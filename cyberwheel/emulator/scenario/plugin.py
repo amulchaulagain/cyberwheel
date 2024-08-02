@@ -5,7 +5,6 @@ import os
 from netaddr import IPNetwork
 from base_objects import Switch
 
-
 # from linux.ubuntu1604 import Ubuntu1604Server, Ubuntu1604Desktop
 from linux.ubuntu1604cage import (
     Ubuntu1604Server,
@@ -81,7 +80,10 @@ class Plugin(AbstractPlugin):
 
             # Create subnets
             print(f"creating {subnet_name} with ip range {subnet_ip}...")
-            subnet_router = self.build_subnet(subnet_name, subnet_network, num_hosts=2)
+            num_hosts = self.num_hosts_in_subnet(
+                name, config
+            )  # use original subnet name
+            subnet_router = self.build_subnet(subnet_name, subnet_network, num_hosts)
             print(f"finished creating {subnet_name}")
 
             # Connect subnet to internal switch
@@ -116,7 +118,7 @@ class Plugin(AbstractPlugin):
             num_hosts (int): the number of hosts the subnet should have.
 
         Returns:
-        vyos.Helium118: The subnet router.
+            vyos.Helium118: The subnet router.
         """
 
         # Create subnet router
@@ -157,3 +159,21 @@ class Plugin(AbstractPlugin):
             )
 
         return subnet_router
+
+    def num_hosts_in_subnet(self, subnet_name: str, config):
+        """
+        Returns number of hosts in a subnet
+
+        Args:
+            subnet_name: name of the subnet
+            config: network configuration (scenario) YAML file
+
+        Returns:
+            num_hosts: number hosts in the subnet
+        """
+
+        hosts = config.get("hosts")
+        num_hosts = sum(
+            1 for _, values in hosts.items() if values.get("subnet") == subnet_name
+        )
+        return num_hosts
