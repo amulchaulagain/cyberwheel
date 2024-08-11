@@ -124,6 +124,5 @@ class ARTAction:
     def get_techniques(self):
         return self.techniques
 
-    @classmethod
-    def get_name(cls):
-        return cls.name
+    def get_name(self):
+        return self.name
