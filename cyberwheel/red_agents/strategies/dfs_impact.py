@@ -1,14 +1,16 @@
 import random
 from cyberwheel.red_agents.strategies.red_strategy import RedStrategy
+from cyberwheel.network.host import Host
 
 """
 The DFS Impact strategy is to attack the current host until it's impacted,
 move to another random unimpacted host, and repeat.
 """
 
+
 class DFSImpact(RedStrategy):
     @classmethod
-    def select_target(cls, agent_obj):
+    def select_target(cls, agent_obj) -> Host:
         """
         If current host has been impacted: choose a random other unimpacted host
         Else: Continue attacking current host
@@ -38,12 +40,3 @@ class DFSImpact(RedStrategy):
             "privilege-escalation": (-6, 0),
             "impact": (-8, -4),
         }
-
-
-
-
-
-
-
-
-

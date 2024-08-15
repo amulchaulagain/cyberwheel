@@ -32,7 +32,12 @@ from cyberwheel.red_actions.actions.art_killchain_phases import (
 )
 from cyberwheel.red_actions import art_techniques
 from cyberwheel.red_agents import ARTAgent
-from cyberwheel.red_agents.strategies import RedStrategy, DFSImpact, ServerDowntime
+from cyberwheel.red_agents.strategies import (
+    RedStrategy,
+    DFSImpact,
+    ServerDowntime,
+    Exfiltration,
+)
 
 from copy import deepcopy
 import pickle
@@ -329,11 +334,6 @@ def train_cyberwheel():
     args.network = network
     args.service_mapping = service_mapping
 
-    if args.red_strategy == "dfs_impact":
-        args.red_strategy = DFSImpact
-    else:
-        args.red_strategy = ServerDowntime
-
     print("Defining environment(s) and beginning training:", end="\n\n")
 
     env_funcs = [make_env(i, args) for i in range(args.num_envs)]
@@ -550,7 +550,6 @@ def train_cyberwheel():
                     base_path=run_path,
                     policy="now",
                 )
-
 
             # Run evaluation
             print("Evaluating Agent...")

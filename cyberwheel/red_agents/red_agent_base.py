@@ -18,6 +18,7 @@ class RedAgent(ABC):
     """
     Base class for Red Agent. Defines structure for any additional red agents to be added.
     """
+
     def __init__(self):
         pass
 
@@ -62,6 +63,7 @@ class KnownHostInfo:
     *   services - The known services on the Host.
     *   vulnerabilities - The known vulnerabilities on the Host.
     """
+
     def __init__(
         self,
         last_step: int = -1,
@@ -71,6 +73,7 @@ class KnownHostInfo:
         type: str = "Unknown",
         services: List[Service] = [],
         vulnerabilities: List[str] = [],
+        leader=False,
     ):
         self.last_step = last_step
         self.ports_scanned = scanned
@@ -81,6 +84,7 @@ class KnownHostInfo:
         self.type = type
         self.routes = None  # TODO: If route not set, defaults to Router and local Subnet-level network
         self.impacted = False
+        self.is_leader = leader
 
     def scan(self):
         self.ports_scanned = True
@@ -103,6 +107,7 @@ class KnownSubnetInfo:
     *   connected_hosts - List of hosts in the subnet
     *   available_ips - The IP Addresses available for the subnet to distribute
     """
+
     def __init__(self, scanned: bool = False):
         self.scanned = scanned
         self.connected_hosts = []
@@ -113,6 +118,7 @@ class KnownSubnetInfo:
 
     def is_scanned(self):
         return self.scanned
+
 
 class AgentHistory:
     """
@@ -125,15 +131,24 @@ class AgentHistory:
     *   subnets - dict of subnets mapped to KnownSubnetInfo.
     *   step - the last step of the simulation
     """
+
     def __init__(self, initial_host: Host):
-        self.history: List[dict[str, Any]] = [] # List of StepInfo objects detailing step information by step
+        self.history: List[dict[str, Any]] = (
+            []
+        )  # List of StepInfo objects detailing step information by step
         self.red_action_history: List[RedActionResults] = []
         self.mapping = {}
-        self.hosts = {}  # Hosts discovered, and whether or not they've been scanned successfully yet
-        self.subnets = {} # Subnets discovered, and last killchainstep performed on them (by index)
+        self.hosts = (
+            {}
+        )  # Hosts discovered, and whether or not they've been scanned successfully yet
+        self.subnets = (
+            {}
+        )  # Subnets discovered, and last killchainstep performed on them (by index)
         self.step = -1
 
-        self.hosts[initial_host.name] = KnownHostInfo(ip_address=initial_host.ip_address)
+        self.hosts[initial_host.name] = KnownHostInfo(
+            ip_address=initial_host.ip_address
+        )
         self.subnets[initial_host.subnet.name] = KnownSubnetInfo()
         self.mapping[initial_host.name] = initial_host
         self.mapping[initial_host.subnet.name] = initial_host.subnet
@@ -147,7 +162,9 @@ class AgentHistory:
         Updates the history of the red agent at a given step with action and RedActionResults metadata
         """
         self.step += 1
-        target_host_metadata = red_action_results.metadata[red_action_results.target_host.name]
+        target_host_metadata = red_action_results.metadata[
+            red_action_results.target_host.name
+        ]
         techniques = {
             "mitre_id": target_host_metadata["mitre_id"],
             "technique": target_host_metadata["technique"],
@@ -160,7 +177,7 @@ class AgentHistory:
                 "src_host": red_action_results.src_host.name,
                 "target_host": red_action_results.target_host.name,
                 "techniques": techniques,
-                "success": red_action_results.attack_success
+                "success": red_action_results.attack_success,
             }
         )
         self.red_action_history.append(red_action_results)
@@ -168,12 +185,14 @@ class AgentHistory:
     def recent_history(self) -> RedActionResults:
         return self.red_action_history[-1]
 
+
 class HybridSetList:
     """
     Defines a Hybrid Set/List object. This allows us to take advantage of the O(1) time complexity for
     membership checking of sets, while taking advantage of the O(1) time complexity of random.choice()
     of lists.
     """
+
     def __init__(self):
         self.data_set = set()
         self.data_list = []

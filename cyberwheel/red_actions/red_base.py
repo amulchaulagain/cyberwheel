@@ -34,7 +34,7 @@ class RedActionResults:
     target_host: Host
     cost: int
 
-    def __init__(self, src_host : Host, target_host : Host):
+    def __init__(self, src_host: Host, target_host: Host):
         self.discovered_hosts = []
         self.detector_alert = Alert(None, [], [])
         self.attack_success = False
@@ -97,6 +97,7 @@ class RedActionResults:
             return True
         return False
 
+
 class ARTAction:
     """
     Base class for defining Atomic Red Team actions. New ART actions should inherit from this class and define sim_execute().
@@ -124,5 +125,6 @@ class ARTAction:
     def get_techniques(self):
         return self.techniques
 
-    def get_name(self):
-        return self.name
+    @classmethod
+    def get_name(cls):
+        return cls.name

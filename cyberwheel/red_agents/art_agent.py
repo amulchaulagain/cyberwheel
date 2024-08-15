@@ -1,6 +1,21 @@
 from typing import Type, Any, Dict, Tuple, List
-from cyberwheel.red_actions.actions.art_killchain_phases import ARTDiscovery, ARTImpact, ARTKillChainPhase, ARTLateralMovement, ARTPingSweep, ARTPortScan, ARTPrivilegeEscalation
-from cyberwheel.red_agents.red_agent_base import KnownSubnetInfo, RedAgent, AgentHistory, KnownHostInfo, RedActionResults, HybridSetList
+from cyberwheel.red_actions.actions.art_killchain_phases import (
+    ARTDiscovery,
+    ARTImpact,
+    ARTKillChainPhase,
+    ARTLateralMovement,
+    ARTPingSweep,
+    ARTPortScan,
+    ARTPrivilegeEscalation,
+)
+from cyberwheel.red_agents.red_agent_base import (
+    KnownSubnetInfo,
+    RedAgent,
+    AgentHistory,
+    KnownHostInfo,
+    RedActionResults,
+    HybridSetList,
+)
 from cyberwheel.red_agents.strategies import RedStrategy, ServerDowntime
 from cyberwheel.network.network_base import Network, Host
 from cyberwheel.red_actions import art_techniques
@@ -14,15 +29,14 @@ class ARTAgent(RedAgent):
         entry_host: Host,
         network: Network = Network(),
         name: str = "ARTAgent",
-        killchain: List[
-            Type[ARTKillChainPhase]
-        ] = [
+        killchain: List[Type[ARTKillChainPhase]] = [
             ARTDiscovery,  # Count reconnaissance techniques (only 1) under Discovery
             ARTPrivilegeEscalation,  # Use previous exploit to elevate privilege level
             ARTImpact,  # Perform big attack
         ],
         red_strategy: RedStrategy = ServerDowntime,
-        service_mapping: dict = {}
+        service_mapping: dict = {},
+        leader: Host | None = None,
     ):
         """
         An Atomic Red Team (ART) Red Agent that uses a defined Killchain to attack hosts in a particular order.
@@ -85,6 +99,7 @@ class ARTAgent(RedAgent):
         self.unknowns = HybridSetList()
         self.strategy = red_strategy
         self.all_kcps = killchain + [ARTLateralMovement]
+        self.leader = leader
         if service_mapping == {}:
             self.services_map = {}
             self.tracked_hosts = set()
@@ -101,17 +116,25 @@ class ARTAgent(RedAgent):
         else:
             self.services_map = service_mapping
             self.tracked_hosts = set(service_mapping.keys())
-    
+        print(f"Entry: {entry_host.name}, Leader: {leader.name}")
+        print("----------------------------------------------------")
+
     @classmethod
     def get_service_map(cls, network: Network):
         """
         Class function to get the service mapping based on host attributes.
         """
-        killchain = [ARTDiscovery, ARTPrivilegeEscalation, ARTImpact, ARTLateralMovement]
+        killchain = [
+            ARTDiscovery,
+            ARTPrivilegeEscalation,
+            ARTImpact,
+            ARTLateralMovement,
+        ]
         service_mapping = {}
         for host in network.get_all_hosts():
             service_mapping[host.name] = {}
             for kcp in killchain:
+                print(kcp)
                 service_mapping[host.name][kcp] = []
                 kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
                 for mid in kcp_valid_techniques:
@@ -232,7 +255,7 @@ class ARTAgent(RedAgent):
     def act(self) -> type[ARTKillChainPhase]:
         """
         This defines the red agent's action at each step of the simulation.
-        It will 
+        It will
             *   handle any newly added hosts
             *   Select the next target
             *   Run an action on the target
@@ -254,10 +277,10 @@ class ARTAgent(RedAgent):
                 self.history.hosts[target_host.name].impacted = True
                 if self.history.hosts[target_host.name].type == "Server":
                     self.unimpacted_servers.remove(target_host.name)
-            #elif action == ARTPrivilegeEscalation:
+            # elif action == ARTPrivilegeEscalation:
             #    target_host.restored = False
 
-        #print(f"{action.get_name()} - from {source_host.name} to {target_host.name}")
+        # print(f"{action.get_name()} - from {source_host.name} to {target_host.name}")
         self.history.update_step(action, action_results)
         return action
 
@@ -288,6 +311,7 @@ class ARTAgent(RedAgent):
                     known_type = "User"
                     self.unknowns.remove(host_name)
                 self.history.hosts[host_name].type = known_type
+                self.history.hosts[host_name].is_leader = self.leader.name == host_name
             elif k == "subnet_scanned":
                 if v.name not in self.history.subnets.keys():
                     self.history.mapping[v.name] = v
@@ -320,7 +344,7 @@ class ARTAgent(RedAgent):
         """
         return self.strategy.get_reward_map()
 
-    def reset(self, entry_host: Host, network: Network):
+    def reset(self, entry_host: Host, network: Network, leader: Host):
         """
         Resets the red agent back to blank slate.
         """
@@ -330,3 +354,6 @@ class ARTAgent(RedAgent):
         self.initial_host_names = set(self.network.get_host_names())
         self.unimpacted_servers = HybridSetList()
         self.unknowns = HybridSetList()
+        self.leader = leader
+        print(f"Entry: {entry_host.name}, Leader: {leader.name}")
+        print("----------------------------------------------------")

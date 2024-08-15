@@ -13,7 +13,7 @@ from cyberwheel.detectors.handler import DetectorHandler
 from cyberwheel.network.network_base import Network
 from cyberwheel.network.host import Host
 from cyberwheel.red_agents import ARTAgent
-from cyberwheel.red_agents.strategies import ServerDowntime
+from cyberwheel.red_agents.strategies import ServerDowntime, Exfiltration, DFSImpact
 from cyberwheel.reward import DecoyReward, StepDetectedReward
 from cyberwheel.reward.recurring_reward import RecurringReward
 from cyberwheel.reward.restore_reward import RestoreReward
@@ -81,7 +81,7 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         * `host_def_file`: optional
             - The name (not filepath) of the host configuration file.
             - Default: host_definitions.yaml
-        
+
         * `detector_config`: optional
             - The name (not filepath) of the detector configuration file.
             - Default: detector.yaml
@@ -92,8 +92,8 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
 
         * `max_decoys`: optional
             - The maximum number of decoys the blue agent should deploy. This range is not used for the default reward function.
-            - Default: 1      
-            
+            - Default: 1
+
         * `blue_reward_scaling`: optional
             - The scaling factor for the blue agent's rewards.
             - Default: 10
@@ -102,11 +102,11 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
             - The reward function used in the environment. Options: 'default' | 'step_detected'
             - The default reward function uses the RecurringReward class.
             - Default: default
-        
+
         * `red_agent`: optional
             - The red agent used in the environment. Currently only using the ART Agent
             - Default: 'art_agent'
-        
+
         * `evaluation`: optional
             - boolean for if the environment should log information for evaluation script or not.
             - Default: False
@@ -158,10 +158,20 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         self.red_agent_choice = red_agent
         self.service_mapping = service_mapping
 
-        self.red_strategy = kwargs.get("red_strategy", ServerDowntime)
+        self.red_strategy = kwargs.get("red_strategy", "server_downtime")
+        if self.red_strategy == "dfs_impact":
+            self.red_strategy = DFSImpact
+        elif self.red_strategy == "exfiltration":
+            self.red_strategy = Exfiltration
+        else:
+            self.red_strategy = ServerDowntime
 
         self.red_agent = ARTAgent(
-            self.network.get_random_user_host(), network=self.network, service_mapping=self.service_mapping, red_strategy=self.red_strategy
+            self.network.get_random_user_host(),
+            network=self.network,
+            service_mapping=self.service_mapping,
+            red_strategy=self.red_strategy,
+            leader=self.network.get_random_server_host(),
         )
 
         self.blue_conf_file = files("cyberwheel.resources.configs.blue_agent").joinpath(
@@ -171,15 +181,21 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         self.action_space = self.blue_agent.create_action_space()
         # self.blue_agent = DecoyBlueAgent(self.network, self.decoy_info, self.host_defs)
 
-        detector_conf_file = files("cyberwheel.resources.configs.detector").joinpath(detector_config)
+        detector_conf_file = files("cyberwheel.resources.configs.detector").joinpath(
+            detector_config
+        )
         self.detector = DetectorHandler(detector_conf_file)
 
         self.reward_function = reward_function
 
         if reward_function == "step_detected":
-            self.reward_calculator = StepDetectedReward(blue_rewards=self.blue_agent.get_reward_map(), max_steps=self.max_steps)
+            self.reward_calculator = StepDetectedReward(
+                blue_rewards=self.blue_agent.get_reward_map(), max_steps=self.max_steps
+            )
         else:
-            self.reward_calculator = RecurringReward(self.red_agent.get_reward_map(), self.blue_agent.get_reward_map())
+            self.reward_calculator = RecurringReward(
+                self.red_agent.get_reward_map(), self.blue_agent.get_reward_map()
+            )
 
         self.evaluation = evaluation
 
@@ -193,7 +209,12 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         5. Return obs and related metadata
         """
         blue_agent_result = self.blue_agent.act(action)
-        self.reward_calculator.handle_blue_action_output(blue_agent_result.name, blue_agent_result.id, blue_agent_result.success, blue_agent_result.recurring)
+        self.reward_calculator.handle_blue_action_output(
+            blue_agent_result.name,
+            blue_agent_result.id,
+            blue_agent_result.success,
+            blue_agent_result.recurring,
+        )
         red_action_name = (
             self.red_agent.act().get_name()
         )  # red_action includes action, and target of action
@@ -204,23 +225,29 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         red_action_dst = action_metadata["target_host"]
         red_action_success = action_metadata["success"]
 
-        self.reward_calculator.handle_red_action_output(red_action_name, self.red_agent.history.mapping[red_action_dst].decoy)
-
-        red_action_result = (
-            self.red_agent.history.recent_history()
+        self.reward_calculator.handle_red_action_output(
+            red_action_name, self.red_agent.history.mapping[red_action_dst].decoy
         )
 
+        red_action_result = self.red_agent.history.recent_history()
         alerts = self.detector.obs([red_action_result.detector_alert])
         obs_vec = self._get_obs(alerts)
-        #print(obs_vec)
-        
+        # print(obs_vec)
+
         if self.reward_function == "step_detected":
             reward = self.reward_calculator.calculate_reward(
-                blue_agent_result.name, blue_agent_result.success, self.red_agent.history.mapping[red_action_dst].decoy, self.current_step
+                blue_agent_result.name,
+                blue_agent_result.success,
+                self.red_agent.history.mapping[red_action_dst].decoy,
+                self.current_step,
             )
         else:
             reward = self.reward_calculator.calculate_reward(
-                red_action_name, blue_agent_result.name, red_action_success, blue_agent_result.success, self.red_agent.history.mapping[red_action_dst].decoy
+                red_action_name,
+                blue_agent_result.name,
+                red_action_success,
+                blue_agent_result.success,
+                self.red_agent.history.mapping[red_action_dst].decoy,
             )
         self.total += reward
 
@@ -264,11 +291,13 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         self.network.reset()
 
         self.red_agent.reset(
-            self.network.get_random_user_host(), network=self.network
+            self.network.get_random_user_host(),
+            network=self.network,
+            leader=self.network.get_random_server_host(),
         )
 
         self.blue_agent.reset()
-        
+
         self.alert_converter = HistoryObservation(
             self.observation_space.shape, host_to_index_mapping(self.network)
         )

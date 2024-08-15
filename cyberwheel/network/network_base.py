@@ -136,6 +136,15 @@ class Network:
         random_host = random.choice(user_hosts)
         return random_host
 
+    def get_random_server_host(self):
+        hosts = self.get_hosts()
+        server_hosts = []
+        for h in hosts:
+            if h.host_type.name != None and "server" in h.host_type.name.lower():
+                server_hosts.append(h)
+        random_host = random.choice(server_hosts)
+        return random_host
+
     def get_hosts(self) -> list[Host]:
         return [
             host for _, host in self.graph.nodes(data="data") if isinstance(host, Host)

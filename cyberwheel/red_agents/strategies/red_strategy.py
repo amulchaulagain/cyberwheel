@@ -5,10 +5,11 @@ from cyberwheel.network.host import Host
 Defines Base class for implementing Red Strategies.
 """
 
+
 class RedStrategy(ABC):
     @classmethod
     @abstractmethod
-    def select_target(cls) -> Host | None:
+    def select_target(cls, agent_obj) -> Host | None:
         return None
 
     @classmethod
