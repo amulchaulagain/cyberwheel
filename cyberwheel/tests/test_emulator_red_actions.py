@@ -22,7 +22,7 @@ class TestEmulatorRedActions(unittest.TestCase):
         Test ping sweep in emulator.
         """
         red_action = EmulatePingSweep(src_host=host, target_host=host)
-        print(red_action.get_name())
+        print(red_action.__class__.get_name())
 
         ping_sweep_cmd = red_action.build_emulator_cmd(
             start_host=1, end_host=6, subnet="192.168.0"
