@@ -116,8 +116,6 @@ class ARTAgent(RedAgent):
         else:
             self.services_map = service_mapping
             self.tracked_hosts = set(service_mapping.keys())
-        print(f"Entry: {entry_host.name}, Leader: {leader.name}")
-        print("----------------------------------------------------")
 
     @classmethod
     def get_service_map(cls, network: Network):
@@ -134,7 +132,6 @@ class ARTAgent(RedAgent):
         for host in network.get_all_hosts():
             service_mapping[host.name] = {}
             for kcp in killchain:
-                print(kcp)
                 service_mapping[host.name][kcp] = []
                 kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
                 for mid in kcp_valid_techniques:
@@ -205,12 +202,10 @@ class ARTAgent(RedAgent):
         * `target_host`: required
             - The target Host of the attack
         """
-        # print(target_host.name)
         step = self.history.hosts[target_host.name].get_next_step()
         if step > len(self.killchain) - 1:
             step = len(self.killchain) - 1
         if not self.history.hosts[target_host.name].ping_sweeped:
-            # print("Time to Ping Sweep")
             action_results = ARTPingSweep(self.current_host, target_host).sim_execute()
             if action_results.attack_success:
                 for h in target_host.subnet.connected_hosts:
@@ -224,14 +219,12 @@ class ARTAgent(RedAgent):
                         self.history.mapping[h.name] = h
             return action_results, ARTPingSweep
         elif not self.history.hosts[target_host.name].ports_scanned:
-            # print("Time to Port Scan")
             action_results = ARTPortScan(self.current_host, target_host).sim_execute()
             if action_results.attack_success:
                 self.history.hosts[target_host.name].ports_scanned = True
             return action_results, ARTPortScan
         elif self.current_host.name != target_host.name:
             # do lateral movement to target host
-            # print("Time to Lateral Move")
             action_results = ARTLateralMovement(
                 self.current_host,
                 target_host,
@@ -279,8 +272,6 @@ class ARTAgent(RedAgent):
                     self.unimpacted_servers.remove(target_host.name)
             # elif action == ARTPrivilegeEscalation:
             #    target_host.restored = False
-
-        # print(f"{action.get_name()} - from {source_host.name} to {target_host.name}")
         self.history.update_step(action, action_results)
         return action
 
@@ -355,5 +346,3 @@ class ARTAgent(RedAgent):
         self.unimpacted_servers = HybridSetList()
         self.unknowns = HybridSetList()
         self.leader = leader
-        print(f"Entry: {entry_host.name}, Leader: {leader.name}")
-        print("----------------------------------------------------")

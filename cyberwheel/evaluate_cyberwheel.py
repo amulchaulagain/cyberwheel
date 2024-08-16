@@ -283,11 +283,6 @@ def evaluate_cyberwheel():
     service_mapping = {}
     if args.red_agent == "art_agent":
         service_mapping = ARTAgent.get_service_map(network)
-    if args.red_strategy == "dfs_impact":
-        args.red_strategy = DFSImpact
-    else:
-        args.red_strategy = ServerDowntime
-
     env_funcs = [
         make_env(
             1,
@@ -349,7 +344,7 @@ def evaluate_cyberwheel():
     if args.graph_name != None:
         now_str = args.graph_name
     else:
-        now_str = f"{experiment_name}_evaluate_{args.network_config.split('.')[0]}_{args.red_agent}_{args.red_strategy.__name__}_{args.min_decoys}-{args.max_decoys}_scaling{int(args.reward_scaling)}_{args.reward_function}reward"
+        now_str = f"{experiment_name}_evaluate_{args.network_config.split('.')[0]}_{args.red_agent}_{args.red_strategy}_{args.min_decoys}-{args.max_decoys}_scaling{int(args.reward_scaling)}_{args.reward_function}reward"
     log_file = files("cyberwheel.action_logs").joinpath(f"{now_str}.csv")
 
     actions_df = pd.DataFrame()
