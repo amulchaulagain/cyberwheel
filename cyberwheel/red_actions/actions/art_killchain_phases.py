@@ -213,11 +213,9 @@ class ARTKillChainPhase(ARTAction):
         Same parameters as defined and described in the ARTAction base class.
         - `src_host`: Host from which the attack originates.
 
-        - `target_service`: The service being targeted.
+        - `target_host`: The host being targeted.
 
-        - `target_hosts`: The hosts being targeted. Can either be a list of hosts or list of subnets. If it is a list of subnets, then the attack should target all known hosts on that subnet.
-
-        - `techniques`: A list of techniques that can be used to perform this attack.
+        - `valid_techniques`: A list of techniques that can be used to perform this attack.
         """
         super().__init__(src_host, target_host)
         self.valid_techniques = valid_techniques
@@ -289,7 +287,6 @@ class ARTPingSweep(ARTKillChainPhase):
         target_host: Host,
     ) -> None:
         super().__init__(src_host, target_host)
-        self.name = "pingsweep"
 
     def sim_execute(self):
         self.action_results.detector_alert.add_src_host(self.src_host)
@@ -365,7 +362,6 @@ class ARTPortScan(ARTKillChainPhase):
         target_host: Host,
     ) -> None:
         super().__init__(src_host, target_host)
-        self.name = "portscan"
 
     def sim_execute(self):
         self.action_results.detector_alert.add_src_host(self.src_host)
@@ -427,7 +423,6 @@ class ARTPrivilegeEscalation(ARTKillChainPhase):
         self, src_host: Host, target_host: Host, valid_techniques: list[str] = []
     ) -> None:
         super().__init__(src_host, target_host, valid_techniques=valid_techniques)
-        self.name = "privilege-escalation"
 
 
 class ARTDiscovery(ARTKillChainPhase):
@@ -449,7 +444,6 @@ class ARTDiscovery(ARTKillChainPhase):
         self, src_host: Host, target_host: Host, valid_techniques: list[str] = []
     ) -> None:
         super().__init__(src_host, target_host, valid_techniques=valid_techniques)
-        self.name = "discovery"
 
     def sim_execute(self):
         super().sim_execute()
@@ -480,7 +474,6 @@ class ARTLateralMovement(ARTKillChainPhase):
         self, src_host: Host, target_host: Host, valid_techniques: list[str] = []
     ) -> None:
         super().__init__(src_host, target_host, valid_techniques=valid_techniques)
-        self.name = "lateral-movement"
 
 
 class ARTImpact(ARTKillChainPhase):
@@ -501,4 +494,3 @@ class ARTImpact(ARTKillChainPhase):
         self, src_host: Host, target_host: Host, valid_techniques: list[str] = []
     ) -> None:
         super().__init__(src_host, target_host, valid_techniques=valid_techniques)
-        self.name = "impact"
