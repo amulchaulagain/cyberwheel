@@ -19,8 +19,6 @@ from cyberwheel.red_agents.strategies import DFSImpact, ServerDowntime
 from cyberwheel.network.network_base import Network
 from cyberwheel.visualize import visualize
 
-import pprofile
-
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     """Initialise neural network weights using orthogonal initialization. Works well in practice."""
@@ -400,9 +398,7 @@ def evaluate_cyberwheel():
 
             # If generating graphs for dash server view
             if args.visualize:
-                profiler = pprofile.Profile()
-                with profiler:
-                    visualize(net, episode, step, now_str, history, killchain)
+                visualize(net, episode, step, now_str, history, killchain)
 
             total_reward += rew
             steps += 1
@@ -410,7 +406,6 @@ def evaluate_cyberwheel():
         obs = envs.reset()
         episode_rewards.append(total_reward)
         total_reward = 0
-        break
 
     actions_df = pd.DataFrame(
         {
