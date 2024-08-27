@@ -84,7 +84,6 @@ class ARTAgent(RedAgent):
             - Default: {} (if empty, will generate during __init__())
         """
         self.name: str = name
-
         self.network = network
         self.config = files("cyberwheel.resources.configs.red_agent").joinpath(
             args.red_agent
@@ -97,8 +96,9 @@ class ARTAgent(RedAgent):
         self.history: AgentHistory = AgentHistory(initial_host=self.entry_host)
         self.unimpacted_servers = HybridSetList()
         self.unknowns = HybridSetList()
+        self.campaign = args.campaign
 
-        if service_mapping == {}: # Probably good to use YAML for this as well
+        if service_mapping == {} and not self.campaign: # Probably good to use YAML for this as well
             self.services_map = {}
             self.tracked_hosts = set()
             for host in self.network.get_all_hosts():
@@ -191,9 +191,10 @@ class ARTAgent(RedAgent):
         network_change = False
         for host_name in new_hosts:
             h: Host = self.network.get_node_from_name(host_name)
-            self.services_map[h.name] = self.get_valid_techniques_by_host(
-                h, self.all_kcps
-            )
+            if not self.campaign:
+                self.services_map[h.name] = self.get_valid_techniques_by_host(
+                    h, self.all_kcps
+                )
             scanned_subnets = [
                 self.history.mapping[s]
                 for s, v in self.history.subnets.items()
