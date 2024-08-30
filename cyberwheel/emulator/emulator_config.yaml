@@ -1,0 +1,7 @@
+firewheel:
+  host:
+    username: ubuntu
+    password: ubuntu
+fleet:
+  server-url: https://192.168.100.2:8220
+  enrollment-token: ckhQN1hKRUI5MFUzUDREcVJnNXI6bThlQVNBU0NUbEtscm5wbjhNTnJTZw==

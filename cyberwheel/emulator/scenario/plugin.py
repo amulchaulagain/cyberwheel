@@ -4,31 +4,16 @@ import yaml
 import os
 from netaddr import IPNetwork
 from base_objects import Switch
-
-# from linux.ubuntu1604 import Ubuntu1604Server, Ubuntu1604Desktop
-from linux.ubuntu1604cage import (
-    Ubuntu1604Server,
-    Ubuntu1604Desktop,
-    Ubuntu1604DesktopSiem,
+from linux.ubuntu_cyberwheel import (
+    Ubuntu1604DesktopSiemCyberwheel,
+    Ubuntu2204DesktopHostCyberwheel,
 )
 from vyos.helium118 import Helium118
 from firewheel.control.experiment_graph import AbstractPlugin, Vertex
-
-# Not working...
-# from linux.ubuntu1804 import Ubuntu1804Server, Ubuntu1804Desktop
-# from windows.windows_server_2008_r2 import WindowsServer2008R2
+from typing import List
 
 # Get network configuration file name from environment variable
-network_config = os.environ["NETWORK_CONFIG"]
-
-
-def read_config(name: str):
-    """Read network config from YAML file"""
-    cwd = os.getcwd()
-
-    with open(f"{cwd}/configs/{name}", "r", encoding="utf-8") as file:
-        data = yaml.load(file, Loader=yaml.SafeLoader)
-        return data
+NETWORK_CONFIG = os.environ["NETWORK_CONFIG"]
 
 
 class Plugin(AbstractPlugin):
@@ -38,7 +23,7 @@ class Plugin(AbstractPlugin):
         """Run method documentation."""
 
         # TODO - add check to ensure config exist
-        config = read_config(network_config)
+        config = read_config(NETWORK_CONFIG)
 
         # Create an external-facing network
         # self.external_network = IPNetwork("1.0.0.0/24")
@@ -80,10 +65,15 @@ class Plugin(AbstractPlugin):
 
             # Create subnets
             print(f"creating {subnet_name} with ip range {subnet_ip}...")
-            num_hosts = self.num_hosts_in_subnet(
-                name, config
-            )  # use original subnet name
-            subnet_router = self.build_subnet(subnet_name, subnet_network, num_hosts)
+            num_hosts = num_hosts_in_subnet(name, config)  # use original subnet name
+
+            # Skip subnet if no hosts
+            if num_hosts == 0:
+                print(f"no hosts in {subnet_name}, skip building subnet.\n")
+                continue
+
+            host_names = get_host_names_in_subnet(name, config)
+            subnet_router = self.build_subnet(subnet_name, subnet_network, host_names)
             print(f"finished creating {subnet_name}")
 
             # Connect subnet to internal switch
@@ -95,39 +85,39 @@ class Plugin(AbstractPlugin):
             print(f"connected {subnet_name} router to {internal_switch_name}\n")
 
             # Connect all connected subnets together
-            # subnet_router.redistribute_ospf_connected()
+            subnet_router.redistribute_ospf_connected()
 
-        # Create the Firewall and Enterprise Hosts subnet (Subnet 2)
-        # enterprise_subnet_firewall = self.build_enterprise_subnet(
-        #     "enterprise", next(self.internal_subnets), num_hosts=3
-        # )
+        # Add SIEM Subnet
+        siem_network = IPNetwork("192.168.100.0/24")
+        # siem_router = self.build_siem("siem", next(self.internal_subnets))
+        siem_router = self.build_siem("siem", siem_network)
+        siem_router.ospf_connect(
+            internal_switch,
+            next(internal_switch_network_iter),
+            internal_switch_network.netmask,
+        )
+        siem_router.redistribute_ospf_connected()
+        print(f"connected siem router to {internal_switch_name}\n")
 
-        # Connect firewall to internal switch
-        # enterprise_subnet_firewall.ospf_connect(
-        #     internal_switch,
-        #     next(internal_switch_network_iter),
-        #     internal_switch_network.netmask,
-        # )
-
-    def build_subnet(self, name: str, network: IPNetwork, num_hosts: int = 1):
+    def build_subnet(self, subnet_name: str, network: IPNetwork, host_names: List[str]):
         """Build subnet
 
         Args:
-            name (str): the name of the user hosts subnet.
-            network (netaddr.IPNetwork): the subnet for the user hosts.
-            num_hosts (int): the number of hosts the subnet should have.
+            subnet_name: the name of the hosts subnet.
+            network: the network object.
+            host_names: names of the hosts in a specified subnet.
 
         Returns:
-            vyos.Helium118: The subnet router.
+            vyos.Helium118: the subnet router object.
         """
 
         # Create subnet router
-        subnet_name = f"{name}.cyberwheel.com"
-        subnet_router = Vertex(self.g, name=subnet_name)
+        full_subnet_name = f"{subnet_name}"
+        subnet_router = Vertex(self.g, name=full_subnet_name)
         subnet_router.decorate(Helium118)
 
         # Create hosts switch
-        subnet_switch_name = f"{name}-switch"
+        subnet_switch_name = f"{subnet_name}-switch"
         subnet_switch = Vertex(self.g, name=subnet_switch_name)
         subnet_switch.decorate(Switch)
 
@@ -145,11 +135,11 @@ class Plugin(AbstractPlugin):
         subnet_router.redistribute_ospf_connected()
 
         # Create hosts
-        for i in range(num_hosts):
+        for host_name in host_names:
             # Create a new host which are Ubuntu Desktops
-            host_name = f"{name}-host-{i}.cyberwheel.com"
+            host_name = f"{host_name}"
             host = Vertex(self.g, name=host_name)
-            host.decorate(Ubuntu1604Desktop)
+            host.decorate(Ubuntu2204DesktopHostCyberwheel)
 
             # Connect the host ot the switch
             host_ip = next(network_iter)
@@ -160,20 +150,105 @@ class Plugin(AbstractPlugin):
 
         return subnet_router
 
-    def num_hosts_in_subnet(self, subnet_name: str, config):
-        """
-        Returns number of hosts in a subnet
+    def build_siem(self, name: str, network: IPNetwork):
+        """Build siem
 
         Args:
-            subnet_name: name of the subnet
-            config: network configuration (scenario) YAML file
+            name (str): the name of the user hosts subnet.
+            network (netaddr.IPNetwork): the subnet for the user hosts.
 
         Returns:
-            num_hosts: number hosts in the subnet
+            vyos.Helium118: The subnet router.
         """
 
-        hosts = config.get("hosts")
-        num_hosts = sum(
-            1 for _, values in hosts.items() if values.get("subnet") == subnet_name
+        # Create SIEM subnet router
+        siem_name = f"{name}-subnet"
+        siem_router = Vertex(self.g, name=siem_name)
+        siem_router.decorate(Helium118)
+
+        # Create SIEM switch
+        siem_switch_name = f"{name}-switch"
+        siem_switch = Vertex(self.g, name=siem_switch_name)
+        siem_switch.decorate(Switch)
+
+        # Create a network generator
+        network_iter = network.iter_hosts()
+
+        # Connet the router to the switch
+        siem_ip = next(network_iter)
+        siem_router.connect(siem_switch, siem_ip, network.netmask)
+        print(
+            f"connected {siem_name} router to {siem_switch_name}, {siem_ip} {network.netmask}"
         )
-        return num_hosts
+
+        # Redistributes routes directly connected subnets to OSPF peers.
+        siem_router.redistribute_ospf_connected()
+
+        # Create SIEM host
+        host_name = f"{name}"
+        host = Vertex(self.g, name=host_name)
+        host.decorate(Ubuntu1604DesktopSiemCyberwheel)
+
+        # Connect the host ot the switch
+        host_ip = "192.168.100.2"  # static ip address for siem
+        host.connect(siem_switch, host_ip, network.netmask)
+        print(
+            f"connected {host_name} to {siem_switch_name}, {host_ip} {network.netmask}"
+        )
+
+        return siem_router
+
+
+################################ Helper Functions #####################################
+
+
+def read_config(name: str):
+    """Read network config from YAML file"""
+    cwd = os.getcwd()
+
+    with open(f"{cwd}/configs/{name}", "r", encoding="utf-8") as file:
+        data = yaml.load(file, Loader=yaml.SafeLoader)
+        return data
+
+
+def num_hosts_in_subnet(subnet_name: str, config):
+    """
+    Returns number of hosts in a subnet
+
+    Args:
+        subnet_name: name of the subnet
+        config: network configuration (scenario) YAML file
+
+    Returns:
+        num_hosts: number hosts in the subnet
+    """
+
+    hosts = config.get("hosts")
+    num_hosts = sum(
+        1 for _, values in hosts.items() if values.get("subnet") == subnet_name
+    )
+    return num_hosts
+
+
+def get_host_names_in_subnet(subnet_name: str, config) -> List[str]:
+    """
+    Returns host names in a subnet
+
+    Args:
+        subnet_name: name of the subnet
+        config: network configuration (scenario) YAML file
+
+    Returns:
+        host_names: names of hosts in a subnet
+    """
+
+    hosts = config.get("hosts")
+
+    replace_underscore = lambda name: name.replace("_", "-")
+    host_names = [
+        replace_underscore(name)
+        for name, values in hosts.items()
+        if values.get("subnet") == subnet_name
+    ]
+
+    return host_names
