@@ -3,11 +3,17 @@ Module defines the class to execute actions in the emulator.
 """
 
 from __future__ import annotations
+import os
 from abc import ABC, abstractmethod
 from cyberwheel.red_actions.red_base import ARTAction, RedActionResults
 import subprocess
 from subprocess import CompletedProcess
 from typing import Any
+from cyberwheel.emulator.utils import read_config
+
+DIR_PATH = os.path.dirname(os.path.abspath(__file__))
+EMULATOR_CONFIG_PATH = f"{DIR_PATH}/../../"
+EMULATOR_CONFIG = "emulator_config.yaml"
 
 
 class EmulateRedAction(ARTAction, ABC):
@@ -20,19 +26,7 @@ class EmulateRedAction(ARTAction, ABC):
         - emulator_execute() - runs the shell command.
     """
 
-    login_username = "ubuntu"  # set in the VM image
-    sshpass_cmd = "sshpass -p ubuntu"
-    emulator_ssh_cmd = f"firewheel ssh {login_username}"
-
-    @property
-    @abstractmethod
-    def shell_script_name(self) -> str | type[NotImplementedError]:
-        """
-        Name of the shell script.
-
-        Include the 'scripts' folder in the name, e.g. 'scripts/linux_ping_sweep.sh'
-        """
-        return NotImplementedError
+    emu_config = read_config(EMULATOR_CONFIG_PATH, EMULATOR_CONFIG)
 
     @abstractmethod
     def build_emulator_cmd(self) -> str | type[NotImplementedError]:
@@ -64,9 +58,12 @@ class EmulateRedAction(ARTAction, ABC):
         Returns:
             final_cmd - full shell command as a string - sshpass + firewheel + action command.
         """
+        host_user = EmulateRedAction.emu_config["firewheel"]["host"]["username"]
+        host_pwd = EmulateRedAction.emu_config["firewheel"]["host"]["password"]
+
         command_arr = [
-            f"{EmulateRedAction.sshpass_cmd}",
-            f"{EmulateRedAction.emulator_ssh_cmd}@{self.src_host.name}",
+            f"sshpass -p {host_pwd}",
+            f"firewheel ssh {host_user}@{self.src_host.name}",
             action_cmd,
         ]
         final_cmd = " ".join(command_arr)

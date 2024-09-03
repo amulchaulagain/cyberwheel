@@ -1,2 +1,3 @@
+from .emulate_port_scan import EmulatePortScan
 from .emulate_ping_sweep import EmulatePingSweep
 from .emulate_red_action_base import EmulateRedAction
