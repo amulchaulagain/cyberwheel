@@ -3,7 +3,11 @@ Module to test the red actions in the emulator.
 """
 
 import unittest
-from cyberwheel.emulator.actions.red_actions import EmulatePingSweep, EmulatePortScan
+from cyberwheel.emulator.actions.red_actions import (
+    EmulatePingSweep,
+    EmulatePortScan,
+    EmulateSudoandSudoCaching,
+)
 from cyberwheel.network.host import Host
 from cyberwheel.network.router import Router
 from cyberwheel.network.subnet import Subnet
@@ -40,4 +44,17 @@ class TestEmulatorRedActions(unittest.TestCase):
 
         port_scan_cmd = red_action.build_emulator_cmd()
         results = red_action.emulator_execute(port_scan_cmd)
+        self.assertIsNotNone(results.attack_success)
+
+    def test_sudo_and_sudo_caching(self) -> None:
+        """Test sudo and sudo cashing in emulator"""
+        src_host = Host(name="user01", subnet=subnet, host_type=None)
+        target_host = Host(name="user02", subnet=subnet, host_type=None)
+        target_host.set_ip_from_str("192.168.0.3")
+
+        red_action = EmulateSudoandSudoCaching(src_host, target_host)
+        print(red_action.__class__.get_name())
+
+        sudo_caching_cmd = red_action.build_emulator_cmd()
+        results = red_action.emulator_execute(sudo_caching_cmd)
         self.assertIsNotNone(results.attack_success)

@@ -1,3 +1,4 @@
 from .emulate_port_scan import EmulatePortScan
 from .emulate_ping_sweep import EmulatePingSweep
+from .emulate_sudo_and_sudo_caching import EmulateSudoandSudoCaching
 from .emulate_red_action_base import EmulateRedAction
