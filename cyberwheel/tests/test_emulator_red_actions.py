@@ -7,6 +7,7 @@ from cyberwheel.emulator.actions.red_actions import (
     EmulatePingSweep,
     EmulatePortScan,
     EmulateSudoandSudoCaching,
+    EmulateDataEncryptedForImpact,
 )
 from cyberwheel.network.host import Host
 from cyberwheel.network.router import Router
@@ -31,7 +32,7 @@ class TestEmulatorRedActions(unittest.TestCase):
         )
 
         results = red_action.emulator_execute(ping_sweep_cmd)
-        self.assertIsNotNone(results.attack_success)
+        self.assertTrue(results.attack_success)
 
     def test_port_scan(self) -> None:
         """Test port scan in emulator"""
@@ -44,7 +45,7 @@ class TestEmulatorRedActions(unittest.TestCase):
 
         port_scan_cmd = red_action.build_emulator_cmd()
         results = red_action.emulator_execute(port_scan_cmd)
-        self.assertIsNotNone(results.attack_success)
+        self.assertTrue(results.attack_success)
 
     def test_sudo_and_sudo_caching(self) -> None:
         """Test sudo and sudo cashing in emulator"""
@@ -57,4 +58,17 @@ class TestEmulatorRedActions(unittest.TestCase):
 
         sudo_caching_cmd = red_action.build_emulator_cmd()
         results = red_action.emulator_execute(sudo_caching_cmd)
-        self.assertIsNotNone(results.attack_success)
+        self.assertTrue(results.attack_success)
+
+    def test_data_encrypted_for_impact(self) -> None:
+        """Test data encrypted for impact in emulator"""
+        src_host = Host(name="user01", subnet=subnet, host_type=None)
+        target_host = Host(name="user02", subnet=subnet, host_type=None)
+        target_host.set_ip_from_str("192.168.0.3")
+
+        red_action = EmulateDataEncryptedForImpact(src_host, target_host)
+        print(red_action.__class__.get_name())
+
+        data_encrypted_cmd = red_action.build_emulator_cmd()
+        results = red_action.emulator_execute(data_encrypted_cmd)
+        self.assertTrue(results.attack_success)
