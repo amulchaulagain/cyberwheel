@@ -5,6 +5,8 @@ from importlib.resources import files
 def generate_art_techniques():
 
     scripts = """from cyberwheel.red_actions.technique import Technique
+from cyberwheel.red_actions.atomic_test import AtomicTest
+from typing import Any
 """
     preamble = "\ntechnique_mapping = {"
     metadata_path = files("cyberwheel.resources.metadata")
@@ -27,6 +29,15 @@ def generate_art_techniques():
         mitigations = t["mitigations"]
         description = t["description"].replace("\n", "").replace('"', "'")
         atomic_tests = t["atomic_tests"]
+        atomic_tests_str = "{"
+        for at in atomic_tests:
+            atomic_test_guid = at["auto_generated_guid"]
+            atomic_test_init = f"AtomicTest({at})"
+            atomic_tests_str += f"'{atomic_test_guid}': {atomic_test_init},"
+        atomic_tests_str += "}"
+        supported_os = list(
+            set([os for at in atomic_tests for os in at["supported_platforms"]])
+        )
         mapping[mitre_id] = name_trunc
         cwe_list = []
         cve_list = []
@@ -60,20 +71,18 @@ def generate_art_techniques():
 
         scripts += f"""
 class {name_trunc}(Technique):
-    def __init__(self):
-        super().__init__(
-            mitre_id="{mitre_id}",
-            name="{name}",
-            technique_id="{technique_id}",
-            data_components={data_components},
-            kill_chain_phases={kill_chain_phases},
-            data_source_platforms={data_source_platforms},
-            mitigations={mitigations},
-            description=b"{"".join(c for c in description if ord(c)<128)}",
-            atomic_tests={atomic_tests},
-            cve_list={set(cve_list)},
-            cwe_list={cwe_list}
-        )
+    mitre_id : str = "{mitre_id}"
+    name : str = "{name}"
+    technique_id : str = "{technique_id}"
+    data_components : list[str] = {data_components}
+    kill_chain_phases : list[str] = {kill_chain_phases}
+    data_source_platforms : list[str] = {data_source_platforms}
+    mitigations : list[str] = {mitigations}
+    description : str = b"{"".join(c for c in description if ord(c)<128)}".decode('utf-8')
+    atomic_tests : dict[str, AtomicTest] = {atomic_tests_str}
+    supported_os : list[str] = {supported_os}
+    cve_list : set[str] = {set(cve_list)}
+    cwe_list : list[str] = {cwe_list}
 """
         preamble += f"'{mitre_id}': {name_trunc}, "
     preamble = preamble[:-2] + "}\n"

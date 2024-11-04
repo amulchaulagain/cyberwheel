@@ -6,7 +6,11 @@ from cyberwheel.red_agents import ARTAgent
 from cyberwheel.network.network_base import Network, Host
 from cyberwheel.red_actions.red_base import RedActionResults
 from cyberwheel.red_actions.technique import Technique
-from cyberwheel.red_agents.strategies import RedStrategy
+from cyberwheel.red_agents.strategies import RedStrategy, BruteForce
+from cyberwheel.red_actions import art_techniques
+from cyberwheel.red_actions.atomic_test import AtomicTest
+
+from cyberwheel.reward import RewardMap
 
 
 class ARTCampaign(ARTAgent):
@@ -20,40 +24,60 @@ class ARTCampaign(ARTAgent):
         self,
         name: str,
         entry_host_name: str,
+        leader_host_name: str,
+        strategy: RedStrategy,
+        campaign: list[dict[str, Type[Technique] | AtomicTest]],
+        lateral_movement_technique: Type[Technique],
+        lateral_movement_atomic_test: Type[AtomicTest],
+        lateral_movement_reward: float | int,
+        reward: RewardMap,
         network: Network,
-        killchain: list[tuple[Technique, str]],
-        red_strategy: RedStrategy,
     ):
+        if strategy == "BruteForce":
+            strategy = BruteForce
         super().__init__(
             name=name,
             entry_host=network.get_node_from_name(entry_host_name),
             network=network,
-            killchain=killchain,
-            red_strategy=red_strategy,
+            killchain=campaign,
+            red_strategy=strategy,
             campaign=True,
         )
+        self.leader = (
+            network.get_node_from_name(leader_host_name)
+            if leader_host_name != None
+            else None
+        )
+        self.lateral_movement_technique = lateral_movement_technique
+        self.lateral_movement_atomic_test = lateral_movement_atomic_test
+        self.lateral_movement_reward = (
+            lateral_movement_reward  # TODO: Need to pass Lateral movement cleaner
+        )
+        self.reward = reward
 
     def run_action(self, target_host: Host) -> Tuple[RedActionResults, Type[Technique]]:
         step = self.history.hosts[target_host.name].get_next_step()
+        self.do_lateral_movement = False
         if step > len(self.killchain) - 1:
             step = len(self.killchain) - 1
 
-        technique_class = self.killchain[step][0]
+        if self.current_host.name == target_host.name:
+            technique_class = self.killchain[step]["technique"]
+            atomic_test = self.killchain[step]["atomic_test"]
+        else:  # Will do lateral movement to get onto other host before continuing
+            technique_class = self.lateral_movement_technique
+            atomic_test = self.lateral_movement_atomic_test
+            self.do_lateral_movement = True
+
         technique = technique_class()
-        atomic_test = self.killchain[step][1]
         mitre_id = technique.mitre_id
         technique_name = technique.name
 
-        for at in technique.atomic_tests:
-            if atomic_test == at.auto_generated_guid:
-                atomic_test = at
-                break
-
         action_results = RedActionResults(self.current_host, target_host)
-        action_results.modify_alert(dst=target_host)
+        action_results.modify_alert(dst=target_host, src=self.current_host)
 
         # TODO: Checking if technique will work: OS match, CVE in cve_list, Killchain check
-        self.action_results.add_successful_action()
+        action_results.add_successful_action()
 
         processes = []
         for dep in atomic_test.dependencies:
@@ -73,7 +97,7 @@ class ARTCampaign(ARTAgent):
                 "technique": technique_name,
             },
         )
-        # TODO: Add metadata dependeing on killchain phase
+        # TODO: Add metadata depending on killchain phase
         return action_results, technique_class
 
     def act(self) -> type[Technique]:
@@ -93,7 +117,8 @@ class ARTCampaign(ARTAgent):
         action_obj = action()
         success = action_results.attack_success
         if success:
-            self.history.hosts[target_host.name].update_killchain_step()
+            if not self.do_lateral_movement:
+                self.history.hosts[target_host.name].update_killchain_step()
             for h_name in action_results.metadata.keys():
                 self.add_host_info(h_name, action_results.metadata[h_name])
             if "impact" in action_obj.kill_chain_phases:  # If KCP was Impact
@@ -101,13 +126,66 @@ class ARTCampaign(ARTAgent):
                 if self.history.hosts[target_host.name].type == "Server":
                     self.unimpacted_servers.remove(target_host.name)
 
-        print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
+        # print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
         self.history.update_step(action, action_results)
         return action
 
     @classmethod
-    def create_campaign_from_yaml(cls, campaign_config: PosixPath) -> Self:
+    def create_campaign_from_yaml(
+        cls, campaign_config: PosixPath, network: Network
+    ) -> Self:
+        reward = {}
+        campaign = []
+
         # Load the YAML config file
         with open(campaign_config, "r") as yaml_file:
             config = yaml.safe_load(yaml_file)
+
+        campaign_name = config["name"]
         entry_host_name = config["entry_host"]
+        if entry_host_name == None:
+            entry_host_name = network.get_random_user_host().name
+        leader_name = config["leader"]
+        strategy = config["strategy"]
+
+        for t in config["campaign"]:
+            technique_name = t["technique_name"]
+            atomic_test_guid = t["atomic_test_guid"]
+            technique_class = getattr(art_techniques, technique_name)
+            atomic_test = technique_class().get_atomic_test(atomic_test_guid)
+            campaign.append({"technique": technique_class, "atomic_test": atomic_test})
+            reward[technique_class().name] = (
+                -float(t["reward"]["immediate"]),
+                -float(t["reward"]["recurring"]) if "recurring" in t["reward"] else 0.0,
+            )
+        if config["lateral_movement_technique"] != None:
+            lateral_movement_technique = getattr(
+                art_techniques, config["lateral_movement_technique"]
+            )
+            lateral_movement_atomic_test = lateral_movement_technique().get_atomic_test(
+                config["lateral_movement_atomic_test"]
+            )
+            lateral_movement_reward = config["lateral_movement_reward"]
+        else:
+            lateral_movement_technique = None
+            lateral_movement_atomic_test = None
+            lateral_movement_reward = 0.0
+
+        return ARTCampaign(
+            name=campaign_name,
+            entry_host_name=entry_host_name,
+            leader_host_name=leader_name,
+            strategy=strategy,
+            campaign=campaign,
+            lateral_movement_technique=lateral_movement_technique,
+            lateral_movement_atomic_test=lateral_movement_atomic_test,
+            lateral_movement_reward=lateral_movement_reward,
+            reward=reward,
+            network=network,
+        )
+
+    def get_reward_map(self) -> RewardMap:
+        """
+        Get the reward mapping for the red campaign. This is defined in the campaign YAML.
+        """
+        return self.reward

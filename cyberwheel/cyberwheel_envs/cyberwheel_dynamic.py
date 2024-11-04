@@ -12,7 +12,7 @@ from cyberwheel.detectors.alert import Alert
 from cyberwheel.detectors.handler import DetectorHandler
 from cyberwheel.network.network_base import Network
 from cyberwheel.network.host import Host
-from cyberwheel.red_agents import ARTAgent
+from cyberwheel.red_agents import ARTAgent, ARTCampaign
 from cyberwheel.red_agents.strategies import ServerDowntime, Exfiltration, DFSImpact
 from cyberwheel.reward import DecoyReward, StepDetectedReward
 from cyberwheel.reward.recurring_reward import RecurringReward
@@ -159,6 +159,7 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         self.service_mapping = service_mapping
 
         self.red_strategy = kwargs.get("red_strategy", "server_downtime")
+        
         if self.red_strategy == "dfs_impact":
             self.red_strategy = DFSImpact
         elif self.red_strategy == "exfiltration":
@@ -166,13 +167,17 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         else:
             self.red_strategy = ServerDowntime
 
-        self.red_agent = ARTAgent(
-            self.network.get_random_user_host(),
-            network=self.network,
-            service_mapping=self.service_mapping,
-            red_strategy=self.red_strategy,
-            leader=self.network.get_random_server_host(),
-        )
+        # TODO: Include flag to switch between agent or campaign
+
+        if red_agent == "campaign":
+            self.red_agent = kwargs.get("campaign", None)
+        else:
+            self.red_agent = ARTAgent(
+                self.network.get_random_user_host(),
+                network=self.network,
+                service_mapping=self.service_mapping,
+                red_strategy=self.red_strategy,
+            )
 
         self.blue_conf_file = files("cyberwheel.resources.configs.blue_agent").joinpath(
             blue_config
@@ -215,8 +220,9 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
             blue_agent_result.success,
             blue_agent_result.recurring,
         )
+        red_agent_result = self.red_agent.act()
         red_action_name = (
-            self.red_agent.act().get_name()
+            red_agent_result.name
         )  # red_action includes action, and target of action
         action_metadata = self.red_agent.history.history[-1]
 
@@ -255,7 +261,6 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         else:
             done = False
         self.current_step += 1
-
         info = {}
         if self.evaluation:
             info = {
@@ -289,11 +294,7 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         self.current_step = 0
         self.network.reset()
 
-        self.red_agent.reset(
-            self.network.get_random_user_host(),
-            network=self.network,
-            leader=self.network.get_random_server_host(),
-        )
+        self.red_agent.reset(self.network.get_random_user_host(), network=self.network)
 
         self.blue_agent.reset()
 

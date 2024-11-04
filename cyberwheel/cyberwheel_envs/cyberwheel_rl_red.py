@@ -11,7 +11,7 @@ from cyberwheel.blue_agents import DynamicBlueAgent, InactiveBlueAgent
 from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.network_base import Network
 from cyberwheel.network.host import Host
-from cyberwheel.red_agents import RLARTAgent, ARTAgent
+from cyberwheel.red_agents import RLARTAgent, ARTAgent, ARTCampaign
 from cyberwheel.utils import YAMLConfig
 from cyberwheel.observation import HistoryObservation
 from cyberwheel.detectors.handler import DetectorHandler
@@ -153,10 +153,13 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             self.max_action_space_size = self.network.get_num_hosts() * self.red_agent.action_space.num_actions * 2
             self.action_space = self.red_agent.action_space.create_action_space(self.max_action_space_size)
         else:
-            self.red_agent = ARTAgent(
-                self.network,
-                args
-            )
+            if args.campaign:
+                self.red_agent = ARTCampaign(self.network, args)
+            else:
+                self.red_agent = ARTAgent(
+                    self.network,
+                    args
+                )
             self.blue_agent = DynamicBlueAgent(
                 self.network,
                 args

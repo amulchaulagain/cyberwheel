@@ -82,8 +82,8 @@ class RecurringReward(Reward):
             raise ValueError("recurring must be either -1, 0, or 1")
 
     def handle_red_action_output(self, red_action: str, is_decoy):
-        if "impact" in red_action.lower():
-            self.add_recurring_red_impact(red_action.lower(), is_decoy)
+        if self.red_rewards[red_action][1] != 0:
+            self.add_recurring_red_impact(red_action, is_decoy)
         return
 
     def reset(self) -> None:

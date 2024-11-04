@@ -236,7 +236,7 @@ class ARTKillChainPhase(ARTAction):
             processes = []
             valid_tests = [
                 at
-                for at in art_technique.atomic_tests
+                for at in art_technique.get_atomic_tests()
                 if host_os in at.supported_platforms
             ]
             chosen_test = random.choice(valid_tests)
@@ -300,7 +300,9 @@ class ARTPingSweep(ARTKillChainPhase):
         mitre_id = art_technique.mitre_id
         processes = []
         valid_tests = [
-            at for at in art_technique.atomic_tests if host_os in at.supported_platforms
+            at
+            for at in art_technique.get_atomic_tests()
+            if host_os in at.supported_platforms
         ]
         chosen_test = random.choice(valid_tests)
         # Get prereq command, prereq command (if dependency). then run executor command(s) and cleanup command.
@@ -381,7 +383,9 @@ class ARTPortScan(ARTKillChainPhase):
         mitre_id = art_technique.mitre_id
         processes = []
         valid_tests = [
-            at for at in art_technique.atomic_tests if host_os in at.supported_platforms
+            at
+            for at in art_technique.get_atomic_tests()
+            if host_os in at.supported_platforms
         ]
         chosen_test = random.choice(valid_tests)
         # Get prereq command, prereq command (if dependency). then run executor command(s) and cleanup command.
