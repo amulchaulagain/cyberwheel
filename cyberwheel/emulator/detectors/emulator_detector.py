@@ -7,9 +7,15 @@ from subprocess import CompletedProcess
 from typing import Any, Iterable
 import json
 import subprocess
+import os
 from cyberwheel.detectors.alert import Alert
-from cyberwheel.detectors.detector import Detector
+from cyberwheel.detectors.detector_base import Detector
 from cyberwheel.emulator.siem import SiemQuery
+from cyberwheel.emulator.utils import read_config
+
+DIR_PATH = os.path.dirname(os.path.abspath(__file__))
+EMULATOR_CONFIG_PATH = f"{DIR_PATH}/../"
+EMULATOR_CONFIG = "emulator_config.yaml"
 
 
 class EmulatorDectector(Detector):
@@ -17,6 +23,8 @@ class EmulatorDectector(Detector):
     Class to communicate with SIEM (elasticsearch) within the emulator.
     The detector, Sysmon, fowards information to the SIEM.
     """
+
+    emu_config = read_config(EMULATOR_CONFIG_PATH, EMULATOR_CONFIG)
 
     def query_to_json(self, result: CompletedProcess[str]) -> Any | None:
         """Converts SIEM query reponse to JSON."""
@@ -26,16 +34,19 @@ class EmulatorDectector(Detector):
         self, user: str, ip: str, query: SiemQuery
     ) -> CompletedProcess[str] | None:
         """SSHs into the host with the SIEM and submits a query."""
-        command = [
-            "ssh",
-            f"{user}@{ip}",
+        siem_pwd = EmulatorDectector.emu_config["firewheel"]["siem"]["password"]
+
+        cmd_arr = [
+            f"sshpass -p {siem_pwd} firewheel ssh {user}@{ip}",
             f"curl -u elastic:elastic -X GET http://localhost:9200/{query.is_alive()}",
         ]
+        cmd = " ".join(cmd_arr)
 
         result = subprocess.run(
-            command,
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            shell=True,
             text=True,
             check=True,
         )
@@ -44,26 +55,38 @@ class EmulatorDectector(Detector):
             error = {"error": result.stderr}
             print(json.dumps(error))
             return None
+        else:
+            print(result.stdout)
 
         return result
 
-    def submit_obs_query(
-        self, user: str, ip: str, query: SiemQuery
-    ) -> CompletedProcess[str] | None:
+    def submit_obs_query(self, query: SiemQuery) -> CompletedProcess[str] | None:
         """Shells into the SIEM VM and submits a query to get the oberstation state."""
-        command = [
-            "ssh",
-            f"{user}@{ip}",
-            f"curl -u elastic:elastic \
-            X GET \
-            http://localhost:9200/logs-sysmon_linux.log-*/_search?size=1000 \
-            -H 'kbn-xsrf: reporting' \
-            -H 'Content-Type: application/json' \
-            -d '{query.get_observation()}'",
+        siem_pwd = EmulatorDectector.emu_config["firewheel"]["siem"]["password"]
+        siem_user = EmulatorDectector.emu_config["firewheel"]["siem"]["username"]
+        siem_hostname = EmulatorDectector.emu_config["firewheel"]["siem"]["hostname"]
+
+        # command = [
+        #     f"sshpass -p {siem_pwd} firewheel ssh {siem_user}@{siem_hostname} \
+        #     curl -u elastic:elastic \
+        #     X GET \
+        #     http://localhost:9200/logs-sysmon_linux.log-*/_search?size=1000 \
+        #     -H 'kbn-xsrf: reporting' \
+        #     -H 'Content-Type: application/json' \
+        #     -d '{query.get_observation()}'",
+        # ]
+
+        cmd_arr = [
+            f"sshpass -p {siem_pwd} firewheel ssh {siem_user}@{siem_hostname}",
+            "curl -u elastic:elastic",
+            '-XGET -H "Content-Type: application/json"',
+            "http://localhost:9200/logs-*/_search?size=10",
+            # f" -d {query.get_observation()}",
         ]
+        cmd = " ".join(cmd_arr)
 
         result = subprocess.run(
-            command,
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -74,6 +97,8 @@ class EmulatorDectector(Detector):
             error = {"error": result.stderr}
             print(json.dumps(error))
             return None
+        else:
+            print(result.stdout)
 
         return result
 

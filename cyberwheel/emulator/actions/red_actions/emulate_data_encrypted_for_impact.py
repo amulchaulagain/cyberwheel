@@ -15,7 +15,7 @@ class EmulateDataEncryptedForImpact(EmulateRedAction):
     Class to exeucte data encrypted for impact in the emulator.
     """
 
-    name = "Emulate Data Encrypted for Impact"
+    name = "EmulateDataEncryptedforImpact"
 
     def __init__(self, src_host, target_host):
         super().__init__(src_host, target_host)

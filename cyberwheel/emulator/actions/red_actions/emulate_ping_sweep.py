@@ -16,7 +16,7 @@ class EmulatePingSweep(EmulateRedAction):
     Class to exeucte ping sweep in the emulator.
     """
 
-    name = "Remote System Discovery - sweep"
+    name = "RemoteSystemDiscovery"
 
     def __init__(self, src_host, target_host):
         super().__init__(src_host, target_host)

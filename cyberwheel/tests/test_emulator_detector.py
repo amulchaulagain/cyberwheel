@@ -2,7 +2,6 @@
 Module to test the EmulatorDetector class.
 """
 
-import os
 import unittest
 from dotenv import load_dotenv
 from cyberwheel.emulator.detectors import EmulatorDectector
@@ -10,19 +9,20 @@ from cyberwheel.emulator.siem import SiemQuery
 
 load_dotenv()
 
-USER = "paustria"
-IP = os.getenv("SIEM_IP")
-
 
 class TestEmulatorDetector(unittest.TestCase):
     """Unit tests for the the EmulatorDetector class"""
 
+    # def test_submit_obs_query(self) -> None:
+    #     """Send test query SIEM to check if alive"""
+    #     eoc = EmulatorDectector()
+
+    #     response = eoc.submit_test_query("ubuntu", "siem", SiemQuery())
+    #     self.assertIsNotNone(response)
+
     def test_submit_obs_query(self) -> None:
-        """Test observation query to SIEM"""
+        """Test observiation query to SIEM"""
         eoc = EmulatorDectector()
 
-        if IP is None:
-            self.fail("SIEM IP address missing in .env")
-
-        response = eoc.submit_obs_query(USER, IP, SiemQuery())
+        response = eoc.submit_obs_query(SiemQuery())
         self.assertIsNotNone(response)

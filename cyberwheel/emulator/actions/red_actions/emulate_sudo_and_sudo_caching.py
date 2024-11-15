@@ -35,7 +35,7 @@ class EmulateSudoandSudoCaching(EmulateRedAction):
             f"'sshpass -p {host_pwd}",
             f"ssh -o StrictHostKeyChecking=accept-new {host_user}@{self.target_host.ip_address}",
             f'"echo {host_pwd} | sudo -S -l;',
-            f"echo {host_pwd}[ | sudo -S cat /etc/sudoers\"'",
+            f"echo {host_pwd} | sudo -S cat /etc/sudoers\"'",
             # Part of the attack to use vim to edit the sudoers file.
             # f"echo {host_pwd} | sudo -S vim /etc/sudoers\"'",
         ]
