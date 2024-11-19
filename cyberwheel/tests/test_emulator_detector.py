@@ -13,16 +13,18 @@ load_dotenv()
 class TestEmulatorDetector(unittest.TestCase):
     """Unit tests for the the EmulatorDetector class"""
 
-    # def test_submit_obs_query(self) -> None:
-    #     """Send test query SIEM to check if alive"""
-    #     eoc = EmulatorDectector()
-
-    #     response = eoc.submit_test_query("ubuntu", "siem", SiemQuery())
-    #     self.assertIsNotNone(response)
-
-    def test_submit_obs_query(self) -> None:
-        """Test observiation query to SIEM"""
+    def test_submit_test_query(self) -> None:
+        """Send test query to elasticsearch to check if SIEM is running"""
         eoc = EmulatorDectector()
 
-        response = eoc.submit_obs_query(SiemQuery())
+        print("\n")
+        response = eoc.submit_test_query()
+        self.assertIsNotNone(response)
+
+    def test_submit_obs_query(self) -> None:
+        """Submit query to elasticsearch"""
+        eoc = EmulatorDectector()
+
+        print("\n")
+        response = eoc.submit_obs_query(query=SiemQuery(), size="1")
         self.assertIsNotNone(response)
