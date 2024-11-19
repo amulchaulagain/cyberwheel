@@ -8,6 +8,7 @@ from cyberwheel.emulator.actions.red_actions import (
     EmulatePortScan,
     EmulateSudoandSudoCaching,
     EmulateDataEncryptedForImpact,
+    EmulateLateralMovement,
 )
 from cyberwheel.network.host import Host
 from cyberwheel.network.router import Router
@@ -67,6 +68,19 @@ class TestEmulatorRedActions(unittest.TestCase):
         target_host.set_ip_from_str("192.168.0.3")
 
         red_action = EmulateDataEncryptedForImpact(src_host, target_host)
+        print(red_action.__class__.get_name())
+
+        data_encrypted_cmd = red_action.build_emulator_cmd()
+        results = red_action.emulator_execute(data_encrypted_cmd)
+        self.assertTrue(results.attack_success)
+
+    def test_lateral_movement(self) -> None:
+        """Test data lateral movement in emulator"""
+        attacker = Host(name="user01", subnet=subnet, host_type=None)
+        user_host = Host(name="user02", subnet=subnet, host_type=None)
+        user_host.set_ip_from_str("192.168.0.3")
+
+        red_action = EmulateLateralMovement(src_host=attacker, target_host=user_host)
         print(red_action.__class__.get_name())
 
         data_encrypted_cmd = red_action.build_emulator_cmd()
