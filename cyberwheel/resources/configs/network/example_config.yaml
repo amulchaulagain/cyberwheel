@@ -9,6 +9,8 @@ topology:
     - user_subnet:
       - user02
       - user03
+      - decoy01
+      - decoy02
       - admin_workstation
     - server_subnet:
       - server01
@@ -102,6 +104,7 @@ subnets:
     firewall:
 
 # Hosts
+# Decoys must be added here since they need to be pre-created in the emulator
 host_type_config: resources/metadata/host_defs_services.yaml
 hosts:
 
@@ -122,6 +125,12 @@ hosts:
         port: 3389
   user03:
     type: workstation
+    subnet: user_subnet
+  decoy01:
+    type: decoy_workstation
+    subnet: user_subnet
+  decoy02:
+    type: decoy_workstation
     subnet: user_subnet
   admin_workstation:
     type: workstation
@@ -172,3 +181,9 @@ interfaces:
     - dmz01
   dmz01:
     - server01
+
+# This section is used by emulator to identity decoy hosts
+# Decoys (must match same name in topology and host section)
+decoys:
+  - decoy01
+  - decoy02

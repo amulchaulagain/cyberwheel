@@ -76,3 +76,10 @@ host_types:
       - name: https
         port: 443
         protocol: tcp
+  decoy_workstation:
+    services:
+      - name: rdp
+        port: 3389
+        protocol: tcp
+    decoy: true
+    os: linux

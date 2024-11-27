@@ -1,4 +1,7 @@
-"""This plugin emulates the Cage 2 Challenge Scenario"""
+"""
+This plugin reads in the Cyberwheel network topology config
+and creates the toplogy in Firehweel.
+"""
 
 import yaml
 import os
@@ -15,9 +18,13 @@ from typing import List
 # Get network configuration file name from environment variable
 NETWORK_CONFIG = os.environ["NETWORK_CONFIG"]
 
+# Name of the interface used within Firewheel experiment;
+# not the interface used by Firewheel ssh command.
+HOST_INTERNAL_INTERFACE = "ens2"
+
 
 class Plugin(AbstractPlugin):
-    """cage.topology plugin documentation."""
+    """cyberwheel.topology plugin."""
 
     def run(self):
         """Run method documentation."""
@@ -73,7 +80,10 @@ class Plugin(AbstractPlugin):
                 continue
 
             host_names = get_host_names_in_subnet(name, config)
-            subnet_router = self.build_subnet(subnet_name, subnet_network, host_names)
+            decoys = config.get("decoys")
+            subnet_router = self.build_subnet(
+                subnet_name, subnet_network, host_names, decoys
+            )
             print(f"finished creating {subnet_name}")
 
             # Connect subnet to internal switch
@@ -99,7 +109,13 @@ class Plugin(AbstractPlugin):
         siem_router.redistribute_ospf_connected()
         print(f"connected siem router to {internal_switch_name}\n")
 
-    def build_subnet(self, subnet_name: str, network: IPNetwork, host_names: List[str]):
+    def build_subnet(
+        self,
+        subnet_name: str,
+        network: IPNetwork,
+        host_names: List[str],
+        decoys: List[str] = [],
+    ):
         """Build subnet
 
         Args:
@@ -147,6 +163,16 @@ class Plugin(AbstractPlugin):
             print(
                 f"connected {host_name} to {subnet_switch_name}, {host_ip} {network.netmask}"
             )
+
+            # Turn internal interface off for decoy hosts to initially hide
+            if host_name in decoys:
+                delay = -50
+                host.run_executable(
+                    delay, "/usr/sbin/ip", f"link set {HOST_INTERNAL_INTERFACE} down"
+                )
+                print(
+                    f"turned off interface {HOST_INTERNAL_INTERFACE} for decoy host: {host_name}"
+                )
 
         return subnet_router
 
