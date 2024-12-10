@@ -23,6 +23,7 @@ import sys
 import networkx as nx
 
 from cyberwheel.cyberwheel_envs.cyberwheel_dynamic import DynamicCyberwheel
+from cyberwheel.cyberwheel_envs.cyberwheel_rl_red import CyberwheelRedRL
 from cyberwheel.network.network_base import Network
 from cyberwheel.red_actions.actions.art_killchain_phases import (
     ARTDiscovery,
@@ -64,6 +65,7 @@ def parse_args():
     training_group.add_argument("--num-envs", type=int, default=1, help="the number of parallel game environments")
     training_group.add_argument("--num-steps", type=int, default=100, help="the number of steps to run in each environment per policy rollout")
     training_group.add_argument('--eval-episodes', type=int, default=10, help='Number of evaluation episodes to run')
+    training_group.add_argument('--resume', type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True, help="Whether to resume a previous run. If so, exp_name must match.")
 
     # Cyberwheel Environment Parameters
     env_group.add_argument("--red-agent", type=str, default="art_agent", help="the red agent to train against. Current option: 'art_agent' | 'killchain_agent' (deprecated)")
@@ -113,13 +115,24 @@ def evaluate(blue_agent, args):
     eval_device = torch.device("cpu")
     env = create_cyberwheel_env(args)
     episode_rewards = []
+    action_masks = torch.zeros(200, dtype=torch.bool).to(eval_device)
     total_reward = 0
     # Standard evaluation loop to estimate mean episodic return
     for episode in range(args.eval_episodes):
         obs, _ = env.reset()
         for step in range(args.num_steps):
             obs = torch.Tensor(obs).to(eval_device)
-            action, _, _, _ = blue_agent.get_action_and_value(obs)
+
+            action_space_size = env.red_agent.action_space._action_space_size
+
+            action_masks[:action_space_size] = (
+                True  # Enable actions for each environment
+            )
+            action_masks[action_space_size:] = False  # Mask out invalid actions
+
+            action, _, _, _ = blue_agent.get_action_and_value(
+                obs, action_mask=action_masks
+            )
             obs, rew, done, _, info = env.step(action)
             total_reward += rew
         episode_rewards.append(total_reward)
@@ -165,21 +178,26 @@ def run_evals(model, args, globalstep):
 
 def create_cyberwheel_env(args):
     """Creates a DynamicCyberwheel environment"""
-    env = DynamicCyberwheel(
+    # env = DynamicCyberwheel(
+    #    network_config=args.network_config,
+    #    decoy_host_file=args.decoy_config,
+    #    host_def_file=args.host_config,
+    #    detector_config=args.detector_config,
+    #    min_decoys=args.min_decoys,
+    #    max_decoys=args.max_decoys,
+    #    blue_reward_scaling=args.reward_scaling,
+    #    reward_function=args.reward_function,
+    #    red_agent=args.red_agent,
+    #    blue_config=args.blue_config,
+    #    num_steps=args.num_steps,
+    #    network=deepcopy(args.network),
+    #    service_mapping=args.service_mapping,
+    #    red_strategy=args.red_strategy,
+    # )
+    env = CyberwheelRedRL(
         network_config=args.network_config,
-        decoy_host_file=args.decoy_config,
         host_def_file=args.host_config,
-        detector_config=args.detector_config,
-        min_decoys=args.min_decoys,
-        max_decoys=args.max_decoys,
-        blue_reward_scaling=args.reward_scaling,
-        reward_function=args.reward_function,
-        red_agent=args.red_agent,
-        blue_config=args.blue_config,
-        num_steps=args.num_steps,
-        network=deepcopy(args.network),
         service_mapping=args.service_mapping,
-        red_strategy=args.red_strategy,
     )
     return env
 
@@ -250,12 +268,23 @@ class Agent(nn.Module):
         """Gets the value for a given state x by running x through the critic network"""
         return self.critic(x)
 
-    def get_action_and_value(self, x, action=None):
+    def get_action_and_value(self, x, action=None, action_mask=None):
         """
         Gets the action and value for the current state by running x through the actor and critic respectively.
         Also calculates the log probabilities of the action and the policy's entropy which are used to calculate PPO's training loss.
         """
         logits = self.actor(x)
+        # print(" LAST RUN ")
+        # print("------------------LOGITS-----------------")
+        # print(len(list(logits)))
+        # print("---------------ACTION MASK--------------------")
+        # print(len(list(action_mask)))
+
+        # logits = logits.reshape(-1)
+
+        if action_mask != None:
+            logits = logits.masked_fill(~action_mask, float("-inf"))
+
         probs = Categorical(logits=logits)
         if action is None:
             action = probs.sample()
@@ -278,15 +307,34 @@ def train_cyberwheel():
         # Initialize Weights and Biases tracking
         import wandb
 
-        wandb.init(
-            project=args.wandb_project_name,  # Can be whatever you want
-            entity=args.wandb_entity,
-            sync_tensorboard=True,  # Data logged to the tensorboard SummaryWriter will be sent to W&B
-            config=vars(args),  # Saves args as the run's configuration
-            name=run_name,  # Unique run name
-            monitor_gym=False,  # Does not attempt to render any episodes
-            save_code=False,
-        )
+        if args.resume:
+            api = wandb.Api()
+            run_id = None
+            for run in api.runs(path=f"{args.wandb_entity}/{args.wandb_project_name}"):
+                if run.name == args.exp_name:
+                    run_id = run.id
+                    break
+            wandb.init(
+                project=args.wandb_project_name,  # Can be whatever you want
+                entity=args.wandb_entity,
+                sync_tensorboard=True,  # Data logged to the tensorboard SummaryWriter will be sent to W&B
+                config=vars(args),  # Saves args as the run's configuration
+                name=run_name,  # Unique run name
+                monitor_gym=False,  # Does not attempt to render any episodes
+                save_code=False,
+                resume="allow",
+                id=run_id,
+            )
+        else:
+            wandb.init(
+                project=args.wandb_project_name,  # Can be whatever you want
+                entity=args.wandb_entity,
+                sync_tensorboard=True,  # Data logged to the tensorboard SummaryWriter will be sent to W&B
+                config=vars(args),  # Saves args as the run's configuration
+                name=run_name,  # Unique run name
+                monitor_gym=False,  # Does not attempt to render any episodes
+                save_code=False,
+            )
     writer = SummaryWriter(
         files("cyberwheel.runs").joinpath(run_name)
     )  # Logs data to tensorboard and W&B
@@ -326,9 +374,7 @@ def train_cyberwheel():
     network = Network.create_network_from_yaml(network_config)
 
     print("Mapping attack validity to hosts...", end=" ")
-    service_mapping = {}
-    if args.red_agent == "art_agent":
-        service_mapping = ARTAgent.get_service_map(network)
+    service_mapping = ARTAgent.get_service_map(network)
     print("done")
 
     args.network = network
@@ -349,7 +395,17 @@ def train_cyberwheel():
     ), "only discrete action space is supported"
 
     # Create agent and optimizer
+
     agent = Agent(envs).to(device)
+
+    # if args.resume:
+    # agent.load_state_dict(torch.load(files(f"cyberwheel.models.RLARTAgent_NoPenalty_Only400ImpactReward").joinpath("95859200.pt"),map_location=device,))
+
+    # Load model from models/ directory
+
+    # agent.load_state_dict(torch.load(files(f"cyberwheel.models.RLARTAgent_lowlatreward").joinpath(),map_location=device,))
+    # agent.eval()
+
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # ALGO Logic: Storage setup
@@ -365,6 +421,10 @@ def train_cyberwheel():
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
     values = torch.zeros((args.num_steps, args.num_envs)).to(device)
     step_rewards = torch.zeros((args.num_steps, args.num_envs))
+    max_action_space_size = 200
+    action_masks = torch.zeros(
+        (args.num_steps, args.num_envs, max_action_space_size), dtype=torch.bool
+    ).to(device)
 
     # TRY NOT TO MODIFY: start the game
 
@@ -391,6 +451,19 @@ def train_cyberwheel():
         # Run an episode in each environment. This loop collects experience which is later used for optimization.
         episode_start = time.time_ns()
         for step in range(0, args.num_steps):
+            action_space_sizes = [
+                env.red_agent.action_space._action_space_size for env in envs.envs
+            ]
+            # print(action_space_sizes)
+
+            for i, action_space_size in enumerate(action_space_sizes):
+                action_masks[step][
+                    i, :action_space_size
+                ] = True  # Enable actions for each environment
+                action_masks[step][
+                    i, action_space_size:
+                ] = False  # Mask out invalid actions
+
             global_step += 1 * args.num_envs
             obs[step] = next_obs
             dones[step] = next_done
@@ -398,7 +471,9 @@ def train_cyberwheel():
             # ALGO LOGIC: action logic
             # Select an action using the current policy and get a value estimate
             with torch.no_grad():
-                action, logprob, _, value = agent.get_action_and_value(next_obs)
+                action, logprob, _, value = agent.get_action_and_value(
+                    next_obs, action_mask=action_masks[step]
+                )
                 values[step] = value.flatten()
 
             actions[step] = action
@@ -452,6 +527,7 @@ def train_cyberwheel():
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
+        b_action_masks = action_masks.reshape(-1, action_masks.shape[-1])
 
         # Optimizing the policy and value network
         b_inds = np.arange(args.batch_size)
@@ -466,7 +542,9 @@ def train_cyberwheel():
                 mb_inds = b_inds[start:end]
 
                 _, newlogprob, entropy, newvalue = agent.get_action_and_value(
-                    b_obs[mb_inds], b_actions.long()[mb_inds]
+                    b_obs[mb_inds],
+                    b_actions.long()[mb_inds],
+                    action_mask=b_action_masks[mb_inds],
                 )
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()

@@ -13,7 +13,7 @@ from importlib.resources import files
 from tqdm import tqdm
 from torch.distributions.categorical import Categorical
 
-from cyberwheel.cyberwheel_envs.cyberwheel_dynamic import DynamicCyberwheel
+from cyberwheel.cyberwheel_envs.cyberwheel_rl_red import CyberwheelRedRL
 from cyberwheel.red_agents import ARTAgent
 from cyberwheel.red_agents.strategies import DFSImpact, ServerDowntime
 from cyberwheel.network.network_base import Network
@@ -65,37 +65,50 @@ class Agent(nn.Module):
         """Gets the value for a given state x by running x through the critic network"""
         return self.critic(x)
 
-    def get_action_and_value(self, x, action=None):
+    def get_action_and_value(self, x, action=None, action_mask=None):
         """
         Gets the action and value for the current state by running x through the actor and critic respectively.
         Also calculates the log probabilities of the action and the policy's entropy which are used to calculate PPO's training loss.
         """
         logits = self.actor(x)
+
+        if action_mask != None:
+            logits = logits.masked_fill(~action_mask, float("-inf"))
+
         probs = Categorical(logits=logits)
         if action is None:
             action = probs.sample()
         return action, probs.log_prob(action), probs.entropy(), self.critic(x)
 
 
-def make_env(
-    env_id: str,
-    rank: int,
-    network_config: str,
-    decoy_host_file: str,
-    host_def_file: str,
-    detector_config: str,
-    seed: int = 0,
-    min_decoys=1,
-    max_decoys=3,
-    blue_reward_scaling=10.0,
-    reward_function="default",
-    red_agent="art_agent",
-    blue_config="dynamic_blue_agent.yaml",
-    num_steps=50,
-    network=None,
-    service_mapping={},
-    red_strategy=ServerDowntime,
-):
+def create_cyberwheel_env(args):
+    """Creates a DynamicCyberwheel environment"""
+    # env = DynamicCyberwheel(
+    #    network_config=args.network_config,
+    #    decoy_host_file=args.decoy_config,
+    #    host_def_file=args.host_config,
+    #    detector_config=args.detector_config,
+    #    min_decoys=args.min_decoys,
+    #    max_decoys=args.max_decoys,
+    #    blue_reward_scaling=args.reward_scaling,
+    #    reward_function=args.reward_function,
+    #    red_agent=args.red_agent,
+    #    blue_config=args.blue_config,
+    #    num_steps=args.num_steps,
+    #    network=deepcopy(args.network),
+    #    service_mapping=args.service_mapping,
+    #    red_strategy=args.red_strategy,
+    # )
+    env = CyberwheelRedRL(
+        network_config=args.network_config,
+        host_def_file=args.host_config,
+        service_mapping=args.service_mapping,
+        evaluation=True,
+    )
+    return env
+
+
+def make_env(rank, args):
     """
     Utility function for multiprocessed env.
 
@@ -106,24 +119,8 @@ def make_env(
     """
 
     def _init():
-        env = DynamicCyberwheel(
-            network_config=network_config,
-            decoy_host_file=decoy_host_file,
-            host_def_file=host_def_file,
-            detector_config=detector_config,
-            min_decoys=min_decoys,
-            max_decoys=max_decoys,
-            blue_reward_scaling=blue_reward_scaling,
-            reward_function=reward_function,
-            red_agent=red_agent,
-            blue_config=blue_config,
-            num_steps=num_steps,
-            network=network,
-            service_mapping=service_mapping,
-            evaluation=True,
-            red_strategy=red_strategy,
-        )
-        env.reset(seed=seed + rank)  # Reset the environment with a specific seed
+        env = create_cyberwheel_env(args)
+        env.reset(seed=1 + rank)  # Reset the environment with a specific seed
         env = gym.wrappers.RecordEpisodeStatistics(
             env
         )  # This tracks the rewards of the environment that it wraps. Used for logging
@@ -280,30 +277,8 @@ def evaluate_cyberwheel():
     )
     network = Network.create_network_from_yaml(network_config)
 
-    service_mapping = {}
-    if args.red_agent == "art_agent":
-        service_mapping = ARTAgent.get_service_map(network)
-    env_funcs = [
-        make_env(
-            1,
-            0,
-            network_config=args.network_config,
-            decoy_host_file=args.decoy_config,
-            host_def_file=args.host_config,
-            detector_config=args.detector_config,
-            min_decoys=args.min_decoys,
-            max_decoys=args.max_decoys,
-            blue_reward_scaling=args.reward_scaling,
-            reward_function=args.reward_function,
-            red_agent=args.red_agent,
-            blue_config=args.blue_config,
-            num_steps=args.num_steps,
-            network=deepcopy(network),
-            service_mapping=service_mapping,
-            red_strategy=args.red_strategy,
-        )
-        for i in range(1)
-    ]
+    args.service_mapping = ARTAgent.get_service_map(network)
+    env_funcs = [make_env(i, args) for i in range(1)]
     envs = gym.vector.SyncVectorEnv(env_funcs)
 
     agent = Agent(envs).to(device)
@@ -357,12 +332,27 @@ def evaluate_cyberwheel():
     full_blue_actions = []
     full_rewards = []
 
+    max_action_space_size = envs.envs[0].red_agent.action_space.max_size
+    action_mask = [False] * max_action_space_size
+
     for episode in tqdm(range(args.num_episodes)):
         for step in range(args.num_steps):
             if step == 0:
                 obs = obs[0]
+
             obs = torch.Tensor(obs).to(device)
-            action, _, _, _ = agent.get_action_and_value(obs)
+            action_space_size = envs.envs[0].red_agent.action_space._action_space_size
+            # print(action_space_sizes)
+
+            for i in range(max_action_space_size):
+                if i < action_space_size:
+                    action_mask[i] = True
+                else:
+                    action_mask[i] = False
+
+            action_mask = torch.asarray(action_mask)
+
+            action, _, _, _ = agent.get_action_and_value(obs, action_mask=action_mask)
 
             obs, rew, done, _, info = envs.step(action.cpu().numpy())
             rew = rew[0]
@@ -375,7 +365,7 @@ def evaluate_cyberwheel():
                 red_action_dest = info["final_info"][0]["red_action_dst"]
                 red_action_success = info["final_info"][0]["red_action_success"]
                 net = info["final_info"][0]["network"]
-                history = info["final_info"][0]["history"]
+                # history = info["final_info"][0]["history"]
                 killchain = info["final_info"][0]["killchain"]
             else:
                 blue_action = info["blue_action"][0]
@@ -384,7 +374,7 @@ def evaluate_cyberwheel():
                 red_action_dest = info["red_action_dst"][0]
                 red_action_success = info["red_action_success"][0]
                 net = info["network"][0]
-                history = info["history"][0]
+                # history = info["history"][0]
                 killchain = info["killchain"][0]
 
             full_episodes.append(episode)
@@ -398,7 +388,8 @@ def evaluate_cyberwheel():
 
             # If generating graphs for dash server view
             if args.visualize:
-                visualize(net, episode, step, now_str, history, killchain)
+                # visualize(net, episode, step, now_str, history, killchain)
+                pass
 
             total_reward += rew
             steps += 1

@@ -86,6 +86,14 @@ class KnownHostInfo:
         self.impacted = False
         self.is_leader = leader
 
+        # temp data for rl agent
+        self.scanned = False
+        self.sweeped = False
+        self.discovered = False
+        self.on_target = False
+        self.escalated = False
+        self.impacted = False
+
     def scan(self):
         self.ports_scanned = True
 

@@ -2,21 +2,17 @@ import copy
 from importlib.resources import files
 from gym import spaces
 import gym
-from typing import Dict, Iterable, List
+from typing import Dict, List
 import yaml
+import numpy as np
 
 from .cyberwheel import Cyberwheel
-from cyberwheel.blue_agents import DynamicBlueAgent
-from cyberwheel.observation import HistoryObservation
+from cyberwheel.blue_agents import InactiveBlueAgent
 from cyberwheel.detectors.alert import Alert
-from cyberwheel.detectors.handler import DetectorHandler
 from cyberwheel.network.network_base import Network
 from cyberwheel.network.host import Host
-from cyberwheel.red_agents import ARTAgent
-from cyberwheel.red_agents.strategies import ServerDowntime, Exfiltration, DFSImpact
-from cyberwheel.reward import DecoyReward, StepDetectedReward
-from cyberwheel.reward.recurring_reward import RecurringReward
-from cyberwheel.reward.restore_reward import RestoreReward
+from cyberwheel.red_agents import RLARTAgent
+from cyberwheel.reward import RLRedReward
 
 
 def host_to_index_mapping(network: Network) -> Dict[Host, int]:
@@ -44,22 +40,16 @@ def decoy_alerted(alerts: List[Alert]) -> bool:
     return False
 
 
-class DynamicCyberwheel(gym.Env, Cyberwheel):
+class CyberwheelRedRL(gym.Env, Cyberwheel):
     metadata = {"render.modes": ["human"]}
 
     def __init__(
         self,
         network_config="15-host-network.yaml",
-        decoy_host_file="decoy_hosts.yaml",
         host_def_file="host_definitions.yaml",
-        detector_config="example_detector_handler.yaml",
-        min_decoys=0,
-        max_decoys=1,
-        blue_reward_scaling=10,
         reward_function="default",
-        red_agent="art_agent",
+        red_agent="rl_red_agent",
         evaluation=False,
-        blue_config="dynamic_blue_agent.yaml",
         network=None,
         service_mapping={},
         **kwargs,
@@ -128,9 +118,6 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         network_conf_file = files("cyberwheel.resources.configs.network").joinpath(
             network_config
         )
-        decoy_conf_file = files("cyberwheel.resources.configs.decoy_hosts").joinpath(
-            decoy_host_file
-        )
         host_conf_file = files(
             "cyberwheel.resources.configs.host_definitions"
         ).joinpath(host_def_file)
@@ -141,61 +128,30 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
 
         # Create action space. Decoy action for each decoy type for each subnet.
         # Length = num_decoy_host_types * num_subnets
-        with open(decoy_conf_file, "r") as f:
-            self.decoy_info = yaml.safe_load(f)
-
         with open(host_conf_file, "r") as f:
             self.host_defs = yaml.safe_load(f)["host_types"]
 
-        self.decoy_types = list(self.decoy_info.keys())
-
-        num_hosts = len(self.network.get_hosts())
-
-        self.observation_space = spaces.Box(0, 1, shape=(2 * num_hosts,))
-        self.alert_converter = HistoryObservation(
-            self.observation_space.shape, host_to_index_mapping(self.network)
-        )
-        self.red_agent_choice = red_agent
         self.service_mapping = service_mapping
 
-        self.red_strategy = kwargs.get("red_strategy", "server_downtime")
-        if self.red_strategy == "dfs_impact":
-            self.red_strategy = DFSImpact
-        elif self.red_strategy == "exfiltration":
-            self.red_strategy = Exfiltration
-        else:
-            self.red_strategy = ServerDowntime
-
-        self.red_agent = ARTAgent(
+        self.red_agent = RLARTAgent(
+            self.network,
             self.network.get_random_user_host(),
-            network=self.network,
-            service_mapping=self.service_mapping,
-            red_strategy=self.red_strategy,
-            leader=self.network.get_random_server_host(),
+            service_mapping=service_mapping,
         )
 
-        self.blue_conf_file = files("cyberwheel.resources.configs.blue_agent").joinpath(
-            blue_config
+        self.observation_space = spaces.Box(
+            0, 2, shape=(len(self.red_agent.get_observation_space()),)
         )
-        self.blue_agent = DynamicBlueAgent(self.blue_conf_file, self.network)
-        self.action_space = self.blue_agent.create_action_space()
-        # self.blue_agent = DecoyBlueAgent(self.network, self.decoy_info, self.host_defs)
 
-        detector_conf_file = files("cyberwheel.resources.configs.detector").joinpath(
-            detector_config
-        )
-        self.detector = DetectorHandler(detector_conf_file)
+        self.action_space = self.red_agent.create_action_space()
+
+        self.blue_agent = InactiveBlueAgent()
 
         self.reward_function = reward_function
 
-        if reward_function == "step_detected":
-            self.reward_calculator = StepDetectedReward(
-                blue_rewards=self.blue_agent.get_reward_map(), max_steps=self.max_steps
-            )
-        else:
-            self.reward_calculator = RecurringReward(
-                self.red_agent.get_reward_map(), self.blue_agent.get_reward_map()
-            )
+        self.reward_calculator = RLRedReward(
+            self.red_agent.get_reward_map(), self.blue_agent.get_reward_map()
+        )
 
         self.evaluation = evaluation
 
@@ -208,68 +164,48 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         4. Convert Alerts from Detector into observation space
         5. Return obs and related metadata
         """
-        blue_agent_result = self.blue_agent.act(action)
-        self.reward_calculator.handle_blue_action_output(
-            blue_agent_result.name,
-            blue_agent_result.id,
-            blue_agent_result.success,
-            blue_agent_result.recurring,
+        blue_action = self.blue_agent.act()
+        red_action_result = self.red_agent.act(action)
+
+        red_action_name = red_action_result.action.get_name()
+        red_action_src = red_action_result.src_host.name
+        red_action_dst = red_action_result.target_host.name
+        red_action_success = red_action_result.success
+
+        # print(f"{red_action_name} from {red_action_src} to {red_action_dst} - {red_action_success}")
+        # print(f"{self.red_agent.observation[red_action_dst].__dict__}")
+        # for h in self.red_agent.observation:
+        #    print(self.red_agent.observation[h].__dict__)
+        # print(f"{self.red_agent.observation}")
+        obs_vec = self.red_agent.get_observation_space()
+
+        reward = self.reward_calculator.calculate_reward(
+            red_action_name,
+            blue_action,
+            red_action_success,
+            True,
+            False,
         )
-        red_action_name = (
-            self.red_agent.act().get_name()
-        )  # red_action includes action, and target of action
-        action_metadata = self.red_agent.history.history[-1]
 
-        red_action_type = action_metadata["action"]
-        red_action_src = action_metadata["src_host"]
-        red_action_dst = action_metadata["target_host"]
-        red_action_success = action_metadata["success"]
-
-        self.reward_calculator.handle_red_action_output(
-            red_action_name, self.red_agent.history.mapping[red_action_dst].decoy
-        )
-
-        red_action_result = self.red_agent.history.recent_history()
-        alerts = self.detector.obs([red_action_result.detector_alert])
-        obs_vec = self._get_obs(alerts)
-
-        if self.reward_function == "step_detected":
-            reward = self.reward_calculator.calculate_reward(
-                blue_agent_result.name,
-                blue_agent_result.success,
-                self.red_agent.history.mapping[red_action_dst].decoy,
-                self.current_step,
-            )
-        else:
-            reward = self.reward_calculator.calculate_reward(
-                red_action_name,
-                blue_agent_result.name,
-                red_action_success,
-                blue_agent_result.success,
-                self.red_agent.history.mapping[red_action_dst].decoy,
-            )
         self.total += reward
 
-        if self.current_step >= self.max_steps:  # Maximal number of steps
-            done = True
-        else:
-            done = False
+        done = self.current_step >= self.max_steps
+
         self.current_step += 1
 
         info = {}
         if self.evaluation:
             info = {
-                "red_action": red_action_type,
+                "red_action": red_action_name,
                 "red_action_src": red_action_src,
                 "red_action_dst": red_action_dst,
                 "red_action_success": red_action_success,
-                "blue_action": blue_agent_result.name,
-                "network": self.blue_agent.network,
-                "history": self.red_agent.history,
+                "blue_action": blue_action,
+                "network": self.red_agent.network,
+                # "history": self.red_agent.history,
                 "killchain": self.red_agent.killchain,
             }
-        self.detector.reset()
-        self.detector.reset()
+
         return (
             obs_vec,
             reward,
@@ -277,12 +213,6 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
             False,
             info,
         )
-
-    def _get_obs(self, alerts: List[Alert]) -> Iterable:
-        return self.alert_converter.create_obs_vector(alerts)
-
-    def _reset_obs(self) -> Iterable:
-        return self.alert_converter.reset_obs_vector()
 
     def reset(self, seed=None, options=None):
         self.total = 0
@@ -292,16 +222,12 @@ class DynamicCyberwheel(gym.Env, Cyberwheel):
         self.red_agent.reset(
             self.network.get_random_user_host(),
             network=self.network,
-            leader=self.network.get_random_server_host(),
         )
 
         self.blue_agent.reset()
 
-        self.alert_converter = HistoryObservation(
-            self.observation_space.shape, host_to_index_mapping(self.network)
-        )
         self.reward_calculator.reset()
-        return self._reset_obs(), {}
+        return np.zeros((len(self.red_agent.get_observation_space()),)), {}
 
     # if you open any other processes close them here
     def close(self):

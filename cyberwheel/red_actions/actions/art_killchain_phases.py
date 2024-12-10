@@ -287,6 +287,7 @@ class ARTPingSweep(ARTKillChainPhase):
         target_host: Host,
     ) -> None:
         super().__init__(src_host, target_host)
+        self.action_results.action = type(self)
 
     def sim_execute(self):
         self.action_results.detector_alert.add_src_host(self.src_host)
@@ -327,12 +328,17 @@ class ARTPingSweep(ARTKillChainPhase):
         self.action_results.add_metadata(
             host.subnet.name, {"subnet_scanned": host.subnet}
         )
+        self.action_results.add_metadata(
+            "sweeped_hosts", [h.name for h in subnet_hosts]
+        )
         for each_host in subnet_hosts:
             for h in each_host.interfaces:
                 interfaces.append(h)
         for h in interfaces:
             self.action_results.add_metadata(h.name, {"ip_address": h})
-
+        self.action_results.add_metadata(
+            "interfaced_hosts", [h.name for h in interfaces]
+        )
         return self.action_results
 
 
@@ -362,6 +368,7 @@ class ARTPortScan(ARTKillChainPhase):
         target_host: Host,
     ) -> None:
         super().__init__(src_host, target_host)
+        self.action_results.action = type(self)
 
     def sim_execute(self):
         self.action_results.detector_alert.add_src_host(self.src_host)
@@ -423,6 +430,7 @@ class ARTPrivilegeEscalation(ARTKillChainPhase):
         self, src_host: Host, target_host: Host, valid_techniques: list[str] = []
     ) -> None:
         super().__init__(src_host, target_host, valid_techniques=valid_techniques)
+        self.action_results.action = type(self)
 
 
 class ARTDiscovery(ARTKillChainPhase):
@@ -444,6 +452,7 @@ class ARTDiscovery(ARTKillChainPhase):
         self, src_host: Host, target_host: Host, valid_techniques: list[str] = []
     ) -> None:
         super().__init__(src_host, target_host, valid_techniques=valid_techniques)
+        self.action_results.action = type(self)
 
     def sim_execute(self):
         super().sim_execute()
@@ -474,6 +483,7 @@ class ARTLateralMovement(ARTKillChainPhase):
         self, src_host: Host, target_host: Host, valid_techniques: list[str] = []
     ) -> None:
         super().__init__(src_host, target_host, valid_techniques=valid_techniques)
+        self.action_results.action = type(self)
 
 
 class ARTImpact(ARTKillChainPhase):
@@ -494,3 +504,4 @@ class ARTImpact(ARTKillChainPhase):
         self, src_host: Host, target_host: Host, valid_techniques: list[str] = []
     ) -> None:
         super().__init__(src_host, target_host, valid_techniques=valid_techniques)
+        self.action_results.action = type(self)

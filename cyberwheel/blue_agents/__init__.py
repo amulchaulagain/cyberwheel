@@ -2,3 +2,4 @@
 # from .decoy_blue import DecoyBlueAgent
 
 from .agents.dynamic_blue_agent import DynamicBlueAgent
+from .agents.inactive_blue_agent import InactiveBlueAgent

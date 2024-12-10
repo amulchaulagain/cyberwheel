@@ -448,9 +448,15 @@ class Network:
             print(f"{node} not found in {self.name}")
             raise e
 
-    def get_all_hosts(self) -> list:
+    def get_all_hosts(self) -> list[Host]:
         nodes_tuple = self.graph.nodes(data="data")  # type: ignore
         hosts = [obj for _, obj in nodes_tuple if isinstance(obj, Host)]
+
+        return hosts
+
+    def get_all_hostnames(self) -> list[Host]:
+        nodes_tuple = self.graph.nodes(data="data")  # type: ignore
+        hosts = [obj.name for _, obj in nodes_tuple if isinstance(obj, Host)]
 
         return hosts
 
