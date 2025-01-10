@@ -3,7 +3,7 @@ import importlib
 import yaml
 
 from importlib.resources import files
-from typing import Dict, List
+from typing import Dict, List, Any
 from gym import Space
 
 from cyberwheel.blue_agents.blue_agent import BlueAgent, BlueAgentResult
@@ -44,11 +44,12 @@ class DynamicBlueAgent(BlueAgent):
 
     This agent should also keep track of blue action config files. The config for decoys is an example.
     """
-    def __init__(self, config: str, network: Network) -> None:
+    def __init__(self, network: Network, args) -> None:
         super().__init__()
-        self.config = config
+        self.config = files("cyberwheel.resources.configs.blue_agent").joinpath(args.blue_agent)
         self.network = network
-        self.configs: Dict[str, any] = {}
+
+        self.configs: Dict[str, Any] = {}
         self.action_space: ActionSpace = None
         
         self.from_yaml()
@@ -57,42 +58,30 @@ class DynamicBlueAgent(BlueAgent):
 
     def from_yaml(self):
         with open(self.config, "r") as r:
-            contents = yaml.safe_load(r)
-
-        # Get module import paths
-        action_module_path = contents['action_module_path']
-        if not isinstance(action_module_path, str):
-            raise TypeError(f'value for key "action_module_path" must be a string')
-        as_module_path = contents['action_space_module_path']
-        if not isinstance(as_module_path, str):
-            raise TypeError(f'value for key "action_space_module_path" must be a string')        
+            contents = yaml.safe_load(r)      
         
         # Initialize the action space converter
         action_space = contents['action_space']
-        as_module = action_space['module']
         as_class = action_space['class']
-        if 'args' in action_space:
+        if 'args' in action_space and action_space['args']:
             as_args = action_space['args']
-            if as_args is None:
-                as_args = {}
-        import_path = ".".join([as_module_path, as_module])
-        m = importlib.import_module(import_path)
+        else:
+            as_args = {}
+        m = importlib.import_module("cyberwheel.blue_agents.action_space")
         self.action_space = getattr(m, as_class)(self.network, **as_args)      
-
 
         # Get information needed to later initialize blue actions.
         actions = []
         for k, v in contents['actions'].items():
-            module_name = v['module']
             class_name = v['class']
             configs = {}
-            if isinstance(v["configs"], Dict):
+            if "configs" in v and isinstance(v["configs"], Dict):
                 configs = v["configs"]
             shared_data = []
-            if isinstance(v['shared_data'], List):
+            if "shared_data" in v and isinstance(v['shared_data'], List):
                 shared_data = v['shared_data']
             
-            import_path = ".".join([action_module_path, module_name])
+            import_path = "cyberwheel.blue_actions.actions"
             m = importlib.import_module(import_path)
             class_ = getattr(m, class_name)
             action_info = _ActionConfigInfo(k, 
@@ -107,25 +96,24 @@ class DynamicBlueAgent(BlueAgent):
         # Set up data shared between actions
         self.shared_data = {}
         self.reset_map = {}
-        if contents["shared_data"] is None:
-            return
-        for k, v in contents["shared_data"].items():
-            if v in ("list", "set", "dict"):
-                data_type = getattr(builtins, v)
-                self.shared_data[k] = data_type()
-            else:
-                if "module" not in v or "class" not in v:
-                    raise KeyError(
-                        "If using custom object, 'module' and 'class' must be defined."
-                    )
-                a = importlib.import_module(v["module"])
-                data_type = getattr(a, v["class"])
+        if "shared_data" in contents:
+            for k, v in contents["shared_data"].items():
+                if v in ("list", "set", "dict"):
+                    data_type = getattr(builtins, v)
+                    self.shared_data[k] = data_type()
+                else:
+                    if "module" not in v or "class" not in v:
+                        raise KeyError(
+                            "If using custom object, 'module' and 'class' must be defined."
+                        )
+                    a = importlib.import_module(v["module"])
+                    data_type = getattr(a, v["class"])
 
-                kwargs = {}
-                if "args" in v and v["args"] is not None:
-                    kwargs = v["args"]
+                    kwargs = {}
+                    if "args" in v and v["args"] is not None:
+                        kwargs = v["args"]
 
-                self.shared_data[k] = data_type(**kwargs)
+                    self.shared_data[k] = data_type(**kwargs)
             
     def _init_blue_actions(self)-> None:
         for action_class, action_info in self.actions:
@@ -178,8 +166,8 @@ class DynamicBlueAgent(BlueAgent):
     def get_action_space_shape(self) -> tuple[int, ...]:
         return self.action_space.get_shape()
     
-    def create_action_space(self) -> Space:
-        return self.action_space.create_action_space()
+    def create_action_space(self, action_space_size: int) -> Space:
+        return self.action_space.create_action_space(action_space_size)
     
     def reset(self):
         for v in self.shared_data.values():

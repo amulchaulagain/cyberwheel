@@ -1,9 +1,5 @@
-action_module_path: "cyberwheel.blue_actions.actions"
-action_space_module_path: "cyberwheel.blue_agents.action_space"
-
 actions:
   nothing: # Unique name for this action
-    module: Nothing # Module this action's class is located in
     class: Nothing # The action class's name
     configs: # List of config file names this action needs. Must be in cyberwheel/resources/configs
     reward:
@@ -14,7 +10,6 @@ actions:
     shared_data:
 
   decoy0:
-    module: DeployDecoyHost
     class: DeployDecoyHost
     configs:
       decoy_hosts: decoy_server_hosts.yaml

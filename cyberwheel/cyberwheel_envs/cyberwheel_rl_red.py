@@ -1,19 +1,20 @@
-import copy
 from importlib.resources import files
 from gym import spaces
 import gym
-from typing import Dict, List
+from typing import Dict, List, Iterable
 import yaml
 import numpy as np
+import importlib
 
 from .cyberwheel import Cyberwheel
-from cyberwheel.blue_agents import InactiveBlueAgent
+from cyberwheel.blue_agents import DynamicBlueAgent, InactiveBlueAgent
 from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.network_base import Network
 from cyberwheel.network.host import Host
-from cyberwheel.red_agents import RLARTAgent
-from cyberwheel.reward import RLRedReward
-
+from cyberwheel.red_agents import RLARTAgent, ARTAgent
+from cyberwheel.utils import YAMLConfig
+from cyberwheel.observation import HistoryObservation
+from cyberwheel.detectors.handler import DetectorHandler
 
 def host_to_index_mapping(network: Network) -> Dict[Host, int]:
     """
@@ -45,14 +46,8 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
 
     def __init__(
         self,
-        network_config="15-host-network.yaml",
-        host_def_file="host_definitions.yaml",
-        reward_function="default",
-        red_agent="rl_red_agent",
-        evaluation=False,
-        network=None,
-        service_mapping={},
-        **kwargs,
+        args: YAMLConfig,
+        network: Network = None
     ):
         """
         The DynamicCyberwheel class is used to define the Cyberwheel environment. It allows you to use a YAML
@@ -116,14 +111,14 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             - Default: {}
         """
         network_conf_file = files("cyberwheel.resources.configs.network").joinpath(
-            network_config
+            args.network_config
         )
         host_conf_file = files(
             "cyberwheel.resources.configs.host_definitions"
-        ).joinpath(host_def_file)
+        ).joinpath(args.host_config)
         super().__init__(config_file_path=network_conf_file, network=network)
         self.total = 0
-        self.max_steps = kwargs.get("num_steps", 100)
+        self.max_steps = args.num_steps
         self.current_step = 0
 
         # Create action space. Decoy action for each decoy type for each subnet.
@@ -131,29 +126,64 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         with open(host_conf_file, "r") as f:
             self.host_defs = yaml.safe_load(f)["host_types"]
 
-        self.service_mapping = service_mapping
+        self.service_mapping = args.service_mapping
+        self.args = args
 
-        self.red_agent = RLARTAgent(
-            self.network,
-            self.network.get_random_user_host(),
-            service_mapping=service_mapping,
-        )
+        if args.valid_targets == "servers":
+            valid_targets = [h.name for h in self.network.get_all_server_hosts()]
+        elif args.valid_targets == "users":
+            valid_targets = [h.name for h in self.network.get_all_user_hosts()]
+        elif type(args.valid_targets) is list:
+            valid_targets = args.valid_targets
+        else:
+            valid_targets = [h.name for h in self.network.get_all_hosts()]
 
-        self.observation_space = spaces.Box(
-            0, 2, shape=(len(self.red_agent.get_observation_space()),)
-        )
 
-        self.action_space = self.red_agent.create_action_space()
+        if args.train_red:
+            self.red_agent = RLARTAgent(
+                self.network,
+                args
+            )
+            self.blue_agent = InactiveBlueAgent()
+            self.rl_agent = self.red_agent
+            self.static_agent = self.blue_agent
+            self.observation_space = spaces.Box(
+                0, 2, shape=(len(self.red_agent.get_observation_space()),)
+            )
+            self.max_action_space_size = self.network.get_num_hosts() * self.red_agent.action_space.num_actions * 2
+            self.action_space = self.red_agent.action_space.create_action_space(self.max_action_space_size)
+        else:
+            self.red_agent = ARTAgent(
+                self.network,
+                args
+            )
+            self.blue_agent = DynamicBlueAgent(
+                self.network,
+                args
+            )
+            self.rl_agent = self.blue_agent
+            self.static_agent = self.red_agent
+            self.max_action_space_size = self.network.get_num_subnets() * 2
+            self.action_space = self.blue_agent.create_action_space(self.max_action_space_size)
 
-        self.blue_agent = InactiveBlueAgent()
+            detector_conf_file = files("cyberwheel.resources.configs.detector").joinpath(
+                args.detector_config
+            )
+            self.detector = DetectorHandler(detector_conf_file)
+            self.observation_space = spaces.Box(0, 1, shape=(2 * self.network.size(),))
+            self.alert_converter = HistoryObservation(
+                self.observation_space.shape, host_to_index_mapping(self.network)
+            )
 
-        self.reward_function = reward_function
+        reward_function = args.reward_function
+        rfm = importlib.import_module("cyberwheel.reward")
 
-        self.reward_calculator = RLRedReward(
-            self.red_agent.get_reward_map(), self.blue_agent.get_reward_map()
-        )
+        self.reward_calculator = getattr(rfm, reward_function)(
+            self.red_agent.get_reward_map(), 
+            self.blue_agent.get_reward_map(),
+            valid_targets)
 
-        self.evaluation = evaluation
+        self.evaluation = args.evaluation
 
     def step(self, action):
         """
@@ -164,27 +194,48 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         4. Convert Alerts from Detector into observation space
         5. Return obs and related metadata
         """
-        blue_action = self.blue_agent.act()
-        red_action_result = self.red_agent.act(action)
+        red_id = -1
+        red_recurring = 0
+        blue_id = -1
+        blue_recurring = 0
 
-        red_action_name = red_action_result.action.get_name()
-        red_action_src = red_action_result.src_host.name
-        red_action_dst = red_action_result.target_host.name
-        red_action_success = red_action_result.success
+        if self.args.train_red:
+            blue_action_name = self.blue_agent.act()
+            blue_action_success = True
+            red_action_result = self.red_agent.act(action)
+            red_action_name = red_action_result.action.get_name()
+            red_action_src = red_action_result.src_host.name
+            red_action_dst = red_action_result.target_host.name
+            red_action_success = red_action_result.success
 
-        # print(f"{red_action_name} from {red_action_src} to {red_action_dst} - {red_action_success}")
-        # print(f"{self.red_agent.observation[red_action_dst].__dict__}")
-        # for h in self.red_agent.observation:
-        #    print(self.red_agent.observation[h].__dict__)
-        # print(f"{self.red_agent.observation}")
-        obs_vec = self.red_agent.get_observation_space()
+            obs_vec = self.red_agent.get_observation_space()
+        else:
+            blue_agent_result = self.blue_agent.act(action)
+            blue_id = blue_agent_result.id
+            blue_recurring = blue_agent_result.recurring
+            blue_action_name = blue_agent_result.name
+            blue_action_success = blue_agent_result.success
+
+            red_action_name = self.red_agent.act().get_name()
+            action_metadata = self.red_agent.history.history[-1]
+            red_action_src = action_metadata["src_host"]
+            red_action_dst = action_metadata["target_host"]
+            red_action_success = action_metadata["success"]
+
+            red_action_result = self.red_agent.history.recent_history()
+            alerts = self.detector.obs([red_action_result.detector_alert])
+            obs_vec = self._get_obs(alerts)
 
         reward = self.reward_calculator.calculate_reward(
             red_action_name,
-            blue_action,
+            blue_action_name,
             red_action_success,
-            True,
-            False,
+            blue_action_success,
+            self.network.get_node_from_name(red_action_dst),
+            red_id=red_id,
+            red_recurring=red_recurring,
+            blue_id=blue_id,
+            blue_recurring=blue_recurring
         )
 
         self.total += reward
@@ -200,12 +251,14 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
                 "red_action_src": red_action_src,
                 "red_action_dst": red_action_dst,
                 "red_action_success": red_action_success,
-                "blue_action": blue_action,
+                "blue_action": blue_action_name,
                 "network": self.red_agent.network,
                 # "history": self.red_agent.history,
                 "killchain": self.red_agent.killchain,
             }
-
+        if self.args.train_blue:
+            self.detector.reset()
+            self.detector.reset()
         return (
             obs_vec,
             reward,
@@ -214,11 +267,17 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             info,
         )
 
+    def _get_obs(self, alerts: List[Alert]) -> Iterable:
+        return self.alert_converter.create_obs_vector(alerts)
+    
+    def _reset_obs(self) -> Iterable:
+        return self.alert_converter.reset_obs_vector()
+
     def reset(self, seed=None, options=None):
         self.total = 0
         self.current_step = 0
         self.network.reset()
-
+        
         self.red_agent.reset(
             self.network.get_random_user_host(),
             network=self.network,
@@ -227,8 +286,24 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         self.blue_agent.reset()
 
         self.reward_calculator.reset()
-        return np.zeros((len(self.red_agent.get_observation_space()),)), {}
+        if self.args.train_red:
+            return np.zeros((len(self.red_agent.get_observation_space()),)), {}
+        else:
+            self.observation_space = spaces.Box(0, 1, shape=(2 * self.network.size(),))
+            self.alert_converter = HistoryObservation(
+                self.observation_space.shape, host_to_index_mapping(self.network)
+            )
+            return self._reset_obs(), {}
+        
 
     # if you open any other processes close them here
     def close(self):
         pass
+
+    @property
+    def red_agent_action_space_size(self):
+        return self.red_agent.action_space._action_space_size
+    
+    @property
+    def blue_agent_action_space_size(self):
+        return self.blue_agent.action_space._action_space_size

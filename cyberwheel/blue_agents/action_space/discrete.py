@@ -6,8 +6,6 @@ from gym.core import ActType
 from .action_space import ActionSpace, ASReturn
 from cyberwheel.network.network_base import Network
 from cyberwheel.blue_actions.blue_action import BlueAction
-from cyberwheel.red_actions.actions.art_killchain_phases import ARTKillChainPhase
-
 
 class _ActionRangeChecker:
     def __init__(
@@ -87,53 +85,5 @@ class DiscreteActionSpace(ActionSpace):
     def get_shape(self) -> tuple[int, ...]:
         return (self._action_space_size,)
 
-    def create_action_space(self) -> Space:
-        return Discrete(self._action_space_size)
-
-
-class RedDiscreteActionSpace:
-    def __init__(self, actions: list[ARTKillChainPhase], entry_host: str) -> None:
-        self.max_size = 200
-        self._action_space_size: int = len(actions)
-        self.num_hosts = 1
-        self.num_actions = len(actions)
-        self.actions = actions
-        self.hosts = [entry_host]
-
-    def select_action(self, action: ActType) -> tuple[ARTKillChainPhase, str]:
-        try:
-            action = int(action)
-        except:
-            raise TypeError(
-                f"provided action is of type {type(action)} and is unsupported by the chosen ActionSpaceConverter"
-            )
-
-        # TODO: comment out after debugging and delete before committing
-        # for i in range(self._action_space_size):
-        #    action_index = i % self.num_actions
-        #    host_index = i // self.num_actions
-        #    action_name = self.actions[action_index]
-        #    host_name = self.hosts[host_index]
-        #    print(f"{i} - {action_name.get_name()} {host_name}")
-
-        # action = int(input("Which action will you take?"))
-        # TODO: End debugging section
-
-        action_index = action % self.num_actions
-        host_index = action // self.num_actions
-
-        action_name = self.actions[action_index]
-        host_name = self.hosts[host_index]
-
-        return action_name, host_name
-
-    def add_host(self, host_name: str) -> None:
-        self._action_space_size += len(self.actions)
-        self.hosts += [host_name]
-        self.num_hosts += 1
-
-    def get_shape(self) -> tuple[int, ...]:
-        return (self._action_space_size,)
-
-    def create_action_space(self) -> Space:
-        return Discrete(self.max_size)
+    def create_action_space(self, max_size: int) -> Space:
+        return Discrete(max_size)

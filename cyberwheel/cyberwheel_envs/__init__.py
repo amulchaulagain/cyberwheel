@@ -1,1 +1,2 @@
 from cyberwheel.cyberwheel_envs.cyberwheel import Cyberwheel
+from cyberwheel.cyberwheel_envs.cyberwheel_rl_red import CyberwheelRedRL

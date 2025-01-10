@@ -82,7 +82,7 @@ class KnownHostInfo:
         self.services = services
         self.vulnerabilities = vulnerabilities
         self.type = type
-        self.routes = None  # TODO: If route not set, defaults to Router and local Subnet-level network
+        self.routes = None
         self.impacted = False
         self.is_leader = leader
 

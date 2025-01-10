@@ -156,7 +156,7 @@ class AtomicTest:
                 executor["elevation_required"]
                 if "elevation_required" in executor
                 else True
-            )  # TODO: Is it better for default elevation required to be T or F???
+            )
 
             self.executor = Executor(
                 name=executor_name,

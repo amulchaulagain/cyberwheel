@@ -1,14 +1,13 @@
-import builtins
 import importlib
 import yaml
 import numpy as np
 
-from importlib.resources import files
-from typing import Dict, List, Iterable
-from gym import Space
+from typing import Iterable
 
-from cyberwheel.red_agents import ARTAgent, RedAgent
+from cyberwheel.red_agents import ARTAgent
 from cyberwheel.red_actions.red_base import RedActionResults
+from cyberwheel.reward.reward_base import RewardMap
+from cyberwheel.network.network_base import Network, Host
 from cyberwheel.red_actions.actions.art_killchain_phases import (
     ARTKillChainPhase,
     ARTPingSweep,
@@ -18,10 +17,6 @@ from cyberwheel.red_actions.actions.art_killchain_phases import (
     ARTPrivilegeEscalation,
     ARTImpact,
 )
-from cyberwheel.reward.reward_base import RewardMap
-from cyberwheel.network.network_base import Network, Host
-from cyberwheel.blue_agents.action_space.discrete import RedDiscreteActionSpace
-
 
 class RLARTAgentResult:
     def __init__(
@@ -78,30 +73,22 @@ class RLARTAgent(ARTAgent):
     Filler
     """
 
-    def __init__(self, network: Network, entry_host: Host, service_mapping={}) -> None:
-        super().__init__(entry_host=entry_host, service_mapping=service_mapping)
+    def __init__(self, network: Network, args) -> None:
+        super().__init__(network, args, service_mapping=args.service_mapping)
         self.network = network
 
-        self.initialize_actions()
+        self.from_yaml()
 
-        self.reward_map = {
-            ARTPingSweep.get_name(): (0, 0),
-            ARTPortScan.get_name(): (0, 0),
-            ARTDiscovery.get_name(): (0, 0),
-            ARTLateralMovement.get_name(): (0, 0),
-            ARTPrivilegeEscalation.get_name(): (0, 0),
-            ARTImpact.get_name(): (400, 0),
-        }
         self.observation = {}
-        self.observation[entry_host.name] = HostView(entry_host.name, on_host=True)
+        self.observation[self.entry_host.name] = HostView(self.entry_host.name, on_host=True)
         self.tracked_hosts = self.network.get_all_hostnames()
+    
+    def from_yaml(self) -> None:
+        with open(self.config, "r") as r:
+            contents = yaml.safe_load(r)
 
-        # TODO: Delete this or comment out after debugging!!! Delete before committing.
-        self.temp_step = 0
-        self.temp_actions = []
-
-    def initialize_actions(self) -> None:
-        valid_actions = [
+        # Get module import path
+        action_classes = [
             ARTPingSweep,
             ARTPortScan,
             ARTDiscovery,
@@ -109,14 +96,22 @@ class RLARTAgent(ARTAgent):
             ARTPrivilegeEscalation,
             ARTImpact,
         ]
-        self.action_space: RedDiscreteActionSpace = RedDiscreteActionSpace(
-            valid_actions, self.current_host.name
-        )
+
+        self.reward_map = {}
+
+        self.entry_host: Host = self.network.get_node_from_name(contents["entry_host"]) if "entry_host" in contents else self.network.get_random_user_host()
+        self.current_host : Host = self.entry_host
+
+        # Initialize the action space
+        as_class = contents['action_space']
+        asm = importlib.import_module("cyberwheel.red_agents.action_space")
+        self.action_space = getattr(asm, as_class)(action_classes, self.current_host.name)
+
+        for k, v in contents['actions'].items():
+            self.reward_map[k] = (v["reward"]["immediate"], v["reward"]["recurring"])
 
     def act(self, action: int) -> RLARTAgentResult:
-        # self.handle_network_change()
-        # for h in self.observation:
-        #    print(self.observation[h].__dict__)
+        # self.handle_network_change() TODO: Implement when developing static blue agent
         art_action, target_host_name = self.action_space.select_action(
             action
         )  # Selects ART Action, should include the action and target host (based on view?)
@@ -137,7 +132,11 @@ class RLARTAgent(ARTAgent):
             success = result.attack_success
             self.handle_action(result)
         return RLARTAgentResult(
-            art_action, source_host, target_host, success, self.get_observation_space()
+            art_action, 
+            source_host, 
+            target_host, 
+            success, 
+            self.get_observation_space()
         )  # Returns what ARTAgent act() should, probably. Or the observation space?
 
     def handle_action(self, result: RedActionResults) -> None:
@@ -153,9 +152,7 @@ class RLARTAgent(ARTAgent):
             for h in set(hosts) - self.observation.keys():
                 self.observation[h] = HostView(h, sweeped=True)
                 self.action_space.add_host(h)
-            for h in set(
-                interfaced_hosts
-            ):  # - self.observation.keys(): TODO: Need to test if this works without set difference
+            for h in set(interfaced_hosts):
                 self.observation[h] = HostView(h)
                 self.action_space.add_host(h)
         elif action == ARTPortScan:  # Scans target host
@@ -236,9 +233,6 @@ class RLARTAgent(ARTAgent):
     def get_action_space_shape(self) -> tuple[int, ...]:
         return self.action_space.get_shape()
 
-    def create_action_space(self) -> Space:
-        return self.action_space.create_action_space()
-
     def get_observation_space(self):
         """
         Takes red agent view of network and transforms it into the obs vector.
@@ -263,4 +257,4 @@ class RLARTAgent(ARTAgent):
         self.current_host = entry_host
         self.observation = {}
         self.observation[entry_host.name] = HostView(entry_host.name, on_host=True)
-        self.initialize_actions()
+        self.action_space.reset(entry_host.name)

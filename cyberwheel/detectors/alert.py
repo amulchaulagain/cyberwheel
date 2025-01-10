@@ -5,6 +5,7 @@ from copy import deepcopy
 from cyberwheel.network.host import Host
 from cyberwheel.network.service import Service
 from cyberwheel.red_actions.technique import Technique
+
 IPAddress = Union[IPv4Address, IPv6Address, None]
 
 class Alert():

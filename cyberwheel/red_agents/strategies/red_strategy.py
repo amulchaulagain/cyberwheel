@@ -7,6 +7,9 @@ Defines Base class for implementing Red Strategies.
 
 
 class RedStrategy(ABC):
+    """
+    filler
+    """
     @classmethod
     @abstractmethod
     def select_target(cls, agent_obj) -> Host | None:
@@ -14,5 +17,5 @@ class RedStrategy(ABC):
 
     @classmethod
     @abstractmethod
-    def get_reward_map(cls) -> dict[str, tuple[int, int]]:
-        return {}
+    def get_reward_map(cls, config) -> dict[str, tuple[int, int]]:
+        return {k: (v["reward"]["immediate"], v["reward"]["recurring"]) for k, v in config['actions'].items()}
