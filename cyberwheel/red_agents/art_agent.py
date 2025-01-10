@@ -26,11 +26,12 @@ from cyberwheel.red_agents.red_agent_base import (
     HybridSetList,
 )
 
+
 class ARTAgent(RedAgent):
     def __init__(
         self,
         network: Network,
-        args, 
+        args,
         name: str = "ARTAgent",
         service_mapping: dict = {},
     ):
@@ -98,7 +99,9 @@ class ARTAgent(RedAgent):
         self.unknowns = HybridSetList()
         self.campaign = args.campaign
 
-        if service_mapping == {} and not self.campaign: # Probably good to use YAML for this as well
+        if (
+            service_mapping == {} and not self.campaign
+        ):  # Probably good to use YAML for this as well
             self.services_map = {}
             self.tracked_hosts = set()
             for host in self.network.get_all_hosts():
@@ -114,7 +117,7 @@ class ARTAgent(RedAgent):
         else:
             self.services_map = service_mapping
             self.tracked_hosts = set(service_mapping.keys())
-    
+
     def from_yaml(self) -> None:
         with open(self.config, "r") as r:
             contents = yaml.safe_load(r)
@@ -123,12 +126,21 @@ class ARTAgent(RedAgent):
         self.all_kcps = []
         self.reward_map = {}
 
-        self.entry_host: Host = self.network.get_node_from_name(contents["entry_host"]) if "entry_host" in contents else self.network.get_random_user_host()
-        self.current_host : Host = self.entry_host
+        self.entry_host: Host = (
+            self.network.get_node_from_name(contents["entry_host"])
+            if "entry_host" in contents and contents["entry_host"]
+            else self.network.get_random_user_host()
+        )
+        self.current_host: Host = self.entry_host
 
-        for k, v in contents['actions'].items():
+        for k, v in contents["actions"].items():
             self.reward_map[k] = (v["reward"]["immediate"], v["reward"]["recurring"])
-            kcp = getattr(importlib.import_module("cyberwheel.red_actions.actions.art_killchain_phases"), v["class"])
+            kcp = getattr(
+                importlib.import_module(
+                    "cyberwheel.red_actions.actions.art_killchain_phases"
+                ),
+                v["class"],
+            )
             if kcp == ARTPingSweep or kcp == ARTPortScan:
                 pass
             elif kcp == ARTLateralMovement:
@@ -140,7 +152,6 @@ class ARTAgent(RedAgent):
         self.strategy = getattr(strategies, contents["strategy"])
 
         self.leader = contents.get("leader")
-
 
     @classmethod
     def get_service_map(cls, network: Network):
@@ -328,17 +339,27 @@ class ARTAgent(RedAgent):
                         known_type = "User"
                         self.unknowns.remove(host_name)
                     self.history.hosts[host_name].type = known_type
-                    self.history.hosts[host_name].is_leader = self.leader.name == host_name if self.leader else False
+                    self.history.hosts[host_name].is_leader = (
+                        self.leader.name == host_name if self.leader else False
+                    )
                 elif k == "subnet_scanned":
                     if metadata.name not in self.history.subnets.keys():
                         self.history.mapping[metadata.name] = metadata
-                        self.history.subnets[metadata.name] = KnownSubnetInfo(scanned=True)
-                        self.history.subnets[metadata.name].connected_hosts = metadata.connected_hosts
-                        self.history.subnets[metadata.name].available_ips = metadata.available_ips
+                        self.history.subnets[metadata.name] = KnownSubnetInfo(
+                            scanned=True
+                        )
+                        self.history.subnets[metadata.name].connected_hosts = (
+                            metadata.connected_hosts
+                        )
+                        self.history.subnets[metadata.name].available_ips = (
+                            metadata.available_ips
+                        )
                         self.history.subnets[metadata.name].scan()
                     elif metadata.name not in self.history.mapping.keys():
                         self.history.mapping[metadata.name] = metadata
-                        self.history.subnets[metadata.name] = KnownSubnetInfo(scanned=False)
+                        self.history.subnets[metadata.name] = KnownSubnetInfo(
+                            scanned=False
+                        )
 
                     for h in metadata.connected_hosts:
                         if h.name not in self.history.hosts.keys():

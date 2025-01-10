@@ -23,16 +23,16 @@ actions:
     shared_data:
       - isolate_data
 
-  remove_decoy:
-    module: RemoveDecoyHost
-    class: RemoveDecoyHost
-    configs:
-    reward:
-      immediate: 0
-      recurring: 0
-    action_space_args:
-      type: subnet
-    shared_data:
+  #remove_decoy:
+  #  module: RemoveDecoyHost
+  #  class: RemoveDecoyHost
+  #  configs:
+  #  reward:
+  #    immediate: 0
+  #    recurring: 0
+  #  action_space_args:
+  #    type: subnet
+  #  shared_data:
 
 # Shared data is additional data that is shared by blue actions
 # The actions define what data they want to use

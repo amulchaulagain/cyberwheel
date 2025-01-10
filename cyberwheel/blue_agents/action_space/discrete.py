@@ -7,6 +7,7 @@ from .action_space import ActionSpace, ASReturn
 from cyberwheel.network.network_base import Network
 from cyberwheel.blue_actions.blue_action import BlueAction
 
+
 class _ActionRangeChecker:
     def __init__(
         self,
@@ -86,4 +87,5 @@ class DiscreteActionSpace(ActionSpace):
         return (self._action_space_size,)
 
     def create_action_space(self, max_size: int) -> Space:
+        self.max_size = max_size
         return Discrete(max_size)

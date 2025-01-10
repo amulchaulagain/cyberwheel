@@ -16,6 +16,7 @@ from cyberwheel.utils import YAMLConfig
 from cyberwheel.observation import HistoryObservation
 from cyberwheel.detectors.handler import DetectorHandler
 
+
 def host_to_index_mapping(network: Network) -> Dict[Host, int]:
     """
     This will help with constructing the obs_vec.
@@ -44,72 +45,7 @@ def decoy_alerted(alerts: List[Alert]) -> bool:
 class CyberwheelRedRL(gym.Env, Cyberwheel):
     metadata = {"render.modes": ["human"]}
 
-    def __init__(
-        self,
-        args: YAMLConfig,
-        network: Network = None
-    ):
-        """
-        The DynamicCyberwheel class is used to define the Cyberwheel environment. It allows you to use a YAML
-        file to configure the actions, rewards, and logic of the blue agent. Given various configurations, it
-        will initiate the environment with the red agent, blue agent, reward functions, and network state.
-        Important member variables:
-
-        * `network_config`: optional
-            - The name (not filepath) of the network configuration file.
-            - Default: 15-host-network.yaml
-
-        * `decoy_host_file`: optional
-            - The name (not filepath) of the decoy configuration file.
-            - Default: decoy_hosts.yaml
-
-        * `host_def_file`: optional
-            - The name (not filepath) of the host configuration file.
-            - Default: host_definitions.yaml
-
-        * `detector_config`: optional
-            - The name (not filepath) of the detector configuration file.
-            - Default: detector.yaml
-
-        * `min_decoys`: optional
-            - The minimum number of decoys the blue agent should deploy. This range is not used for the default reward function.
-            - Default: 0
-
-        * `max_decoys`: optional
-            - The maximum number of decoys the blue agent should deploy. This range is not used for the default reward function.
-            - Default: 1
-
-        * `blue_reward_scaling`: optional
-            - The scaling factor for the blue agent's rewards.
-            - Default: 10
-
-        * `reward_function`: optional
-            - The reward function used in the environment. Options: 'default' | 'step_detected'
-            - The default reward function uses the RecurringReward class.
-            - Default: default
-
-        * `red_agent`: optional
-            - The red agent used in the environment. Currently only using the ART Agent
-            - Default: 'art_agent'
-
-        * `evaluation`: optional
-            - boolean for if the environment should log information for evaluation script or not.
-            - Default: False
-
-        * `blue_config`: optional
-            - The name (not filepath) of the blue agent configuration file.
-            - Default: blue_agent_config.yaml
-
-        * `network`: optional
-            - The Network object to use throughout the environment. This prevents long start-up times when training with multiple environments.
-            - If not passed, it will build the network with the config file passed.
-            - Default: None
-
-        * `service_mapping`: optional
-            - The host -> valid_action mapping from the exploitable services on the Network.
-            - If not passed, it will build the mapping when defining the red agent.
-            - Default: {}
-        """
+    def __init__(self, args: YAMLConfig, network: Network = None):
         network_conf_file = files("cyberwheel.resources.configs.network").joinpath(
             args.network_config
         )
@@ -138,40 +74,38 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         else:
             valid_targets = [h.name for h in self.network.get_all_hosts()]
 
-
         if args.train_red:
-            self.red_agent = RLARTAgent(
-                self.network,
-                args
-            )
+            self.red_agent = RLARTAgent(self.network, args)
             self.blue_agent = InactiveBlueAgent()
             self.rl_agent = self.red_agent
             self.static_agent = self.blue_agent
             self.observation_space = spaces.Box(
                 0, 2, shape=(len(self.red_agent.get_observation_space()),)
             )
-            self.max_action_space_size = self.network.get_num_hosts() * self.red_agent.action_space.num_actions * 2
-            self.action_space = self.red_agent.action_space.create_action_space(self.max_action_space_size)
+            self.max_action_space_size = (
+                self.network.get_num_hosts()
+                * self.red_agent.action_space.num_actions
+                * 2
+            )
+            self.action_space = self.red_agent.action_space.create_action_space(
+                self.max_action_space_size
+            )
         else:
             if args.campaign:
                 self.red_agent = ARTCampaign(self.network, args)
             else:
-                self.red_agent = ARTAgent(
-                    self.network,
-                    args
-                )
-            self.blue_agent = DynamicBlueAgent(
-                self.network,
-                args
-            )
+                self.red_agent = ARTAgent(self.network, args)
+            self.blue_agent = DynamicBlueAgent(self.network, args)
             self.rl_agent = self.blue_agent
             self.static_agent = self.red_agent
             self.max_action_space_size = self.network.get_num_subnets() * 2
-            self.action_space = self.blue_agent.create_action_space(self.max_action_space_size)
-
-            detector_conf_file = files("cyberwheel.resources.configs.detector").joinpath(
-                args.detector_config
+            self.action_space = self.blue_agent.create_action_space(
+                self.max_action_space_size
             )
+
+            detector_conf_file = files(
+                "cyberwheel.resources.configs.detector"
+            ).joinpath(args.detector_config)
             self.detector = DetectorHandler(detector_conf_file)
             self.observation_space = spaces.Box(0, 1, shape=(2 * self.network.size(),))
             self.alert_converter = HistoryObservation(
@@ -182,9 +116,10 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         rfm = importlib.import_module("cyberwheel.reward")
 
         self.reward_calculator = getattr(rfm, reward_function)(
-            self.red_agent.get_reward_map(), 
+            self.red_agent.get_reward_map(),
             self.blue_agent.get_reward_map(),
-            valid_targets)
+            valid_targets,
+        )
 
         self.evaluation = args.evaluation
 
@@ -238,7 +173,7 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             red_id=red_id,
             red_recurring=red_recurring,
             blue_id=blue_id,
-            blue_recurring=blue_recurring
+            blue_recurring=blue_recurring,
         )
 
         self.total += reward
@@ -257,7 +192,7 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
                 "blue_action": blue_action_name,
                 "network": self.red_agent.network,
                 # "history": self.red_agent.history,
-                "killchain": self.red_agent.killchain,
+                # "killchain": self.red_agent.killchain,
             }
         if self.args.train_blue:
             self.detector.reset()
@@ -272,7 +207,7 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
 
     def _get_obs(self, alerts: List[Alert]) -> Iterable:
         return self.alert_converter.create_obs_vector(alerts)
-    
+
     def _reset_obs(self) -> Iterable:
         return self.alert_converter.reset_obs_vector()
 
@@ -280,7 +215,7 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         self.total = 0
         self.current_step = 0
         self.network.reset()
-        
+
         self.red_agent.reset(
             self.network.get_random_user_host(),
             network=self.network,
@@ -297,7 +232,6 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
                 self.observation_space.shape, host_to_index_mapping(self.network)
             )
             return self._reset_obs(), {}
-        
 
     # if you open any other processes close them here
     def close(self):
@@ -306,7 +240,7 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
     @property
     def red_agent_action_space_size(self):
         return self.red_agent.action_space._action_space_size
-    
+
     @property
     def blue_agent_action_space_size(self):
         return self.blue_agent.action_space._action_space_size

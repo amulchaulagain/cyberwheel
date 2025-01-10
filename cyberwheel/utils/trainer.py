@@ -11,17 +11,23 @@ from torch.utils.tensorboard import SummaryWriter
 from torch import optim, nn
 from importlib.resources import files
 
-from cyberwheel.utils import RLAgent
+from cyberwheel.utils import RLAgent, get_action_mask
 from cyberwheel.network.network_base import Network
-from cyberwheel.red_actions.actions.art_killchain_phases import ARTDiscovery, ARTLateralMovement, ARTPrivilegeEscalation, ARTImpact
+from cyberwheel.red_actions.actions.art_killchain_phases import (
+    ARTDiscovery,
+    ARTLateralMovement,
+    ARTPrivilegeEscalation,
+    ARTImpact,
+)
 from cyberwheel.red_actions import art_techniques
+
 
 class Trainer:
     def __init__(self, args):
         self.args = args
         m = importlib.import_module("cyberwheel.cyberwheel_envs")
         self.env = getattr(m, args.environment)
-    
+
     def make_env(self, rank, evaluation: bool = False):
         """
         Utility function for multiprocessed env.
@@ -34,24 +40,25 @@ class Trainer:
 
         def _init():
             if evaluation:
-                config_path = files("cyberwheel.resources.configs.network").joinpath(self.args.network_config)
-                env = self.env(self.args, network=Network.create_network_from_yaml(config_path))
+                config_path = files("cyberwheel.resources.configs.network").joinpath(
+                    self.args.network_config
+                )
+                env = self.env(
+                    self.args, network=Network.create_network_from_yaml(config_path)
+                )
             else:
                 env = self.env(self.args, network=self.networks[rank])
             self.max_action_space_size = env.max_action_space_size
-            env.reset(seed=self.args.seed + rank)  # Reset the environment with a specific seed
+            env.reset(
+                seed=self.args.seed + rank
+            )  # Reset the environment with a specific seed
             env = gym.wrappers.RecordEpisodeStatistics(
                 env
             )  # This tracks the rewards of the environment that it wraps. Used for logging
             return env
 
         return _init
-    
-    def get_action_mask(self, action_space_size, action_masks):
-        action_masks[:action_space_size] = True # Valid actions
-        action_masks[action_space_size:] = False # Invalid actions
-        return action_masks
-    
+
     def evaluate(self, agent):
         """Evaluate 'agent'"""
         # We evaluate on CPU because learning is already happening on GPUs.
@@ -60,7 +67,9 @@ class Trainer:
         eval_device = torch.device("cpu")
         env = self.env(self.args)
         episode_rewards = []
-        action_masks = torch.zeros(self.max_action_space_size, dtype=torch.bool).to(eval_device)
+        action_masks = torch.zeros(self.max_action_space_size, dtype=torch.bool).to(
+            eval_device
+        )
         total_reward = 0
         # Standard evaluation loop to estimate mean episodic return
         for episode in range(self.args.eval_episodes):
@@ -68,7 +77,9 @@ class Trainer:
             for step in range(self.args.num_steps):
                 obs = torch.Tensor(obs).to(eval_device)
 
-                action_masks = self.get_action_mask(env.rl_agent.action_space._action_space_size, action_masks)
+                action_masks = get_action_mask(
+                    env.rl_agent.action_space._action_space_size, action_masks
+                )
 
                 action, _, _, _ = agent.get_action_and_value(
                     obs, action_mask=action_masks
@@ -80,7 +91,7 @@ class Trainer:
 
         episodic_return = float(sum(episode_rewards)) / self.args.eval_episodes
         return episodic_return
-    
+
     def run_evals(self, model, globalstep):
         """Evaluate 'model' on tasks listed in 'eval_queue' in a separate process"""
         # TRY NOT TO MODIFY: seeding
@@ -114,7 +125,7 @@ class Trainer:
             result,
             globalstep,
         )
-    
+
     def get_service_map(self, network: Network):
         """
         Class function to get the service mapping based on host attributes.
@@ -136,7 +147,7 @@ class Trainer:
                     if len(host.host_type.cve_list & technique.cve_list) > 0:
                         service_mapping[host.name][kcp].append(mid)
         return service_mapping
-    
+
     def wandb_setup(self):
         # Initialize Weights and Biases tracking
         import wandb
@@ -144,7 +155,9 @@ class Trainer:
         if self.args.resume:
             api = wandb.Api()
             run_id = None
-            for run in api.runs(path=f"{self.args.wandb_entity}/{self.args.wandb_project_name}"):
+            for run in api.runs(
+                path=f"{self.args.wandb_entity}/{self.args.wandb_project_name}"
+            ):
                 if run.name == self.args.experiment_name:
                     run_id = run.id
                     break
@@ -177,7 +190,11 @@ class Trainer:
         self.writer.add_text(
             "hyperparameters",
             "|param|value|\n|-|-|\n%s"
-            % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
+            % (
+                "\n".join(
+                    [f"|{key}|{value}|" for key, value in vars(self.args).items()]
+                )
+            ),
         )
         # Seeding
         random.seed(self.args.seed)
@@ -226,22 +243,35 @@ class Trainer:
 
         # Load model from models/ directory
 
-        self.optimizer = optim.Adam(self.agent.parameters(), lr=self.args.learning_rate, eps=1e-5)
+        self.optimizer = optim.Adam(
+            self.agent.parameters(), lr=self.args.learning_rate, eps=1e-5
+        )
 
         # ALGO Logic: Storage setup
         self.obs = torch.zeros(
-            (self.args.num_steps, self.args.num_envs) + self.envs.single_observation_space.shape
+            (self.args.num_steps, self.args.num_envs)
+            + self.envs.single_observation_space.shape
         ).to(self.device)
         self.actions = torch.zeros(
-            (self.args.num_steps, self.args.num_envs) + self.envs.single_action_space.shape
+            (self.args.num_steps, self.args.num_envs)
+            + self.envs.single_action_space.shape
         ).to(self.device)
-        self.logprobs = torch.zeros((self.args.num_steps, self.args.num_envs)).to(self.device)
-        self.rewards = torch.zeros((self.args.num_steps, self.args.num_envs)).to(self.device)
-        self.dones = torch.zeros((self.args.num_steps, self.args.num_envs)).to(self.device)
-        self.values = torch.zeros((self.args.num_steps, self.args.num_envs)).to(self.device)
+        self.logprobs = torch.zeros((self.args.num_steps, self.args.num_envs)).to(
+            self.device
+        )
+        self.rewards = torch.zeros((self.args.num_steps, self.args.num_envs)).to(
+            self.device
+        )
+        self.dones = torch.zeros((self.args.num_steps, self.args.num_envs)).to(
+            self.device
+        )
+        self.values = torch.zeros((self.args.num_steps, self.args.num_envs)).to(
+            self.device
+        )
         self.step_rewards = torch.zeros((self.args.num_steps, self.args.num_envs))
         self.action_masks = torch.zeros(
-            (self.args.num_steps, self.args.num_envs, self.max_action_space_size), dtype=torch.bool
+            (self.args.num_steps, self.args.num_envs, self.max_action_space_size),
+            dtype=torch.bool,
         ).to(self.device)
         self.global_step = 0
         self.start_time = time.time()
@@ -261,14 +291,21 @@ class Trainer:
         episode_start = time.time_ns()
         for step in range(0, self.args.num_steps):
             if isinstance(self.envs, gym.vector.AsyncVectorEnv):
-                action_space_sizes = self.envs.call("red_agent_action_space_size") if self.args.train_red else self.envs.call("blue_agent_action_space_size")
+                action_space_sizes = (
+                    self.envs.call("red_agent_action_space_size")
+                    if self.args.train_red
+                    else self.envs.call("blue_agent_action_space_size")
+                )
             else:
                 action_space_sizes = [
-                    env.rl_agent.action_space._action_space_size for env in self.envs.envs
+                    env.rl_agent.action_space._action_space_size
+                    for env in self.envs.envs
                 ]
 
             for i, action_space_size in enumerate(action_space_sizes):
-                self.action_masks[step][i] = self.get_action_mask(action_space_size, self.action_masks[step][i])
+                self.action_masks[step][i] = get_action_mask(
+                    action_space_size, self.action_masks[step][i]
+                )
 
             self.global_step += 1 * self.args.num_envs
             self.obs[step] = self.next_obs
@@ -289,9 +326,9 @@ class Trainer:
             temp_action = action.cpu().numpy()
             self.next_obs, reward, done, _, info = self.envs.step(temp_action)
             self.rewards[step] = torch.tensor(reward).to(self.device).view(-1)
-            self.next_obs, self.next_done = torch.Tensor(self.next_obs).to(self.device), torch.Tensor(
-                done
-            ).to(self.device)
+            self.next_obs, self.next_done = torch.Tensor(self.next_obs).to(
+                self.device
+            ), torch.Tensor(done).to(self.device)
         end_time = time.time_ns()
         episode_time = (end_time - episode_start) / (10**9)
 
@@ -304,8 +341,6 @@ class Trainer:
             episode_time,
             self.global_step,
         )
-        
-
 
         # bootstrap value if not done
         # Calculate advantages used to optimize the policy and returns which are compared to values to optimize the critic.
@@ -321,10 +356,16 @@ class Trainer:
                     nextnonterminal = 1.0 - self.dones[t + 1]
                     nextvalues = self.values[t + 1]
                 delta = (
-                    self.rewards[t] + self.args.gamma * nextvalues * nextnonterminal - self.values[t]
+                    self.rewards[t]
+                    + self.args.gamma * nextvalues * nextnonterminal
+                    - self.values[t]
                 )
                 advantages[t] = lastgaelam = (
-                    delta + self.args.gamma * self.args.gae_lambda * nextnonterminal * lastgaelam
+                    delta
+                    + self.args.gamma
+                    * self.args.gae_lambda
+                    * nextnonterminal
+                    * lastgaelam
                 )
             returns = advantages + self.values
 
@@ -363,7 +404,10 @@ class Trainer:
                     old_approx_kl = (-logratio).mean()
                     approx_kl = ((ratio - 1) - logratio).mean()
                     clipfracs += [
-                        ((ratio - 1.0).abs() > self.args.clip_coef).float().mean().item()
+                        ((ratio - 1.0).abs() > self.args.clip_coef)
+                        .float()
+                        .mean()
+                        .item()
                     ]
 
                 mb_advantages = b_advantages[mb_inds]
@@ -398,12 +442,18 @@ class Trainer:
 
                 # Add an entropy bonus to the loss
                 entropy_loss = entropy.mean()
-                loss = pg_loss - self.args.ent_coef * entropy_loss + v_loss * self.args.vf_coef
+                loss = (
+                    pg_loss
+                    - self.args.ent_coef * entropy_loss
+                    + v_loss * self.args.vf_coef
+                )
 
                 # Backpropagation
                 self.optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.agent.parameters(), self.args.max_grad_norm)
+                nn.utils.clip_grad_norm_(
+                    self.agent.parameters(), self.args.max_grad_norm
+                )
                 self.optimizer.step()
 
             if self.args.target_kl is not None:
@@ -427,6 +477,7 @@ class Trainer:
             torch.save(self.agent.state_dict(), globalstep_path)
             if self.args.track:
                 import wandb
+
                 wandb.save(
                     agent_path,
                     base_path=run_path,
@@ -466,18 +517,26 @@ class Trainer:
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         self.writer.add_scalar(
-            "charts/learning_rate", self.optimizer.param_groups[0]["lr"], self.global_step
+            "charts/learning_rate",
+            self.optimizer.param_groups[0]["lr"],
+            self.global_step,
         )
         self.writer.add_scalar("losses/value_loss", v_loss.item(), self.global_step)
         self.writer.add_scalar("losses/policy_loss", pg_loss.item(), self.global_step)
         self.writer.add_scalar("losses/entropy", entropy_loss.item(), self.global_step)
-        self.writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), self.global_step)
+        self.writer.add_scalar(
+            "losses/old_approx_kl", old_approx_kl.item(), self.global_step
+        )
         self.writer.add_scalar("losses/approx_kl", approx_kl.item(), self.global_step)
         self.writer.add_scalar("losses/clipfrac", np.mean(clipfracs), self.global_step)
-        self.writer.add_scalar("losses/explained_variance", explained_var, self.global_step)
+        self.writer.add_scalar(
+            "losses/explained_variance", explained_var, self.global_step
+        )
         print("SPS:", int(self.global_step / (time.time() - self.start_time)))
         self.writer.add_scalar(
-            "charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step
+            "charts/SPS",
+            int(self.global_step / (time.time() - self.start_time)),
+            self.global_step,
         )
 
     def close(self) -> None:
