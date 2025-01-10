@@ -16,12 +16,12 @@ environment: CyberwheelRedRL # Environment class to use
 network_config: 15-host-network.yaml # Network configuration filename in config/network
 host_config: host_defs_services.yaml # Host configuration filename in config/host_definitions
 decoy_config: decoy_hosts.yaml # Decoy configuration filename in config/detector
-red_agent: rl_red_agent.yaml # Red agent configuration filename in config/red_agent
-train_red: true
-campaign: false
+red_agent: brute_force_encryption_campaign.yaml # Red agent configuration filename in config/red_agent
+train_red: false
+campaign: true
 valid_targets: all
-blue_agent: inactive_blue_agent.yaml # Blue agent configuration filename in config/blue_agent
-train_blue: false
+blue_agent: dynamic_blue_agent.yaml # Blue agent configuration filename in config/blue_agent
+train_blue: true
 min_decoys: 2 # TODO: Is this still being used?
 max_decoys: 3 # TODO: Is this still being used?
 reward_function: RLRedReward # The reward function

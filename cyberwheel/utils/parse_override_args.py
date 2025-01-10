@@ -30,6 +30,7 @@ def parse_override_args():
     # Cyberwheel Environment Parameters
     env_group.add_argument("--red-agent", type=str, help="the red agent to train against. Current option: 'art_agent' | 'killchain_agent' (deprecated)")
     env_group.add_argument("--red-strategy", type=str, help="the red agent strategies to train against. Current options: 'server_downtime' | 'dfs_impact'")
+    env_group.add_argument("--campaign", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, uses ARTCampaign as red agent")
     env_group.add_argument("--network-config", help="Input the network config filename", type=str)
     env_group.add_argument("--decoy-config", help="Input the decoy config filename", type=str)
     env_group.add_argument("--host-config", help="Input the host config filename", type=str)

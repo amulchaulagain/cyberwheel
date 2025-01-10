@@ -1,6 +1,9 @@
 import yaml
+import importlib
+
 from pathlib import PosixPath
 from typing_extensions import Self, Tuple, Type
+from importlib.resources import files
 
 from cyberwheel.red_agents import ARTAgent
 from cyberwheel.network.network_base import Network, Host
@@ -9,7 +12,6 @@ from cyberwheel.red_actions.technique import Technique
 from cyberwheel.red_agents.strategies import RedStrategy, BruteForce
 from cyberwheel.red_actions import art_techniques
 from cyberwheel.red_actions.atomic_test import AtomicTest
-
 from cyberwheel.reward import RewardMap
 
 
@@ -22,38 +24,49 @@ class ARTCampaign(ARTAgent):
 
     def __init__(
         self,
-        name: str,
-        entry_host_name: str,
-        leader_host_name: str,
-        strategy: RedStrategy,
-        campaign: list[dict[str, Type[Technique] | AtomicTest]],
-        lateral_movement_technique: Type[Technique],
-        lateral_movement_atomic_test: Type[AtomicTest],
-        lateral_movement_reward: float | int,
-        reward: RewardMap,
         network: Network,
+        args
     ):
-        if strategy == "BruteForce":
-            strategy = BruteForce
+        self.args = args
+
         super().__init__(
-            name=name,
-            entry_host=network.get_node_from_name(entry_host_name),
-            network=network,
-            killchain=campaign,
-            red_strategy=strategy,
-            campaign=True,
+            network,
+            args
         )
-        self.leader = (
-            network.get_node_from_name(leader_host_name)
-            if leader_host_name != None
-            else None
-        )
-        self.lateral_movement_technique = lateral_movement_technique
-        self.lateral_movement_atomic_test = lateral_movement_atomic_test
-        self.lateral_movement_reward = (
-            lateral_movement_reward  # TODO: Need to pass Lateral movement cleaner
-        )
-        self.reward = reward
+    
+    def from_yaml(self) -> None:
+        with open(self.config, "r") as f:
+            config = yaml.safe_load(f)
+        self.entry_host = self.network.get_node_from_name(config["entry_host"]) if config["entry_host"] else self.network.get_random_user_host()
+        self.leader = self.network.get_node_from_name(config["leader"]) if config["leader"] else self.network.get_random_server_host()
+        sm = importlib.import_module("cyberwheel.red_agents.strategies")
+        self.strategy = getattr(sm, config['strategy'])
+
+        self.killchain = []
+        self.reward = {}
+
+        for t in config["campaign"]:
+            technique_name = t["technique_name"]
+            atomic_test_guid = t["atomic_test_guid"]
+            technique_class = getattr(art_techniques, technique_name)
+            atomic_test_class = technique_class().get_atomic_test(atomic_test_guid)
+            self.killchain.append({"technique": technique_class, "atomic_test": atomic_test_class})
+            self.reward[technique_class().name] = (
+                -float(t["reward"]["immediate"]),
+                -float(t["reward"]["recurring"]) if "recurring" in t["reward"] else 0.0,
+            )
+        if config["lateral_movement_technique"] != None:
+            self.lateral_movement_technique = getattr(
+                art_techniques, config["lateral_movement_technique"]
+            )
+            self.lateral_movement_atomic_test = self.lateral_movement_technique().get_atomic_test(
+                config["lateral_movement_atomic_test"]
+            )
+            self.lateral_movement_reward = config["lateral_movement_reward"]
+        else:
+            self.lateral_movement_technique = None
+            self.lateral_movement_atomic_test = None
+            self.lateral_movement_reward = 0.0
 
     def run_action(self, target_host: Host) -> Tuple[RedActionResults, Type[Technique]]:
         step = self.history.hosts[target_host.name].get_next_step()
@@ -120,13 +133,13 @@ class ARTCampaign(ARTAgent):
             if not self.do_lateral_movement:
                 self.history.hosts[target_host.name].update_killchain_step()
             for h_name in action_results.metadata.keys():
-                self.add_host_info(h_name, action_results.metadata[h_name])
+                self.add_host_info(action_results.metadata)
             if "impact" in action_obj.kill_chain_phases:  # If KCP was Impact
                 self.history.hosts[target_host.name].impacted = True
                 if self.history.hosts[target_host.name].type == "Server":
                     self.unimpacted_servers.remove(target_host.name)
 
-        # print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
+        #print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
         self.history.update_step(action, action_results)
         return action
 

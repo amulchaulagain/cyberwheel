@@ -22,7 +22,7 @@ class Trainer:
         m = importlib.import_module("cyberwheel.cyberwheel_envs")
         self.env = getattr(m, args.environment)
     
-    def make_env(self, rank):
+    def make_env(self, rank, evaluation: bool = False):
         """
         Utility function for multiprocessed env.
 
@@ -33,7 +33,11 @@ class Trainer:
         """
 
         def _init():
-            env = self.env(self.args, network=self.networks[rank])
+            if evaluation:
+                config_path = files("cyberwheel.resources.configs.network").joinpath(self.args.network_config)
+                env = self.env(self.args, network=Network.create_network_from_yaml(config_path))
+            else:
+                env = self.env(self.args, network=self.networks[rank])
             self.max_action_space_size = env.max_action_space_size
             env.reset(seed=self.args.seed + rank)  # Reset the environment with a specific seed
             env = gym.wrappers.RecordEpisodeStatistics(
@@ -88,7 +92,7 @@ class Trainer:
         torch.manual_seed(self.args.seed)
         torch.backends.cudnn.deterministic = self.args.deterministic
 
-        env_funcs = [self.make_env(i) for i in range(1)]
+        env_funcs = [self.make_env(i, evaluation=True) for i in range(1)]
 
         # Load the agent
         sample_env = gym.vector.SyncVectorEnv(env_funcs)
@@ -300,6 +304,8 @@ class Trainer:
             episode_time,
             self.global_step,
         )
+        
+
 
         # bootstrap value if not done
         # Calculate advantages used to optimize the policy and returns which are compared to values to optimize the critic.

@@ -18,6 +18,7 @@ host_config: host_defs_services.yaml # Host configuration filename in config/hos
 decoy_config: decoy_hosts.yaml # Decoy configuration filename in config/detector
 red_agent: art_agent.yaml # Red agent configuration filename in config/red_agent
 train_red: false
+campaign: false
 valid_targets: all
 blue_agent: dynamic_blue_agent.yaml # Blue agent configuration filename in config/blue_agent
 train_blue: true

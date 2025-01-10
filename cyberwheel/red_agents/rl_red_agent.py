@@ -75,17 +75,14 @@ class RLARTAgent(ARTAgent):
 
     def __init__(self, network: Network, args) -> None:
         super().__init__(network, args, service_mapping=args.service_mapping)
-        self.network = network
-
-        self.from_yaml()
 
         self.observation = {}
         self.observation[self.entry_host.name] = HostView(self.entry_host.name, on_host=True)
         self.tracked_hosts = self.network.get_all_hostnames()
     
     def from_yaml(self) -> None:
-        with open(self.config, "r") as r:
-            contents = yaml.safe_load(r)
+        with open(self.config, "r") as f:
+            contents = yaml.safe_load(f)
 
         # Get module import path
         action_classes = [
