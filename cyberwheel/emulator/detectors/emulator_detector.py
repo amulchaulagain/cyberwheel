@@ -3,19 +3,34 @@ Module defines the Emulator Dectectory class.
 """
 
 from __future__ import annotations
-from subprocess import CompletedProcess
-from typing import Any, Iterable
-import json
-import subprocess
-import os
 from cyberwheel.detectors.alert import Alert
 from cyberwheel.detectors.detector_base import Detector
-from cyberwheel.emulator.siem import SiemQuery
+from cyberwheel.emulator.control import EmulatorControl
 from cyberwheel.emulator.utils import read_config
+from cyberwheel.network.host import Host, HostType
+from cyberwheel.network.subnet import Subnet
+from pprint import pprint
+from subprocess import CompletedProcess
+from typing import Any, Dict, Iterable, List
+import json
+import pathlib
+import re
+import subprocess
 
-DIR_PATH = os.path.dirname(os.path.abspath(__file__))
+# Librares for testing
+# from cyberwheel.network.router import Router
+
+# TEST variables
+# decoy_ips = ["192.168.0.5", "192.168.0.6"]
+# router = Router(name="192.168.0.0")
+# subnet = Subnet(name="192.168.0.0", ip_range="192.168.0.0/24", router=router)
+
+# Paths and file locations
+DIR_PATH = pathlib.Path(__file__).parent.resolve()
 EMULATOR_CONFIG_PATH = f"{DIR_PATH}/../"
+NETWORK_CONFIG_PATH = f"{DIR_PATH}/../../resources/configs/network"
 EMULATOR_CONFIG = "emulator_config.yaml"
+QUERY_FILE = f"query.txt"
 
 
 class EmulatorDectector(Detector):
@@ -25,6 +40,12 @@ class EmulatorDectector(Detector):
     """
 
     emu_config = read_config(EMULATOR_CONFIG_PATH, EMULATOR_CONFIG)
+
+    def __init__(self, network_config: str, subnet: Subnet):
+        self.network_config = read_config(NETWORK_CONFIG_PATH, network_config)
+
+        # For now, assuming detector detects for a single subnet
+        self.subnet = subnet
 
     def query_to_json(self, result: CompletedProcess[str]) -> Any | None:
         """Converts SIEM query reponse to JSON."""
@@ -60,9 +81,7 @@ class EmulatorDectector(Detector):
 
         return result
 
-    def submit_obs_query(
-        self, query: SiemQuery, size: str = "10"
-    ) -> CompletedProcess[str] | None:
+    def submit_obs_query(self) -> Dict[Any, Any]:
         """Shells into the SIEM VM and submits a query to get the oberstation state."""
         siem_pwd = EmulatorDectector.emu_config["firewheel"]["siem"]["password"]
         siem_user = EmulatorDectector.emu_config["firewheel"]["siem"]["username"]
@@ -70,12 +89,11 @@ class EmulatorDectector(Detector):
 
         cmd_arr = [
             f"sshpass -p {siem_pwd} firewheel ssh {siem_user}@{siem_hostname}",
-            "curl -u elastic:elastic",
-            '-XGET -H "Content-Type: application/json"',
-            f'"http://localhost:9200/logs-*/_search?size={size}"',
-            # f"-d '{query.get_observation()}'",
+            f"$(cat {DIR_PATH / QUERY_FILE})",
         ]
         cmd = " ".join(cmd_arr)
+        print("Querying SIEM logs in the last 5 minutes...")
+        print(f"{cmd}\n")
 
         result = subprocess.run(
             cmd,
@@ -89,16 +107,108 @@ class EmulatorDectector(Detector):
         if result.returncode != 0:
             error = {"error": result.stderr}
             print(json.dumps(error))
-            return None
+            return {}
         else:
-            print(result.stdout)
+            response = json.loads(result.stdout)
+            # pprint(response)
 
-        return result
+        return response
 
-    def obs(self, perfect_alert: Alert) -> Iterable[Alert]:
+    def parse_query_response(self, response: Dict[Any, Any]) -> List[Dict[Any, Any]]:
+        hits = response["hits"]["hits"]
+        parsed_hits = []
+        print("parsing logs into hits...\n")
+
+        for hit in hits:
+            id = hit["_id"]
+            source = hit["_source"]
+            timestamp = source["@timestamp"]
+            hostname = source["host"]["hostname"]
+            src_ip = source["host"]["ip"][2]
+            command = source["process"]["command_line"]
+            # command_args = source["process"]["args"]
+            target_ip = self._get_target_ip((command))
+
+            if not target_ip:
+                continue
+
+            parsed_hits.append(
+                {
+                    "id": id,
+                    "timestamp": timestamp,
+                    "hostname": hostname,
+                    "src_ip": src_ip,
+                    "target_ip": target_ip,
+                    "command": command,
+                }
+            )
+
+        return parsed_hits
+
+    def create_alerts(self, hits: List[Dict[Any, Any]]) -> Iterable[Alert]:
+        """
+        Take the parsed logs (hits) and creates Alerts.
+        Currenlty, Alerts are created when a target host is a decoy.
+        """
+        decoy_hits = self._find_decoy_hits((hits))
+        alerts = []
+        prev_dst_ip = ""
+
+        for hit in decoy_hits:
+            dst_ip = hit["target_ip"]
+
+            # skip hits with same target ip (we're assuming its from in the same action)
+            if prev_dst_ip == dst_ip:
+                continue
+
+            print("found decoy hit, creating a new alert...")
+            pprint(hit)
+
+            src_host = Host(name="src_host", subnet=self.subnet, host_type=None)
+            src_host.set_ip_from_str(hit["src_ip"])
+
+            dst_host_type = HostType()
+            dst_host_type.decoy = True
+            dst_host = Host(
+                name="dst_host", subnet=self.subnet, host_type=dst_host_type
+            )
+            dst_host.set_ip_from_str(dst_ip)
+
+            new_alert = Alert()
+            new_alert.add_src_host(src_host)
+            new_alert.add_dst_host(dst_host)
+            alerts.append(new_alert)
+
+            prev_dst_ip = dst_ip
+
+        return alerts
+
+    def obs(self, perfect_alerts: Iterable[Alert] = []) -> Iterable[Alert]:
         """
         Creates an array of alerts using information from the SIEM's query response.
         TODO: implement
         """
-        alerts = []
+        response = self.submit_obs_query()
+        hits = self.parse_query_response(response)
+        alerts = self.create_alerts(hits)
         return alerts
+
+    def _get_target_ip(self, command: str) -> str:
+        ip_candidates = re.findall(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", command)
+
+        if len(ip_candidates) == 0:
+            return ""
+
+        return ip_candidates[0]  # assuming only 1 target
+
+    def _find_decoy_hits(self, hits: List[Dict[Any, Any]]) -> List[Dict[Any, Any]]:
+        decoy_host_names = self.network_config["decoys"]
+        decoy_ips = []
+
+        for host_name in decoy_host_names:
+            ip = EmulatorControl.get_ip_address(host_name)
+            if ip:
+                decoy_ips.append(ip)
+
+        decoy_hits = [hit for hit in hits if hit["target_ip"] in decoy_ips]
+        return decoy_hits

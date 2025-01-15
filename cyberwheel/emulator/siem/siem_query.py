@@ -26,15 +26,18 @@ class SiemQuery:
     def get_observation(cls) -> str:
         """Query to get the state of the hosts"""
 
-        query = {
-            "query": {
-                "bool": {
-                    "filter": [
-                        {"term": {"process.executable": {"value": "/usr/sbin/sshd"}}},
-                        {"term": {"event.category": {"value": "network"}}},
-                    ]
-                }
-            }
-        }
+        # query = {
+        #     "query": {
+        #         "bool": {
+        #             "filter": [
+        #                 {"term": {"process.executable": {"value": "/usr/sbin/sshd"}}},
+        #                 {"term": {"event.category": {"value": "network"}}},
+        #             ]
+        #         }
+        #     }
+        # }
 
-        return json.dumps(query)
+        query = '\\"query\\":{\\"bool\\":{\\"filter\\": [{\\"term\\":{\\"process.executable\\":{\\"value\\":\\"/usr/sbin/sshd\\"}}}]}}\\"'
+        # return json.dumps(query, ensure_ascii=False)
+
+        return query
