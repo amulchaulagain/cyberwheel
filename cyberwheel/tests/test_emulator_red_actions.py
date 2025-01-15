@@ -38,8 +38,8 @@ class TestEmulatorRedActions(unittest.TestCase):
     def test_port_scan(self) -> None:
         """Test port scan in emulator"""
         src_host = Host(name="user01", subnet=subnet, host_type=None)
-        target_host = Host(name="user02", subnet=subnet, host_type=None)
-        target_host.set_ip_from_str("192.168.0.3")
+        target_host = Host(name="decoy01", subnet=subnet, host_type=None)
+        target_host.set_ip_from_str("192.168.0.5")
 
         red_action = EmulatePortScan(src_host, target_host)
         print(red_action.__class__.get_name())
@@ -51,8 +51,8 @@ class TestEmulatorRedActions(unittest.TestCase):
     def test_sudo_and_sudo_caching(self) -> None:
         """Test sudo and sudo cashing in emulator"""
         src_host = Host(name="user01", subnet=subnet, host_type=None)
-        target_host = Host(name="user02", subnet=subnet, host_type=None)
-        target_host.set_ip_from_str("192.168.0.3")
+        target_host = Host(name="decoy01", subnet=subnet, host_type=None)
+        target_host.set_ip_from_str("192.168.0.5")
 
         red_action = EmulateSudoandSudoCaching(src_host, target_host)
         print(red_action.__class__.get_name())

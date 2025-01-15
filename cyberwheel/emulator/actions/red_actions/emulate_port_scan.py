@@ -32,7 +32,7 @@ class EmulatePortScan(EmulateRedAction):
 
         action_cmd_arr = [
             f"'echo ubuntu | sudo -S nmap -sS {self.target_host.ip_address}"
-            r"| grep open | cut -d \" \" -f 1'"
+            r" | grep open | cut -d \" \" -f 1'"
         ]
         action_cmd = " ".join(action_cmd_arr)
         shell_cmd = self.prefix_emulator_cmd(action_cmd)
