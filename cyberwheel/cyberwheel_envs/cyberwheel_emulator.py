@@ -73,40 +73,37 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         5. Return obs and related metadata
         """
 
-        action = 2  # TODO: Get action type -> dest subnet from int
-        src_host = ""
-        dst_host = ""
-        action_name = ""
-
-        blue_agent_result = self.blue_agent.act(
+        blue_action_name, blue_action_src, blue_action_dst = translate_action(
             action
-        )  # TODO: Call Emulator Defender to take this action
+        )  # TODO
 
-        blue_action_name = (
-            blue_agent_result.name
-        )  # TODO: Get name by translating the int to
-        blue_action_success = (
-            blue_agent_result.success
-        )  # TODO: Get action success from emulator
+        blue_action_result = emulator.run_blue_action(
+            blue_action_name, blue_action_dst, id=step
+        )  # TODO
+
+        blue_action_success = blue_action_result.success
 
         # TODO: Use the following action metadata to execute the correct command in emulator
-        red_action_name = self.red_agent.act().get_name()
-        action_metadata = self.red_agent.history.history[-1]
-        red_action_src = action_metadata["src_host"]
-        red_action_dst = action_metadata["target_host"]
-        red_action_success = action_metadata[
-            "success"
-        ]  # TODO: Get success from emulator
+        red_action_name, red_action_src, red_action_dst = (
+            self.red_agent.get_next_action()
+        )  # TODO
+        red_action_result = emulator.run_red_action(
+            red_action_name, red_action_src, red_action_dst, id=step
+        )  # TODO
+        red_action_success = red_action_result.success
+        red_agent.resolve(
+            red_action_success
+        )  # TODO: Either pass success or pass emulator observation
 
-        obs_vec = self._get_obs(alerts)  # TODO: Get obs from emulator
+        obs_vec = emulator.get_siem_observation(id=step)  # TODO
 
         reward = self.reward_calculator.calculate_reward(
             red_action_name,
             blue_action_name,
             red_action_success,
             blue_action_success,
-            self.network.get_node_from_name(red_action_dst),
-        )  # TODO: Should be able to calculate reward from the values we have
+            red_action_dst,
+        )
 
         self.total += reward
 
