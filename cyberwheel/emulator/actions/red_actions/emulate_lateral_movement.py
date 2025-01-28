@@ -65,6 +65,6 @@ class EmulateLateralMovement(EmulateRedAction):
             print(result.stderr)
         else:
             self.action_results.attack_success = True
-            print(f"lateral moved host {result.stdout}")
+            print(f"{self.src_host.name} ssh'd to host {result.stdout}")
 
         return self.action_results

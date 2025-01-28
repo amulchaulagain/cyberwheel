@@ -5,7 +5,6 @@ Module defines the Emulator Dectectory class.
 from __future__ import annotations
 from cyberwheel.detectors.alert import Alert
 from cyberwheel.detectors.detector_base import Detector
-from cyberwheel.emulator.control import EmulatorControl
 from cyberwheel.emulator.utils import read_config
 from cyberwheel.network.host import Host, HostType
 from cyberwheel.network.subnet import Subnet
@@ -186,7 +185,6 @@ class EmulatorDectector(Detector):
     def obs(self, perfect_alerts: Iterable[Alert] = []) -> Iterable[Alert]:
         """
         Creates an array of alerts using information from the SIEM's query response.
-        TODO: implement
         """
         response = self.submit_obs_query()
         hits = self.parse_query_response(response)
@@ -206,9 +204,38 @@ class EmulatorDectector(Detector):
         decoy_ips = []
 
         for host_name in decoy_host_names:
-            ip = EmulatorControl.get_ip_address(host_name)
+            ip = self._get_ip_address(host_name)
             if ip:
                 decoy_ips.append(ip)
 
         decoy_hits = [hit for hit in hits if hit["target_ip"] in decoy_ips]
         return decoy_hits
+
+    def _get_ip_address(self, host_name: str) -> str:
+        host_user = self.emu_config["firewheel"]["host"]["username"]
+        host_pwd = self.emu_config["firewheel"]["host"]["password"]
+
+        command_arr = [
+            f"sshpass -p {host_pwd}",
+            f"firewheel ssh {host_user}@{host_name}",
+            "ip -4 -brief address show | grep ens2 | awk '{print $3}'",
+        ]
+        cmd = " ".join(command_arr)
+
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            text=True,
+            check=True,
+        )
+
+        if result.returncode != 0:
+            print(result.stderr)
+            return ""
+        elif result.stdout == "":
+            return ""
+        else:
+            ip = result.stdout.split("/")[0]
+            return ip

@@ -8,7 +8,7 @@ Once turned off, the decoy machine will be unreachable to other machines in the 
 
 from __future__ import annotations
 from .emulate_blue_action_base import EmulateBlueAction
-from cyberwheel.blue_actions.blue_action import BlueActionReturn, generate_id
+from cyberwheel.blue_actions.blue_action import BlueActionReturn
 
 
 class EmulateRemoveDecoyHost(
@@ -17,6 +17,8 @@ class EmulateRemoveDecoyHost(
     """
     Class to remove a decoy in the emulator.
     """
+
+    name = "deploy_decoy_host"
 
     def build_emulator_cmd(self, decoy_hostname: str) -> str:
         """
@@ -53,5 +55,4 @@ class EmulateRemoveDecoyHost(
             isSuccessful = True
             print(result.stdout)
 
-        name = generate_id()
-        return BlueActionReturn(name, isSuccessful, 1)
+        return BlueActionReturn(self.name, isSuccessful, 1)
