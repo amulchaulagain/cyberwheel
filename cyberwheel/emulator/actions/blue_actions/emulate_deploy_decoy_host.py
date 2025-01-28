@@ -8,7 +8,7 @@ Once turned on the decoy machine will be visible to other machines in the subnet
 
 from __future__ import annotations
 from .emulate_blue_action_base import EmulateBlueAction
-from cyberwheel.blue_actions.blue_action import BlueActionReturn, generate_id
+from cyberwheel.blue_actions.blue_action import BlueActionReturn
 
 
 class EmulateDeployDecoyHost(
@@ -17,6 +17,8 @@ class EmulateDeployDecoyHost(
     """
     Class to deploy decoy in the emulator.
     """
+
+    name = "deploy_decoy_host"
 
     def build_emulator_cmd(self, decoy_hostname: str) -> str:
         """
@@ -54,5 +56,4 @@ class EmulateDeployDecoyHost(
             isSuccessful = True
             print(result.stdout)
 
-        name = generate_id()
-        return BlueActionReturn(name, isSuccessful, 1)
+        return BlueActionReturn(self.name, isSuccessful, 0)

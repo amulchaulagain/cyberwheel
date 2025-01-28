@@ -23,7 +23,10 @@ class EmulatePingSweep(EmulateRedAction):
         self.name = EmulatePingSweep.name
 
     def build_emulator_cmd(
-        self, start_host: int = 1, end_host: int = 254, subnet: str = "192.168.1"
+        self,
+        start_host: int = 2,
+        end_host: int = 254,
+        ip_range: str = "192.168.0.0/24",
     ):
         """
         Construct shell command to execute ping sweep script on emulator host VM.
@@ -36,6 +39,10 @@ class EmulatePingSweep(EmulateRedAction):
         Returns:
             shell_cmd - full shell command that runs in a subprocess.
         """
+        # TODO: update to parse network address
+        ip_split = ip_range.split(".")
+        subnet = ".".join(ip_split[:-1])  # drop last element
+
         action_cmd_arr = [
             f"'for ip in $(seq {start_host} {end_host});",
             f"do ping -c 1 {subnet}.$ip;",

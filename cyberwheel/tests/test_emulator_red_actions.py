@@ -29,7 +29,7 @@ class TestEmulatorRedActions(unittest.TestCase):
         print(red_action.__class__.get_name())
 
         ping_sweep_cmd = red_action.build_emulator_cmd(
-            start_host=3, end_host=6, subnet="192.168.0"
+            start_host=3, end_host=6, ip_range="192.168.0.0/24"
         )
 
         results = red_action.emulator_execute(ping_sweep_cmd)
