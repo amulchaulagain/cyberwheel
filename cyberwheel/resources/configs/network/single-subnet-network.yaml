@@ -1,0 +1,52 @@
+hosts:
+  host1:
+    firewall:
+    routes:
+    subnet: user_subnet
+    type: workstation
+  host2:
+    firewall:
+    routes:
+    subnet: user_subnet
+    type: workstation
+  host3:
+    firewall:
+    routes:
+    subnet: user_subnet
+    type: workstation
+  host4:
+    firewall:
+    routes:
+    subnet: user_subnet
+    type: workstation
+  server1:
+    firewall:
+    routes:
+    subnet: user_subnet
+    type: mail_server
+interfaces:
+network:
+  desc: default description
+  name: single-subnet-network
+routers:
+  core_router:
+    default_route:
+    firewall:
+    routes:
+      - dest: 10.0.0.0/8
+        via: 10.0.0.1
+    routes_by_name:
+subnets:
+  user_subnet:
+    firewall:
+    ip_range: 192.168.0.0/24
+    router: core_router
+topology:
+  core_router:
+    user_subnet:
+    - host0
+    - host1
+    - host2
+    - host3
+    - host4
+    - server1

@@ -22,25 +22,26 @@ class ARTCampaign(ARTAgent):
     These are also
     """
 
-    def __init__(
-        self,
-        network: Network,
-        args
-    ):
+    def __init__(self, network: Network, args):
         self.args = args
 
-        super().__init__(
-            network,
-            args
-        )
-    
+        super().__init__(network, args)
+
     def from_yaml(self) -> None:
         with open(self.config, "r") as f:
             config = yaml.safe_load(f)
-        self.entry_host = self.network.get_node_from_name(config["entry_host"]) if config["entry_host"] else self.network.get_random_user_host()
-        self.leader = self.network.get_node_from_name(config["leader"]) if config["leader"] else self.network.get_random_server_host()
+        self.entry_host = (
+            self.network.get_node_from_name(config["entry_host"])
+            if config["entry_host"]
+            else self.network.get_random_user_host()
+        )
+        self.leader = (
+            self.network.get_node_from_name(config["leader"])
+            if config["leader"]
+            else self.network.get_random_server_host()
+        )
         sm = importlib.import_module("cyberwheel.red_agents.strategies")
-        self.strategy = getattr(sm, config['strategy'])
+        self.strategy = getattr(sm, config["strategy"])
 
         self.killchain = []
         self.reward = {}
@@ -50,7 +51,9 @@ class ARTCampaign(ARTAgent):
             atomic_test_guid = t["atomic_test_guid"]
             technique_class = getattr(art_techniques, technique_name)
             atomic_test_class = technique_class().get_atomic_test(atomic_test_guid)
-            self.killchain.append({"technique": technique_class, "atomic_test": atomic_test_class})
+            self.killchain.append(
+                {"technique": technique_class, "atomic_test": atomic_test_class}
+            )
             self.reward[technique_class().name] = (
                 -float(t["reward"]["immediate"]),
                 -float(t["reward"]["recurring"]) if "recurring" in t["reward"] else 0.0,
@@ -59,8 +62,10 @@ class ARTCampaign(ARTAgent):
             self.lateral_movement_technique = getattr(
                 art_techniques, config["lateral_movement_technique"]
             )
-            self.lateral_movement_atomic_test = self.lateral_movement_technique().get_atomic_test(
-                config["lateral_movement_atomic_test"]
+            self.lateral_movement_atomic_test = (
+                self.lateral_movement_technique().get_atomic_test(
+                    config["lateral_movement_atomic_test"]
+                )
             )
             self.lateral_movement_reward = config["lateral_movement_reward"]
         else:
@@ -113,6 +118,34 @@ class ARTCampaign(ARTAgent):
         # TODO: Add metadata depending on killchain phase
         return action_results, technique_class
 
+    def get_next_action(self) -> Tuple[Type[Technique], RedActionResults]:
+        self.handle_network_change()
+
+        target_host = self.select_next_target()
+        action_results, action = self.run_action(target_host)
+        action_obj = action()
+        return action_obj, action_results
+
+    def resolve_action(
+        self, action_obj: type[Technique], action_results: RedActionResults
+    ) -> None:
+        success = action_results.attack_success
+        target_host = action_results.target_host
+
+        if success:
+            if not self.do_lateral_movement:
+                self.history.hosts[target_host.name].update_killchain_step()
+            for h_name in action_results.metadata.keys():
+                self.add_host_info(action_results.metadata)
+            if "impact" in action_obj.kill_chain_phases:  # If KCP was Impact
+                self.history.hosts[target_host.name].impacted = True
+                if self.history.hosts[target_host.name].type == "Server":
+                    self.unimpacted_servers.remove(target_host.name)
+
+        # print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
+        self.history.update_step(action_obj.__class__, action_results)
+        return
+
     def act(self) -> type[Technique]:
         """
         This defines the red agent's action at each step of the simulation.
@@ -139,7 +172,7 @@ class ARTCampaign(ARTAgent):
                 if self.history.hosts[target_host.name].type == "Server":
                     self.unimpacted_servers.remove(target_host.name)
 
-        #print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
+        # print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
         self.history.update_step(action, action_results)
         return action
 

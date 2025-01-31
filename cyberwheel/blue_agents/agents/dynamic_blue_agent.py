@@ -9,7 +9,7 @@ from gym import Space
 from cyberwheel.blue_agents.blue_agent import BlueAgent, BlueAgentResult
 from cyberwheel.reward.reward_base import RewardMap
 from cyberwheel.network.network_base import Network
-from cyberwheel.blue_agents.action_space.action_space import ActionSpace
+from cyberwheel.blue_agents.action_space.action_space import ActionSpace, ASReturn
 
 
 class _ActionConfigInfo:
@@ -166,6 +166,13 @@ class DynamicBlueAgent(BlueAgent):
         asc_return = self.action_space.select_action(action)
         result = asc_return.action.execute(*asc_return.args, **asc_return.kwargs)
         id = result.id  # NOTE: BlueActionReturn -> BlueAgentReturn is redundant
+        success = result.success
+        recurring = result.recurring
+        return BlueAgentResult(asc_return.name, id, success, recurring)
+
+    def resolve_action(self, asc_return: ASReturn) -> BlueAgentResult:
+        result = asc_return.action.execute(*asc_return.args, **asc_return.kwargs)
+        id = result.id
         success = result.success
         recurring = result.recurring
         return BlueAgentResult(asc_return.name, id, success, recurring)

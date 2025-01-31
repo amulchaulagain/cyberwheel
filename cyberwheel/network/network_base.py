@@ -17,6 +17,7 @@ from cyberwheel.network.router import Router
 from cyberwheel.network.service import Service
 from cyberwheel.network.subnet import Subnet
 
+
 class Network:
 
     def __init__(
@@ -38,7 +39,7 @@ class Network:
 
     def __len__(self):
         return len(self.graph)
-    
+
     def size(self):
         return len(self.get_all_hosts())
 
@@ -158,14 +159,12 @@ class Network:
         except KeyError:
             return None  # return None if host not found
 
-    
-
     def get_num_hosts(self):
         return len(self.get_all_hosts())
-    
+
     def get_num_subnets(self):
         return len(self.get_all_subnets())
-    
+
     def get_num_routers(self):
         return len(self.get_all_routers())
 
@@ -325,7 +324,7 @@ class Network:
                     )
             # TODO: Maybe integrate with routers instead
             interfaces = []
-            if h in config["interfaces"]:
+            if config["interfaces"] and h in config["interfaces"]:
                 interfaces = config["interfaces"][h]
             # instantiate host
             host = network.add_host_to_subnet(
