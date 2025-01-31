@@ -6,3 +6,4 @@ from cyberwheel.utils.parse_override_args import (
 )
 from cyberwheel.utils.trainer import Trainer
 from cyberwheel.utils.evaluator import Evaluator
+from cyberwheel.utils.emulator_evaluator import EmulatorEvaluator

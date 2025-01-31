@@ -9,7 +9,7 @@ actions:
       type: standalone
     shared_data:
 
-  decoy0:
+  deploy_decoy:
     class: DeployDecoyHost
     configs:
       decoy_hosts: decoy_server_hosts.yaml

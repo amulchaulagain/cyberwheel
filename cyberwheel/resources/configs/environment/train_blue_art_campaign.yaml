@@ -1,19 +1,19 @@
 # Training Parameters
-experiment_name: # The experiment name
+experiment_name: test_emu_model # The experiment name
 seed: 1 # The seed to use for the experiment
 deterministic: false # Whether or not the training is deterministic
 device: cpu # Which device to train on
 async_env: false # Whether to run the environments in parallel
-total_timesteps: 1000000 # Total number of steps to run throughout training
+total_timesteps: 10000000 # Total number of steps to run throughout training
 num_saves: 10 # Number of times the model is evaluated and saved during the training run
-num_envs: 1 # Number of game environments to run at once (parallel if async_env == true)
-num_steps: 100 # Number of steps to run per episode
+num_envs: 128 # Number of game environments to run at once (parallel if async_env == true)
+num_steps: 20 # Number of steps to run per episode
 eval_episodes: 10 # Number of episodes to run in an evaluation
 resume: false # When training with an existing model_name, whether to resume training that model, or overrwrite it
 
 # Environment Parameters
 environment: CyberwheelRedRL # Environment class to use
-network_config: 15-host-network.yaml # Network configuration filename in config/network
+network_config: single-subnet-network.yaml # Network configuration filename in config/network
 host_config: host_defs_services.yaml # Host configuration filename in config/host_definitions
 decoy_config: decoy_hosts.yaml # Decoy configuration filename in config/detector
 red_agent: brute_force_encryption_campaign.yaml # Red agent configuration filename in config/red_agent
@@ -45,6 +45,6 @@ max_grad_norm: 0.5 # The maximum norm for the gradient clipping
 target_kl: null # The target KL Divergence Threshold
 
 # Weights & Biases Parameters (optional)
-track: false
-wandb_project_name: # The W&B project name if tracking
-wandb_entity: # The W&B entity if tracking
+track: true
+wandb_project_name: Cyberwheel # The W&B project name if tracking
+wandb_entity: oeschsec # The W&B entity if tracking

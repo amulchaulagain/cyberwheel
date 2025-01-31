@@ -5,6 +5,7 @@ from typing import Dict, List, Iterable
 import yaml
 import numpy as np
 import importlib
+import torch
 
 from .cyberwheel import Cyberwheel
 from cyberwheel.blue_agents import DynamicBlueAgent, InactiveBlueAgent
@@ -48,7 +49,8 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             self.network.get_num_subnets()
         )  # TODO: Do we need a less sim-y way to get this value?
         self.max_action_space_size = num_subnets * 2
-
+        self.obs_shape = (2 * self.network.size(),)
+        self.observation_space = spaces.Box(0, 1, shape=self.obs_shape)
         self.action_space = self.blue_agent.create_action_space(
             self.max_action_space_size
         )
@@ -65,9 +67,10 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         self.evaluation = args.evaluation
 
         # how to get subnet? I need to eventually remove it from EmulatorController.
+
         self.emulator = EmulatorControl(
             network=network,
-            subnet=network.get_all_subnets[0],
+            subnet=network.get_all_subnets()[0],
             network_config_name=args.network_config,
         )
 
@@ -81,33 +84,44 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         5. Return obs and related metadata
         """
 
-        blue_action_name, blue_action_src, blue_action_dst = translate_action(
-            action
-        )  # TODO
+        blue_action_info = self.blue_agent.action_space.select_action(action)
+        blue_action_name = blue_action_info.name
+        print(blue_action_name)
+        print(blue_action_info.args)
+        blue_action_src = (
+            blue_action_info.args[0] if blue_action_name != "nothing" else None
+        )
 
+        print(
+            f"running blue action in emulator: {blue_action_name} from {blue_action_src}"
+        )
         blue_action_result = self.emulator.run_blue_action(
             blue_action_name,
             blue_action_src,
-            id=step,  # blue_action_src should be host name
+            id=self.current_step,  # blue_action_src should be host name
         )  # TODO
 
-        blue_action_success = blue_action_result.success
+        blue_action_success = True  # blue_action_result.success
 
         # TODO: Use the following action metadata to execute the correct command in emulator
-        (
-            red_action_name,
-            red_action_src,
-            red_action_dst,
-        ) = self.red_agent.get_next_action()  # TODO
+        red_action, red_action_result = (
+            self.red_agent.get_next_action()
+        )  # TODO: run act() on ARTCampaign to get next action
+        red_action_name = red_action.get_name()
+        red_action_src = red_action_result.src_host
+        red_action_dst = red_action_result.target_host
 
+        print(
+            f"running red action in emulator: {red_action_name} from {red_action_src.name} to {red_action_dst.name}"
+        )
         red_action_result = self.emulator.run_red_action(
-            red_action_name, red_action_src, red_action_dst, id=step
+            red_action_name, red_action_src, red_action_dst, id=self.current_step
         )  # TODO
-        red_action_success = red_action_result.success
+        red_action_success = True  # red_action_result.success
 
-        red_agent.resolve(
-            red_action_success
-        )  # TODO: Either pass success or pass emulator observation
+        self.red_agent.resolve_action(
+            red_action, red_action_result
+        )  # TODO: Either pass success or pass emulator observation (this could just be red_agent.act() if it succeeds)
 
         obs_vec = self.emulator.get_siem_obs()  # TODO
 
@@ -132,18 +146,26 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             reward,
             done,
             False,
-            {},
+            {
+                "blue_action": blue_action_name,
+                "blue_action_src": blue_action_src,
+                "red_action": red_action_name,
+                "red_action_src": red_action_src,
+                "red_action_dst": red_action_dst,
+                "blue_action_success": blue_action_success,
+                "red_action_success": red_action_success,
+            },
         )
 
-    def _get_obs(
-        self, alerts: List[Alert]
-    ) -> Iterable:  # TODO: implement function to get obs from emu
-        return self.alert_converter.create_obs_vector(alerts)
-
-    def _reset_obs(
-        self,
-    ) -> Iterable:  # TODO: Implement this function to also tell emu to reset
-        return self.alert_converter.reset_obs_vector()
+    # def _get_obs(
+    #    self, alerts: List[Alert]
+    # ) -> Iterable:  # TODO: implement function to get obs from emu
+    #    return self.alert_converter.create_obs_vector(alerts)
+    #
+    # def _reset_obs(
+    #    self,
+    # ) -> Iterable:  # TODO: Implement this function to also tell emu to reset
+    #    return self.alert_converter.reset_obs_vector()
 
     def reset(self, seed=None, options=None):
         self.total = 0
@@ -159,4 +181,4 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
 
         self.reward_calculator.reset()
 
-        return self._reset_obs(), {}
+        return spaces.Box(0, 1, shape=self.obs_shape), {}

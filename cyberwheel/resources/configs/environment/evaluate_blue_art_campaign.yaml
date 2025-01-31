@@ -1,23 +1,23 @@
 # Evaluation Parameters
 red_agent: brute_force_encryption_campaign.yaml
 blue_agent: dynamic_blue_agent.yaml
-environment: CyberwheelRedRL
+environment: CyberwheelEmulator
 valid_targets: all
 train_red: false
 train_blue: true
-campaign: false
+campaign: true
 seed: 1
 
 checkpoint: agent
-download_model: false
-run: # required if download_model is true
-wandb_project_name: # required if download_model is true
-wandb_entity: # required if download_model is true
+download_model: true
+run: 3qtdlqx2
+wandb_project_name: Cyberwheel # required if download_model is true
+wandb_entity: oeschsec # required if download_model is true
 
-experiment: EmulatorTransferabilityTesting
+experiment: EmulatorTesting
 visualize: false
-graph_name:
-network_config: 15-host-network.yaml
+graph_name: EmulatorTesting
+network_config: single-subnet-network.yaml
 decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml
 detector_config: detector_handler.yaml
