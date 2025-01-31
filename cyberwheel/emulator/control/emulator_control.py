@@ -83,6 +83,8 @@ class EmulatorControl:
                 action = EmulateRemoveDecoyHost(network=self.network, configs={})
                 shell_cmd = action.build_emulator_cmd(src_host_name)
                 return action.emulator_execute(shell_cmd)
+            case 'nothing':
+                return BlueActionReturn(action_name, False, 0)
             case _:
                 return BlueActionReturn(action_name, False, 0)
 
