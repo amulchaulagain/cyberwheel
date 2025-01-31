@@ -65,7 +65,11 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         self.evaluation = args.evaluation
 
         # how to get subnet? I need to eventually remove it from EmulatorController.
-        self.emulator = EmulatorControl(network=network, subnet=?, network_config_name=args.network_config)
+        self.emulator = EmulatorControl(
+            network=network,
+            subnet=network.get_all_subnets[0],
+            network_config_name=args.network_config,
+        )
 
     def step(self, action):
         """
@@ -82,7 +86,9 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         )  # TODO
 
         blue_action_result = self.emulator.run_blue_action(
-            blue_action_name, blue_action_src, id=step  # blue_action_src should be host name
+            blue_action_name,
+            blue_action_src,
+            id=step,  # blue_action_src should be host name
         )  # TODO
 
         blue_action_success = blue_action_result.success
