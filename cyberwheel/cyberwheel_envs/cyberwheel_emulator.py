@@ -15,6 +15,7 @@ from cyberwheel.red_agents import RLARTAgent, ARTAgent, ARTCampaign
 from cyberwheel.utils import YAMLConfig
 from cyberwheel.observation import HistoryObservation
 from cyberwheel.detectors.handler import DetectorHandler
+from cyberwheel.emulator.control import EmulatorControl
 
 
 class CyberwheelEmulator(gym.Env, Cyberwheel):
@@ -63,6 +64,9 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
 
         self.evaluation = args.evaluation
 
+        # how to get subnet? I need to eventually remove it from EmulatorController.
+        self.emulator = EmulatorControl(network=network, subnet=?, network_config_name=args.network_config)
+
     def step(self, action):
         """
         Steps through environment.
@@ -77,25 +81,29 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             action
         )  # TODO
 
-        blue_action_result = emulator.run_blue_action(
-            blue_action_name, blue_action_dst, id=step
+        blue_action_result = self.emulator.run_blue_action(
+            blue_action_name, blue_action_src, id=step  # blue_action_src should be host name
         )  # TODO
 
         blue_action_success = blue_action_result.success
 
         # TODO: Use the following action metadata to execute the correct command in emulator
-        red_action_name, red_action_src, red_action_dst = (
-            self.red_agent.get_next_action()
-        )  # TODO
-        red_action_result = emulator.run_red_action(
+        (
+            red_action_name,
+            red_action_src,
+            red_action_dst,
+        ) = self.red_agent.get_next_action()  # TODO
+
+        red_action_result = self.emulator.run_red_action(
             red_action_name, red_action_src, red_action_dst, id=step
         )  # TODO
         red_action_success = red_action_result.success
+
         red_agent.resolve(
             red_action_success
         )  # TODO: Either pass success or pass emulator observation
 
-        obs_vec = emulator.get_siem_observation(id=step)  # TODO
+        obs_vec = self.emulator.get_siem_obs()  # TODO
 
         reward = self.reward_calculator.calculate_reward(
             red_action_name,
