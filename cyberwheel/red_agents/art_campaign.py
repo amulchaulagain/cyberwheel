@@ -143,7 +143,8 @@ class ARTCampaign(ARTAgent):
                     self.unimpacted_servers.remove(target_host.name)
 
         # print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
-        self.history.update_step(action_obj.__class__, action_results)
+        # self.history.update_step(action_obj.__class__, action_results)
+        self.history.step += 1
         return
 
     def act(self) -> type[Technique]:

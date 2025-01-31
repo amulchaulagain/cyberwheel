@@ -1,6 +1,6 @@
 name: BruteForceEncryption
-entry_host: host1 # optional; defaults to random user
-leader: server1 # optional; defaults to random server
+entry_host: user01 # optional; defaults to random user
+leader: user03 # optional; defaults to random server
 strategy: BruteForce # Set red agent strategy.
 campaign:
   - technique_name: RemoteSystemDiscovery

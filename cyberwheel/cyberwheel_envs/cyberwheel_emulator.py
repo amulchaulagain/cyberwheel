@@ -17,6 +17,7 @@ from cyberwheel.utils import YAMLConfig
 from cyberwheel.observation import HistoryObservation
 from cyberwheel.detectors.handler import DetectorHandler
 from cyberwheel.emulator.control import EmulatorControl
+from cyberwheel.cyberwheel_envs.cyberwheel_rl_red import host_to_index_mapping
 
 
 class CyberwheelEmulator(gym.Env, Cyberwheel):
@@ -51,6 +52,9 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         self.max_action_space_size = num_subnets * 2
         self.obs_shape = (2 * self.network.size(),)
         self.observation_space = spaces.Box(0, 1, shape=self.obs_shape)
+        self.alert_converter = HistoryObservation(
+            self.observation_space.shape, host_to_index_mapping(self.network)
+        )
         self.action_space = self.blue_agent.create_action_space(
             self.max_action_space_size
         )
@@ -101,10 +105,13 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             id=self.current_step,  # blue_action_src should be host name
         )  # TODO
 
-        blue_action_success = True  # blue_action_result.success
+        blue_action_success = blue_action_result.success
 
         # TODO: Use the following action metadata to execute the correct command in emulator
-        red_action, red_action_result = (
+        (
+            red_action,
+            red_action_result,
+        ) = (
             self.red_agent.get_next_action()
         )  # TODO: run act() on ARTCampaign to get next action
         red_action_name = red_action.get_name()
@@ -117,13 +124,15 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         red_action_result = self.emulator.run_red_action(
             red_action_name, red_action_src, red_action_dst, id=self.current_step
         )  # TODO
-        red_action_success = True  # red_action_result.success
+        red_action_success = red_action_result.attack_success
 
         self.red_agent.resolve_action(
             red_action, red_action_result
         )  # TODO: Either pass success or pass emulator observation (this could just be red_agent.act() if it succeeds)
 
-        obs_vec = self.emulator.get_siem_obs()  # TODO
+        obs_vec = self.alert_converter.create_obs_vector(
+            self.emulator.get_siem_obs()
+        )  # TODO
 
         reward = self.reward_calculator.calculate_reward(
             red_action_name,
@@ -157,15 +166,15 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             },
         )
 
-    # def _get_obs(
-    #    self, alerts: List[Alert]
-    # ) -> Iterable:  # TODO: implement function to get obs from emu
-    #    return self.alert_converter.create_obs_vector(alerts)
-    #
-    # def _reset_obs(
-    #    self,
-    # ) -> Iterable:  # TODO: Implement this function to also tell emu to reset
-    #    return self.alert_converter.reset_obs_vector()
+    def _get_obs(
+        self, alerts: List[Alert]
+    ) -> Iterable:  # TODO: implement function to get obs from emu
+        return self.alert_converter.create_obs_vector(alerts)
+
+    def _reset_obs(
+        self,
+    ) -> Iterable:  # TODO: Implement this function to also tell emu to reset
+        return self.alert_converter.reset_obs_vector()
 
     def reset(self, seed=None, options=None):
         self.total = 0
@@ -181,4 +190,4 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
 
         self.reward_calculator.reset()
 
-        return spaces.Box(0, 1, shape=self.obs_shape), {}
+        return self._reset_obs(), {}

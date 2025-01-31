@@ -7,6 +7,7 @@ network:
 topology:
   - core_router:
     - user_subnet:
+      - user01
       - user02
       - user03
       - decoy01
@@ -84,10 +85,6 @@ hosts:
         port: 22
 
 interfaces:
-  user01:
-    - dmz01
-  dmz01:
-    - server01
 
 # This section is used by emulator to identity decoy hosts
 # Decoys (must match same name in topology and host section)

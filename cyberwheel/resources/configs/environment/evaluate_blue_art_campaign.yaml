@@ -10,14 +10,14 @@ seed: 1
 
 checkpoint: agent
 download_model: true
-run: 3qtdlqx2
+run: 4n18kf44
 wandb_project_name: Cyberwheel # required if download_model is true
 wandb_entity: oeschsec # required if download_model is true
 
-experiment: EmulatorTesting
+experiment: EmulatorTestingIntegrationConfig
 visualize: false
-graph_name: EmulatorTesting
-network_config: single-subnet-network.yaml
+graph_name: EmulatorTestingIntegrationConfig
+network_config: integration_config.yaml
 decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml
 detector_config: detector_handler.yaml
