@@ -1,7 +1,7 @@
 # Evaluation Parameters
 red_agent: targeted_encryption_campaign.yaml
 blue_agent: dynamic_blue_agent.yaml
-environment: CyberwheelRedRL
+environment: CyberwheelEmulator
 valid_targets: user03
 train_red: false
 train_blue: true
