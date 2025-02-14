@@ -124,7 +124,7 @@ class EmulatorControl:
                 action = EmulateDataEncryptedForImpact(src_host=src_host, target_host=dst_host)
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
-            case "lateral-movement":
+            case "LinuxLateralMovement":
                 action = EmulateLateralMovement(src_host=src_host, target_host=dst_host)
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
