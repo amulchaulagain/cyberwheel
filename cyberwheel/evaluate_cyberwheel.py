@@ -27,7 +27,7 @@ for arg in override_args_dict:
 args.evaluation = True  # Should be set anyway?
 
 # Initialize the Evaluator object
-evaluator = EmulatorEvaluator(args)
+evaluator = Evaluator(args)
 
 # Configure training parameters and train
 evaluator.configure_evaluation()

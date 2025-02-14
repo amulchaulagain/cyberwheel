@@ -10,6 +10,7 @@ from os import PathLike
 from pathlib import PosixPath
 from typing import Union, List
 from tqdm import tqdm
+from copy import deepcopy
 
 from cyberwheel.network.host import Host, HostType
 from cyberwheel.network.network_object import NetworkObject, FirewallRule
@@ -33,6 +34,7 @@ class Network:
         self.decoys = decoys
         self.disconnected_nodes = disconnected_nodes
         self.isolated_hosts: List[Host] = isolated_hosts
+        self.decoys_reserve: List[Host] = []
 
     def __iter__(self):
         return iter(self.graph)
@@ -327,14 +329,23 @@ class Network:
             if config["interfaces"] and h in config["interfaces"]:
                 interfaces = config["interfaces"][h]
             # instantiate host
-            host = network.add_host_to_subnet(
-                name=h,
-                subnet=network.get_node_from_name(val["subnet"]),
-                host_type=type,
-                firewall_rules=fw_rules,
-                services=services,
-                interfaces=interfaces,
-            )
+            if "decoy" in h:
+                d = Host(
+                    h,
+                    network.get_node_from_name(val["subnet"]),
+                    type,
+                )
+                network.decoys_reserve.append(d)
+
+            else:
+                host = network.add_host_to_subnet(
+                    name=h,
+                    subnet=network.get_node_from_name(val["subnet"]),
+                    host_type=type,
+                    firewall_rules=fw_rules,
+                    services=services,
+                    interfaces=interfaces,
+                )
 
             if routes := val.get("routes"):
                 host.add_routes_from_dict(routes)
@@ -595,6 +606,27 @@ class Network:
             if self.decoys[i].name == host.name:
                 break
         self.decoys.remove(i)
+
+    def enable_decoy_host(self, name: str, subnet: Subnet, host_type: HostType) -> Host:
+        decoy = deepcopy(self.decoys_reserve[0])
+
+        decoy.name = name
+        decoy.host_type = host_type
+
+        self.add_node(decoy)
+        # connect node to parent subnet
+        self.connect_nodes(decoy.name, subnet.name)
+        # assign IP, DNS, route for subnet, and default route
+        decoy.get_dhcp_lease()
+        # set decoy status
+        decoy.decoy = True
+        decoy.interfaces = []
+        self.decoys.append(decoy)
+
+        # print(decoy)
+        # print([h.name for h in self.get_all_hosts()])
+
+        return decoy
 
     def reset(self):
         for decoy in self.decoys:

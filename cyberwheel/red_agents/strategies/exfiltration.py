@@ -17,13 +17,26 @@ class Exfiltration(RedStrategy):
         """
 
         target_host = agent_obj.current_host
+        # print(agent_obj.history.hosts)
+        # print(agent_obj.history.hosts[agent_obj.current_host.name].is_leader)
+
+        # If current host is Unknown, or if it is known AND leader, keep attacking
         if (
-            current_host_type == "Unknown"
-            or agent_obj.history.hosts[agent_obj.current_host.name].is_leader
+            agent_obj.history.hosts[agent_obj.current_host.name].is_leader
+            or agent_obj.history.hosts[agent_obj.current_host.name].type == "Unknown"
         ):
             target_host = agent_obj.current_host
+        # If Leader is in view, and the type is known, it is the target (switch to it)
+        elif (
+            agent_obj.leader.name in agent_obj.history.hosts
+            and agent_obj.history.hosts[agent_obj.leader.name].is_leader
+        ):
+            target_host = agent_obj.leader
+        # If there are any unknown hosts attack them
         elif agent_obj.unknowns.length() > 0:
             target_host = agent_obj.history.mapping[agent_obj.unknowns.get_random()]
+        # print(agent_obj.unknowns.data_list)
+        # print(agent_obj.leader.name)
         return target_host
 
     @classmethod

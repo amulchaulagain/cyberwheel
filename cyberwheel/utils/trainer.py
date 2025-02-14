@@ -70,13 +70,14 @@ class Trainer:
         action_masks = torch.zeros(self.max_action_space_size, dtype=torch.bool).to(
             eval_device
         )
+        # print(f"Max Action Space (Should be 2): {self.max_action_space_size}")
         total_reward = 0
         # Standard evaluation loop to estimate mean episodic return
         for episode in range(self.args.eval_episodes):
             obs, _ = env.reset()
             for step in range(self.args.num_steps):
                 obs = torch.Tensor(obs).to(eval_device)
-
+                # print(len(env.network.get_all_hosts()))
                 action_masks = get_action_mask(
                     env.rl_agent.action_space._action_space_size, action_masks
                 )

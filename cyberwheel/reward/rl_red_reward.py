@@ -11,7 +11,7 @@ class RLRedReward(Reward):
         self,
         red_rewards: RewardMap,
         blue_rewards: RewardMap,
-        valid_targets: list[str] | str
+        valid_targets: list[str] | str,
     ) -> None:
         super().__init__(red_rewards, blue_rewards)
         self.valid_targets = valid_targets
@@ -30,19 +30,29 @@ class RLRedReward(Reward):
     ) -> int | float:
         target_host_name = target_host.name
         decoy = target_host.decoy
-        if red_success and not decoy and target_host_name in self.valid_targets:  # If red action succeeded on a real Host
-            r = self.red_rewards[red_action][0]
+        if (
+            red_success and not decoy and target_host_name in self.valid_targets
+        ):  # If red action succeeded on a real Host
+            if red_action == "LinuxLateralMovement":
+                r = 15
+            else:
+                r = self.red_rewards[red_action][0]
+        elif red_success and decoy:
+            if red_action == "LinuxLateralMovement":
+                r = -500
+            else:
+                r = -500  # -2 * self.red_rewards[red_action][0]
         else:
             r = 0
 
         if blue_success:
             b = self.blue_rewards[blue_action][0]
         else:
-            b = 0 # -100?
+            b = 0  # -100?
 
         if len(self.blue_recurring_actions) < 1:
             b -= 0
-        
+
         if red_recurring == -1:
             self.remove_recurring_red_action(red_id)
         elif red_recurring == 1:
@@ -54,7 +64,7 @@ class RLRedReward(Reward):
             self.add_recurring_blue_action(blue_id, blue_action)
 
         return r + b + self.sum_recurring()
-    
+
     def sum_recurring(self) -> int | float:
         sum = 0
         for ra in self.blue_recurring_actions:
@@ -75,9 +85,11 @@ class RLRedReward(Reward):
                 self.blue_recurring_actions.pop(i)
                 break
 
-    def add_recurring_red_action(self, id: str, red_action: str, is_decoy: bool) -> None:
+    def add_recurring_red_action(
+        self, id: str, red_action: str, is_decoy: bool
+    ) -> None:
         self.red_recurring_actions.append((RecurringAction(id, red_action), is_decoy))
-    
+
     def remove_recurring_red_action(self, id: str) -> None:
         for i in range(len(self.red_recurring_actions)):
             if self.red_recurring_actions[i].id == id:

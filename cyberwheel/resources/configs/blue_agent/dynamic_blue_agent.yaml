@@ -16,8 +16,8 @@ actions:
       host_definitions: host_defs_services.yaml
       services: windows_exploitable_services.yaml
     reward:
-      immediate: -20.0
-      recurring: -2.0
+      immediate: -1.0
+      recurring: 0.0
     action_space_args:
       type: subnet
     shared_data:

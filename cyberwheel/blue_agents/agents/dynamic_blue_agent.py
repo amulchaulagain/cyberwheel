@@ -10,6 +10,7 @@ from cyberwheel.blue_agents.blue_agent import BlueAgent, BlueAgentResult
 from cyberwheel.reward.reward_base import RewardMap
 from cyberwheel.network.network_base import Network
 from cyberwheel.blue_agents.action_space.action_space import ActionSpace, ASReturn
+from cyberwheel.blue_actions.actions import DeployDecoyHost
 
 
 class _ActionConfigInfo:
@@ -61,6 +62,8 @@ class DynamicBlueAgent(BlueAgent):
         self.from_yaml()
         self._init_blue_actions()
         self._init_reward_map()
+
+        self.decoys_deployed = 0
 
     def from_yaml(self):
         with open(self.config, "r") as r:
@@ -164,11 +167,20 @@ class DynamicBlueAgent(BlueAgent):
 
     def act(self, action: int) -> BlueAgentResult:
         asc_return = self.action_space.select_action(action)
-        result = asc_return.action.execute(*asc_return.args, **asc_return.kwargs)
-        id = result.id  # NOTE: BlueActionReturn -> BlueAgentReturn is redundant
-        success = result.success
-        recurring = result.recurring
-        return BlueAgentResult(asc_return.name, id, success, recurring)
+        # print(self.decoys_deployed)
+        # print(asc_return.action)
+        if isinstance(asc_return.action, DeployDecoyHost) and self.decoys_deployed < 2:
+            result = asc_return.action.execute(*asc_return.args, **asc_return.kwargs)
+            id = result.id  # NOTE: BlueActionReturn -> BlueAgentReturn is redundant
+            success = result.success
+            recurring = result.recurring
+            if success:
+                self.decoys_deployed += 1
+
+            return BlueAgentResult(asc_return.name, id, success, recurring)
+        else:
+            # print("This happens?")
+            return BlueAgentResult(asc_return.name, "0", False, 0)
 
     def resolve_action(self, asc_return: ASReturn) -> BlueAgentResult:
         result = asc_return.action.execute(*asc_return.args, **asc_return.kwargs)
@@ -189,3 +201,4 @@ class DynamicBlueAgent(BlueAgent):
     def reset(self):
         for v in self.shared_data.values():
             v.clear()
+        self.decoys_deployed = 0

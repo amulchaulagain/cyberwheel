@@ -61,6 +61,7 @@ class Host(NetworkObject):
         self.processes = []
         self.command_history = []
         self.dns_server = None
+        self.ip_address = None
 
     def __str__(self) -> str:
         str = f'Host(name="{self.name}", subnet="{self.subnet.name}", '
@@ -72,7 +73,7 @@ class Host(NetworkObject):
         str += f"host_type={self.host_type!r}, firewall_rules={self.firewall_rules!r}, "
         str += f"services={self.services!r}, dns_server={self.dns_server!r}"
         return str
-    
+
     def __deepcopy__(self, memo):
         new_host = Host(name=self.name, subnet=self.subnet, host_type=self.host_type)
         memo[id(self)] = new_host
@@ -91,7 +92,7 @@ class Host(NetworkObject):
         new_host.dns_server = self.dns_server
         new_host.ip_address = self.ip_address
         return new_host
-    
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Host):
             return False
@@ -226,9 +227,11 @@ class Host(NetworkObject):
         self.processes.append(
             Process(name=process_name, privilege=process_privilege_level)
         )
-    
+
     def run_command(self, command_executor, command_content, privilege):
-        self.command_history.append(Command(command_executor, command_content, privilege))
+        self.command_history.append(
+            Command(command_executor, command_content, privilege)
+        )
 
     def remove_process(self, process_name: str):
         new_processes = [p for p in self.processes if p.name != process_name]

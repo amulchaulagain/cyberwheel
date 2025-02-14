@@ -211,7 +211,10 @@ class ARTAgent(RedAgent):
                 for s, v in self.history.subnets.items()
                 if v.is_scanned()
             ]
+            # print(scanned_subnets)
+            # print(h.subnet)
             if h.subnet in scanned_subnets:
+                # print("subnet was scanned")
                 network_change = True
                 new_host = h
             self.tracked_hosts.add(h.name)

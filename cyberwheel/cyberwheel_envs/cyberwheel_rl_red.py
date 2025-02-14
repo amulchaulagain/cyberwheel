@@ -71,6 +71,8 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             valid_targets = [h.name for h in self.network.get_all_user_hosts()]
         elif type(args.valid_targets) is list:
             valid_targets = args.valid_targets
+        elif type(args.valid_targets) is str:
+            valid_targets = [args.valid_targets]
         else:
             valid_targets = [h.name for h in self.network.get_all_hosts()]
 
@@ -136,6 +138,8 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         red_recurring = 0
         blue_id = -1
         blue_recurring = 0
+
+        # print(self.red_agent.history.hosts.keys())
 
         if self.args.train_red:
             blue_action_name = self.blue_agent.act()
@@ -217,8 +221,9 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         self.network.reset()
 
         self.red_agent.reset(
-            self.network.get_random_user_host(),
+            self.red_agent.entry_host,
             network=self.network,
+            leader=self.red_agent.leader,
         )
 
         self.blue_agent.reset()

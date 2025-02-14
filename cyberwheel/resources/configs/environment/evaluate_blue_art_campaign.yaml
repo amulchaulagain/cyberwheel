@@ -1,5 +1,5 @@
 # Evaluation Parameters
-red_agent: brute_force_encryption_campaign.yaml
+red_agent: targeted_encryption_campaign.yaml
 blue_agent: dynamic_blue_agent.yaml
 environment: CyberwheelEmulator
 valid_targets: all
@@ -10,7 +10,7 @@ seed: 1
 
 checkpoint: agent
 download_model: true
-run: 4n18kf44
+run: 7vmfx5ad
 wandb_project_name: Cyberwheel # required if download_model is true
 wandb_entity: oeschsec # required if download_model is true
 
@@ -25,5 +25,5 @@ min_decoys: 2
 max_decoys: 3
 reward_scaling: 10.0
 reward_function: RLRedReward
-num_steps: 50
+num_steps: 40
 num_episodes: 10
