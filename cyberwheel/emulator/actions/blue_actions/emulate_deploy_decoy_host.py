@@ -18,7 +18,7 @@ class EmulateDeployDecoyHost(
     Class to deploy decoy in the emulator.
     """
 
-    name = "deploy_decoy_host"
+    name = "deploy_decoy"
 
     def build_emulator_cmd(self, decoy_hostname: str) -> str:
         """

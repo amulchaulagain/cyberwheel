@@ -75,7 +75,7 @@ class EmulatorControl:
         print (f"executing emulator blue action: {action_name}, id: {id}")
 
         match action_name:
-            case 'deploy_decoy_host':
+            case 'deploy_decoy':
                 action = EmulateDeployDecoyHost(network=self.network, configs={})
                 shell_cmd = action.build_emulator_cmd(src_host_name)
                 return action.emulator_execute(shell_cmd)
@@ -86,6 +86,7 @@ class EmulatorControl:
             case 'nothing':
                 return BlueActionReturn(action_name, False, 0)
             case _:
+                print('action does not exist.')
                 return BlueActionReturn(action_name, False, 0)
 
     def run_red_action(
@@ -102,13 +103,14 @@ class EmulatorControl:
         print (f"executing emulator red action: {action_name}, id: {id}")
 
         match action_name:
-            case "RemoteSystemDiscovery":
+            case "Remote System Discovery":
                 action = EmulatePingSweep(src_host=src_host, target_host=dst_host)
+                options = {"start_host": 2, "end_host": 7}  # will go to 2-254 if not defined
                 shell_cmd = action.build_emulator_cmd(
                     start_host=options['start_host'], end_host=options['end_host'], ip_range=self.subnet.ip_range
                 )
                 return action.emulator_execute(shell_cmd)
-            case "RemoteServiceDiscovery":
+            case "Network Service Discovery":
                 action = EmulatePortScan(src_host=src_host, target_host=dst_host)
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
@@ -116,11 +118,7 @@ class EmulatorControl:
                 action = EmulateSudoandSudoCaching(src_host=src_host, target_host=dst_host)
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
-            case "Sudo and Sudo Caching":
-                action = EmulateSudoandSudoCaching(src_host=src_host, target_host=dst_host)
-                shell_cmd = action.build_emulator_cmd()
-                return action.emulator_execute(shell_cmd)
-            case "DataEncryptedForImpact":
+            case "Data Encrypted for Impact":
                 action = EmulateDataEncryptedForImpact(src_host=src_host, target_host=dst_host)
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
@@ -129,6 +127,7 @@ class EmulatorControl:
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
             case _:
+                print('Attack does not exist.')
                 results = RedActionResults(src_host=src_host, target_host=dst_host)
                 results.attack_success = False
                 return results

@@ -16,7 +16,7 @@ class EmulatePortScan(EmulateRedAction):
     Class to exeucte ping sweep in the emulator.
     """
 
-    name = "NetworkServiceDiscovery"
+    name = "Network Service Discovery"
 
     def __init__(self, src_host, target_host):
         super().__init__(src_host, target_host)

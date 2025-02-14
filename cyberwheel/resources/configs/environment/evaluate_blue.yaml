@@ -10,13 +10,13 @@ seed: 1
 
 checkpoint: agent
 download_model: true
-run: ubbfskbm
+run: ah2vdkvo
 wandb_project_name: Cyberwheel # required if download_model is true
 wandb_entity: oeschsec # required if download_model is true
 
-experiment: NewestLateralMovement
+experiment: NewNewestLateralMovement
 visualize: false
-graph_name: NewestLateralMovement
+graph_name: NewNewestLateralMovement
 network_config: integration_config.yaml
 decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml
