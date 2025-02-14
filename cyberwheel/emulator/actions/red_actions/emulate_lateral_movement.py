@@ -18,7 +18,7 @@ class EmulateLateralMovement(EmulateRedAction):
     Class to exeucte ping sweep in the emulator.
     """
 
-    name = "lateral-movement"
+    name = "LinuxLateralMovement"
 
     def __init__(self, src_host, target_host):
         super().__init__(src_host, target_host)
