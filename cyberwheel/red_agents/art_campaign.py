@@ -198,13 +198,18 @@ class ARTCampaign(ARTAgent):
     def resolve_action(
         self, action_obj: type[Technique], action_results: RedActionResults
     ) -> None:
-
         success = action_results.attack_success
+        
         target_host = action_results.target_host
 
         if success:
-            if not self.do_lateral_movement:
+            target_info = self.history.hosts[target_host.name]
+            if (
+                target_host.name == self.current_host.name
+                and target_info.last_step < len(self.killchain) - 1
+            ):
                 self.history.hosts[target_host.name].update_killchain_step()
+                # print(self.history.hosts[target_host.name].last_step)
             for h_name in action_results.metadata.keys():
                 self.add_host_info(action_results.metadata)
             if "impact" in action_obj.kill_chain_phases:  # If KCP was Impact
@@ -213,8 +218,13 @@ class ARTCampaign(ARTAgent):
                     self.unimpacted_servers.remove(target_host.name)
 
         # print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
+        self.history.update_step(action_obj.__class__, action_results)
+        #print(self.history.hosts.keys())
+        #print(action_results.metadata)
+
+        # print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
         # self.history.update_step(action_obj.__class__, action_results)
-        self.history.step += 1
+        #self.history.step += 1 
         return
 
     def act(self) -> type[Technique]:
@@ -234,8 +244,10 @@ class ARTCampaign(ARTAgent):
         # print(target_host.name)
         source_host = self.current_host
         action_results, action = self.run_action(target_host)
+
         action_obj = action()
         success = action_results.attack_success
+
         if success:
             target_info = self.history.hosts[target_host.name]
             if (

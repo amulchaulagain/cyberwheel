@@ -169,22 +169,23 @@ class AgentHistory:
         """
         Updates the history of the red agent at a given step with action and RedActionResults metadata
         """
+        #print(red_action_results.metadata)
         self.step += 1
-        target_host_metadata = red_action_results.metadata[
-            red_action_results.target_host.name
-        ]
-        techniques = {
-            "mitre_id": target_host_metadata["mitre_id"],
-            "technique": target_host_metadata["technique"],
-            "commands": target_host_metadata["commands"],
-        }
+        #target_host_metadata = red_action_results.metadata[
+        #    red_action_results.target_host.name
+        #]
+        #techniques = {
+        #    "mitre_id": target_host_metadata["mitre_id"],
+        #    "technique": target_host_metadata["technique"],
+        #    "commands": target_host_metadata["commands"],
+        #}
         self.history.append(
             {
                 "step": self.step,
                 "action": action.__name__,
                 "src_host": red_action_results.src_host.name,
                 "target_host": red_action_results.target_host.name,
-                "techniques": techniques,
+                #"techniques": techniques,
                 "success": red_action_results.attack_success,
             }
         )
