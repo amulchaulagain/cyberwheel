@@ -79,9 +79,10 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             network_config_name=args.network_config,
         )
 
-        # TODO: add function to get ip address from emulator for each host
+        # get host IP addresses from emulator
         for h in self.network.get_all_hosts():
-            h.set_ip_from_str("192.168.0.3")
+            emu_host_ip = self.emulator.get_ip_address(h.name)
+            h.set_ip_from_str(emu_host_ip)
 
     def step(self, action):
         """
