@@ -29,3 +29,21 @@ class TestEmulatorSetup(unittest.TestCase):
         success_flag = emulator.init_hosts()
 
         self.assertTrue(success_flag)
+
+    def test_get_ip_address(self) -> None:
+        """
+        Test retrieving IP address from emulator.
+        """
+        emulator = EmulatorControl(
+            network=network, subnet=subnet, network_config_name=NETWORK_CONFIG
+        )
+
+        all_hosts = list(emulator.net_config["hosts"].keys())
+        decoys = emulator.net_config["decoys"]
+        user_hosts = [host for host in all_hosts if host not in decoys]
+        print(user_hosts)
+
+        for name in user_hosts:
+            host_name = name.replace("_", "-")  # firewheel host names use hyphen
+            ip = emulator.get_ip_address(host_name)
+            print(f"{host_name} ip address: {ip}")

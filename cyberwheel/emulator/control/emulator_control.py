@@ -147,6 +147,36 @@ class EmulatorControl:
         print(f"alert count: {len(list(alerts))}")
         return alerts
 
+    def get_ip_address(self, host_name: str) -> str:
+        """Returns emulator IP address."""
+        host_user = self.emu_config["firewheel"]["host"]["username"]
+        host_pwd = self.emu_config["firewheel"]["host"]["password"]
+
+        command_arr = [
+            f"sshpass -p {host_pwd}",
+            f"firewheel ssh {host_user}@{host_name}",
+            "ip -4 -brief address show | grep ens2 | awk '{print $3}'",
+        ]
+        cmd = " ".join(command_arr)
+
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            text=True,
+            check=True,
+        )
+
+        if result.returncode != 0:
+            print(result.stderr)
+            return ""
+        elif result.stdout == "":
+            return ""
+        else:
+            ip = result.stdout.split("/")[0]
+            return ip
+
     def _get_host_names(self) -> List[str]:
         """Returns list of all host names."""
 
