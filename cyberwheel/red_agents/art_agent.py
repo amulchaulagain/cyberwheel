@@ -153,8 +153,8 @@ class ARTAgent(RedAgent):
 
         #self.leader = contents.get("leader")
         #if self.leader and self.leader == "servers":
-        self.leader = [h.name for h in self.network.get_all_hosts() if "server" in h.host_type.name and "decoy" not in h.host_type.name]
-        print(self.leader)
+        #self.leader = [h.name for h in self.network.get_all_hosts() if "server" in h.host_type.name and "decoy" not in h.host_type.name]
+        #print(self.leader)
 
     @classmethod
     def get_service_map(cls, network: Network):
@@ -399,4 +399,4 @@ class ARTAgent(RedAgent):
         self.unimpacted_servers = HybridSetList()
         self.unknowns = HybridSetList()
         #self.leader = leader
-        self.leader = [h.name for h in self.network.get_all_hosts() if "server" in h.host_type.name and "decoy" not in h.host_type.name]
+        self.leader = []

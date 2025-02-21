@@ -1,5 +1,6 @@
 from cyberwheel.red_agents.strategies.red_strategy import RedStrategy
 from cyberwheel.network.host import Host
+from cyberwheel.red_actions.art_techniques import SudoandSudoCaching
 
 """
 The Server Downtime strategy is to find and attack all of the Servers it can find in the network.
@@ -19,6 +20,9 @@ class ServerDowntime(RedStrategy):
         """
 
         target_host = agent_obj.current_host
+        current_kc_step = agent_obj.history.hosts[target_host.name].get_next_step()
+        print(f"CURRENT HOST TYPE: {current_host_type}")
+        print(f"CURRENT HOST {target_host.name} KC STEP: {current_kc_step}")
         if (
             current_host_type == "Unknown"
             or agent_obj.unimpacted_servers.check_membership(
@@ -30,7 +34,7 @@ class ServerDowntime(RedStrategy):
             target_host = agent_obj.history.mapping[
                 agent_obj.unimpacted_servers.get_random()
             ]  # O(1)
-        elif agent_obj.unknowns.length() > 0:
+        elif agent_obj.unknowns.length() > 0 and agent_obj.history.hosts[target_host.name].ports_scanned:
             target_host = agent_obj.history.mapping[
                 agent_obj.unknowns.get_random()
             ]  # O(1)

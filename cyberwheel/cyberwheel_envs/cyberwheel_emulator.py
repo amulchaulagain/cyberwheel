@@ -95,10 +95,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         4. Convert Alerts from Detector into observation space
         5. Return obs and related metadata
         """
-        print(f"red agent leader: {self.red_agent.leader}")
-        print(
-            f"red agent unimpacted servers: {self.red_agent.unimpacted_servers.data_list}"
-        )
+        
 
         blue_action_info = self.blue_agent.action_space.select_action(action)
         blue_action_name = blue_action_info.name
@@ -108,7 +105,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             blue_action_info.args[0] if blue_action_name != "nothing" else None
         )
 
-        print(f"Emulator Blue Action: {blue_action_name} on {blue_action_src}")
+        print(f"\n\nEmulator Blue Action: {blue_action_name} on {blue_action_src}")
         blue_action_result = self.emulator.run_blue_action(
             blue_action_name,
             blue_action_src,
@@ -130,13 +127,17 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         red_action_name = red_action.get_name()
         red_action_src = red_action_result.src_host
         red_action_dst = red_action_result.target_host
+        print(f"\nred agent leader: {self.red_agent.leader}")
+        print(
+            f"red agent unimpacted servers: {self.red_agent.unimpacted_servers.data_list}"
+        )
         print(
             f"red agent host type: {self.red_agent.history.hosts[red_action_dst.name].type}"
         )
         print(f"red agent host type name: {red_action_dst.host_type.name}")
 
         print(
-            f"Emulator Red Action: {red_action_name} from {red_action_src.name} to {red_action_dst.name}"
+            f"\nEmulator Red Action: {red_action_name} from {red_action_src.name} to {red_action_dst.name}"
         )
         print("----------------------------------\n----------------------------------")
 
@@ -146,7 +147,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             red_action_name, red_action_src, red_action_dst, id=self.current_step
         )  # TODO
         red_action_success = red_action_result.attack_success
-        print(f"red action success: {red_action_success}")
+        print(f"Red action success: {red_action_success}")
 
         self.red_agent.resolve_action(
             red_action, red_action_result
@@ -207,7 +208,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         self.red_agent.reset(
             self.red_agent.entry_host,
             network=self.network,
-            leader=self.red_agent.leader,
+            leader=[],
         )
 
         self.blue_agent.reset()

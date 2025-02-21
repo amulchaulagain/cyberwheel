@@ -42,8 +42,8 @@ class ARTCampaign(ARTAgent):
         #    else self.network.get_random_server_host()
         #)
         #print([h.host_type.name for h in self.network.get_all_hosts()])
-        known_types = [h for h in list(self.history.hosts.values())]
-        self.leader = [h.name for h in known_types if h.type == "Server"]
+        #known_types = [h for h in list(self.history.hosts.values())]
+        self.leader = []
         #print(self.leader)
         sm = importlib.import_module("cyberwheel.red_agents.strategies")
         self.strategy = getattr(sm, config["strategy"])
@@ -81,14 +81,15 @@ class ARTCampaign(ARTAgent):
             self.do_lateral_movement = False
 
     def run_action(self, target_host: Host) -> Tuple[RedActionResults, Type[Technique]]:
-        known_types = [h for h in list(self.history.hosts.values())]
-        self.leader = [h.name for h in known_types if h.type == "Server"]
+        #print(self.history.hosts)
+        #print(list(zip(self.history.hosts.items())))
+        self.leader = [k for k,v in self.history.hosts.items() if v.type == "Server"]
         step = self.history.hosts[target_host.name].get_next_step()
 
         if step > len(self.killchain) - 1:
             step = len(self.killchain) - 1
 
-        if self.current_host.name == target_host.name:
+        if self.current_host.name == target_host.name or not self.history.hosts[target_host.name].ports_scanned: # If already on the same host, or target host is not past Discovery
             technique_class = self.killchain[step]["technique"]
             atomic_test = self.killchain[step]["atomic_test"]
         else:  # Will do lateral movement to get onto other host before continuing
