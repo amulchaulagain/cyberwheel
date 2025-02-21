@@ -32,6 +32,9 @@ class EmulateDeployDecoyHost(
         host_username = EmulateBlueAction.emu_config["firewheel"]["host"]["username"]
         interface = EmulateBlueAction.emu_config["firewheel"]["interface"]
 
+        # TEST
+        decoy_hostname = 'decoy01'
+
         action_cmd_arr = [
             f"firewheel ssh {host_username}@{decoy_hostname}",
             f"'echo ubuntu | sudo -S ip link set {interface} up'",
