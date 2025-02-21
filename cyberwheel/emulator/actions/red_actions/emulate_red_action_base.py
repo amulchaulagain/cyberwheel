@@ -61,9 +61,12 @@ class EmulateRedAction(ARTAction, ABC):
         host_user = EmulateRedAction.emu_config["firewheel"]["host"]["username"]
         host_pwd = EmulateRedAction.emu_config["firewheel"]["host"]["password"]
 
+        # Ensure hostname is replaced with dash
+        src_host_name = self.src_host.name.replace("_", "-")
+
         command_arr = [
             f"sshpass -p {host_pwd}",
-            f"firewheel ssh {host_user}@{self.src_host.name}",
+            f"firewheel ssh {host_user}@{src_host_name}",
             action_cmd,
         ]
         final_cmd = " ".join(command_arr)
