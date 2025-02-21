@@ -42,7 +42,8 @@ class ARTCampaign(ARTAgent):
         #    else self.network.get_random_server_host()
         #)
         #print([h.host_type.name for h in self.network.get_all_hosts()])
-        self.leader = [h.name for h in self.network.get_all_hosts() if "server" in h.host_type.name and "decoy" not in h.host_type.name]
+        known_types = [h for h in list(self.history.hosts.values())]
+        self.leader = [h.name for h in known_types if h.type == "Server"]
         #print(self.leader)
         sm = importlib.import_module("cyberwheel.red_agents.strategies")
         self.strategy = getattr(sm, config["strategy"])
@@ -80,6 +81,8 @@ class ARTCampaign(ARTAgent):
             self.do_lateral_movement = False
 
     def run_action(self, target_host: Host) -> Tuple[RedActionResults, Type[Technique]]:
+        known_types = [h for h in list(self.history.hosts.values())]
+        self.leader = [h.name for h in known_types if h.type == "Server"]
         step = self.history.hosts[target_host.name].get_next_step()
 
         if step > len(self.killchain) - 1:
