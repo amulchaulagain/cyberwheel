@@ -1,8 +1,8 @@
 # Evaluation Parameters
-red_agent: targeted_encryption_campaign.yaml
+red_agent: server_encryption.yaml
 blue_agent: dynamic_blue_agent.yaml
 environment: CyberwheelEmulator
-valid_targets: user03
+valid_targets:
 train_red: false
 train_blue: true
 campaign: true
@@ -10,13 +10,13 @@ seed: 1
 
 checkpoint: agent
 download_model: true
-run: ah2vdkvo
+run: ctf6bg7v
 wandb_project_name: Cyberwheel # required if download_model is true
 wandb_entity: oeschsec # required if download_model is true
 
-experiment: NewNewestLateralMovement
+experiment: ServerEncryption
 visualize: false
-graph_name: NewNewestLateralMovement
+graph_name: ServerEncryption
 network_config: integration_config.yaml
 decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml

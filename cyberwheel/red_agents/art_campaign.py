@@ -36,11 +36,14 @@ class ARTCampaign(ARTAgent):
             if config["entry_host"]
             else self.network.get_random_user_host()
         )
-        self.leader = (
-            self.network.get_node_from_name(config["leader"])
-            if config["leader"]
-            else self.network.get_random_server_host()
-        )
+        #self.leader = (
+        #  self.network.get_node_from_name(config["leader"])
+        #    if config["leader"]
+        #    else self.network.get_random_server_host()
+        #)
+        #print([h.host_type.name for h in self.network.get_all_hosts()])
+        self.leader = [h.name for h in self.network.get_all_hosts() if "server" in h.host_type.name and "decoy" not in h.host_type.name]
+        #print(self.leader)
         sm = importlib.import_module("cyberwheel.red_agents.strategies")
         self.strategy = getattr(sm, config["strategy"])
 
@@ -163,7 +166,7 @@ class ARTCampaign(ARTAgent):
             known_type = "Unknown"
             if "server" in host_type.lower():
                 known_type = "Server"
-                # self.unimpacted_servers.add(target_host.name)
+                self.unimpacted_servers.add(target_host.name)
             elif "workstation" in host_type.lower():
                 known_type = "User"
             else:
@@ -171,8 +174,9 @@ class ARTCampaign(ARTAgent):
             self.unknowns.remove(target_host.name)
             self.history.hosts[target_host.name].type = known_type
             self.history.hosts[target_host.name].is_leader = (
-                self.leader.name == target_host.name if self.leader else False
+                target_host.name in self.leader if self.leader else False
             )
+            #print(self.leader)
         elif (
             "lateral-movement" in technique.kill_chain_phases
             and action_results.attack_success

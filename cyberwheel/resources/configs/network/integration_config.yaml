@@ -10,6 +10,9 @@ topology:
       - user01
       - user02
       - user03
+      - server01
+      - server02
+      - server03
       - decoy01
       - decoy02
       - admin_workstation
@@ -70,11 +73,20 @@ hosts:
   user03:
     type: workstation
     subnet: user_subnet
+  server01:
+    type: web_server
+    subnet: user_subnet
+  server02:
+    type: web_server
+    subnet: user_subnet
+  server03:
+    type: web_server
+    subnet: user_subnet
   decoy01:
-    type: decoy_workstation
+    type: decoy_server
     subnet: user_subnet
   decoy02:
-    type: decoy_workstation
+    type: decoy_server
     subnet: user_subnet
   admin_workstation:
     type: workstation
