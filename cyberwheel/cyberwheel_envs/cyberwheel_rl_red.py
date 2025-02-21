@@ -135,6 +135,8 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             valid_targets = [h.name for h in self.network.get_all_user_hosts()]
         elif type(args.valid_targets) is list:
             valid_targets = args.valid_targets
+        elif type(args.valid_targets) is str:
+            valid_targets = [args.valid_targets]
         else:
             valid_targets = [h.name for h in self.network.get_all_hosts()]
 
@@ -147,9 +149,10 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             self.blue_agent = InactiveBlueAgent()
             self.rl_agent = self.red_agent
             self.static_agent = self.blue_agent
-            self.observation_space = spaces.Box(
-                0, 2, shape=(len(self.red_agent.get_observation_space()),)
-            )
+            #self.observation_space = spaces.Box( # TODO
+            #    0, 2, shape=(len(self.red_agent.get_observation_space()),)
+            #)
+            self.observation_space = spaces.MultiDiscrete(np.array([3] * len(self.red_agent.get_observation_space())))
             self.max_action_space_size = self.network.get_num_hosts() * self.red_agent.action_space.num_actions * 2
             self.action_space = self.red_agent.action_space.create_action_space(self.max_action_space_size)
         else:
@@ -173,7 +176,8 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
                 args.detector_config
             )
             self.detector = DetectorHandler(detector_conf_file)
-            self.observation_space = spaces.Box(0, 1, shape=(2 * self.network.size(),))
+            #self.observation_space = spaces.Box(0, 1, shape=(2 * self.network.size(),)) # TODO
+            self.observation_space = spaces.MultiBinary(2 * self.network.size())
             self.alert_converter = HistoryObservation(
                 self.observation_space.shape, host_to_index_mapping(self.network)
             )
@@ -290,9 +294,12 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
 
         self.reward_calculator.reset()
         if self.args.train_red:
-            return np.zeros((len(self.red_agent.get_observation_space()),)), {}
+            self.observation_space = spaces.MultiDiscrete(np.array([3] * len(self.red_agent.get_observation_space())))
+            return np.zeros((len(self.red_agent.get_observation_space()),), dtype=np.int64), {} # TODO
+            #return np.zeros((len(self.red_agent.get_observation_space()),), dtype=np.float64), {}
         else:
-            self.observation_space = spaces.Box(0, 1, shape=(2 * self.network.size(),))
+            #self.observation_space = spaces.Box(0, 1, shape=(2 * self.network.size(),)) # TODO
+            self.observation_space = spaces.MultiBinary(2 * self.network.size())
             self.alert_converter = HistoryObservation(
                 self.observation_space.shape, host_to_index_mapping(self.network)
             )

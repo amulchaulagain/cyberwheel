@@ -361,6 +361,18 @@ class Network:
         hosts = [obj for _, obj in nodes_tuple if isinstance(obj, Host)]
 
         return hosts
+    
+    def get_all_user_hosts(self) -> list[Host]:
+        nodes_tuple = self.graph.nodes(data="data")  # type: ignore
+        hosts = [obj for _, obj in nodes_tuple if isinstance(obj, Host) and "user" in obj.host_type.name.lower()]
+
+        return hosts
+    
+    def get_all_server_hosts(self) -> list[Host]:
+        nodes_tuple = self.graph.nodes(data="data")  # type: ignore
+        hosts = [obj for _, obj in nodes_tuple if isinstance(obj, Host) and "server" in obj.host_type.name.lower()]
+
+        return hosts
 
     def get_all_hostnames(self) -> list[Host]:
         nodes_tuple = self.graph.nodes(data="data")  # type: ignore

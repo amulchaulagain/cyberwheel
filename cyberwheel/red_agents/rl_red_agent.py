@@ -64,7 +64,7 @@ class HostView:
             return 1
         elif self.type.lower() == "server":
             return 2
-        else:
+        else: # Unknown
             return 0
 
 
@@ -78,6 +78,7 @@ class RLARTAgent(ARTAgent):
 
         self.observation = {}
         self.observation[self.entry_host.name] = HostView(self.entry_host.name, on_host=True)
+        self.obs_size = 7
         self.tracked_hosts = self.network.get_all_hostnames()
     
     def from_yaml(self) -> None:
@@ -96,7 +97,7 @@ class RLARTAgent(ARTAgent):
 
         self.reward_map = {}
 
-        self.entry_host: Host = self.network.get_node_from_name(contents["entry_host"]) if "entry_host" in contents else self.network.get_random_user_host()
+        self.entry_host: Host = self.network.get_node_from_name(contents["entry_host"]) if "entry_host" in contents and contents["entry_host"] else self.network.get_random_user_host()
         self.current_host : Host = self.entry_host
 
         # Initialize the action space
@@ -245,8 +246,11 @@ class RLARTAgent(ARTAgent):
                 int(view.escalated),
                 int(view.impacted),
             ]
-        obs = obs + [-1] * (200 - len(obs))
-        _obs = np.array(obs, dtype=np.float64)
+        self.obs_size = len(obs)
+        #TODO
+        obs = obs + [0] * (200 - self.obs_size)
+        _obs = np.array(obs, dtype=np.int64)
+        #_obs = np.array(obs, dtype=np.float64) # TODO
         return _obs
 
     def reset(self, entry_host: Host, network: Network):
@@ -254,4 +258,5 @@ class RLARTAgent(ARTAgent):
         self.current_host = entry_host
         self.observation = {}
         self.observation[entry_host.name] = HostView(entry_host.name, on_host=True)
+        self.obs_size = 7
         self.action_space.reset(entry_host.name)

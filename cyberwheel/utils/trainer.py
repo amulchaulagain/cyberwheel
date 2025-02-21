@@ -52,6 +52,11 @@ class Trainer:
         action_masks[action_space_size:] = False # Invalid actions
         return action_masks
     
+    def get_observation_mask(self, observation_space_size, observation_masks):
+        observation_masks[:observation_space_size] = True # Valid actions
+        observation_masks[observation_space_size:] = False # Invalid actions
+        return observation_masks
+    
     def evaluate(self, agent):
         """Evaluate 'agent'"""
         # We evaluate on CPU because learning is already happening on GPUs.
@@ -61,6 +66,7 @@ class Trainer:
         env = self.env(self.args)
         episode_rewards = []
         action_masks = torch.zeros(self.max_action_space_size, dtype=torch.bool).to(eval_device)
+        #observation_masks = torch.zeros(200, dtype=torch.bool).to(eval_device)  # TODO
         total_reward = 0
         # Standard evaluation loop to estimate mean episodic return
         for episode in range(self.args.eval_episodes):
@@ -69,6 +75,7 @@ class Trainer:
                 obs = torch.Tensor(obs).to(eval_device)
 
                 action_masks = self.get_action_mask(env.rl_agent.action_space._action_space_size, action_masks)
+                #observation_masks = self.get_observation_mask(env.rl_agent.obs_size, observation_masks)
 
                 action, _, _, _ = agent.get_action_and_value(
                     obs, action_mask=action_masks
