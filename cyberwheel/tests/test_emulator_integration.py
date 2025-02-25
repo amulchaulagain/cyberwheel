@@ -53,7 +53,7 @@ class TestEmulatorIntegration(unittest.TestCase):
         """
         action_name = "Remote System Discovery"
         src_host = Host(name="user01", subnet=subnet, host_type=None)
-        options = {"start_host": 2, "end_host": 7}  # will go to 2-254 if not defined
+        options = {"start_host": 2, "end_host": 11}  # will go to 2-254 if not defined
 
         red_action_return = self.emulator.run_red_action(
             action_name, src_host=src_host, dst_host=src_host, options=options

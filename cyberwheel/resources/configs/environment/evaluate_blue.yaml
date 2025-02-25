@@ -25,5 +25,5 @@ min_decoys: 2
 max_decoys: 3
 reward_scaling: 10.0
 reward_function: RLRedReward
-num_steps: 40
+num_steps: 100
 num_episodes: 10

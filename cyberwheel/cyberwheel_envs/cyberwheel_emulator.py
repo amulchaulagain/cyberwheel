@@ -40,7 +40,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
 
         self.service_mapping = args.service_mapping
         self.args = args
-        self.max_steps = 10
+        self.max_steps = 30
 
         valid_targets = [h.name for h in self.network.get_all_hosts()]
 
@@ -95,7 +95,6 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         4. Convert Alerts from Detector into observation space
         5. Return obs and related metadata
         """
-        
 
         blue_action_info = self.blue_agent.action_space.select_action(action)
         blue_action_name = blue_action_info.name

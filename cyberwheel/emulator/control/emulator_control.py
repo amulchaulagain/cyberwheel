@@ -105,7 +105,7 @@ class EmulatorControl:
         match action_name:
             case "Remote System Discovery":
                 action = EmulatePingSweep(src_host=src_host, target_host=dst_host)
-                options = {"start_host": 2, "end_host": 7}  # will go to 2-254 if not defined
+                options = {"start_host": 2, "end_host": 11}  # will go to 2-254 if not defined
                 shell_cmd = action.build_emulator_cmd(
                     start_host=options['start_host'], end_host=options['end_host'], ip_range=self.subnet.ip_range
                 )
