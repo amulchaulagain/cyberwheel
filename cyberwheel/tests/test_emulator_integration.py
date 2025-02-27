@@ -11,11 +11,17 @@ from cyberwheel.network.host import Host
 from cyberwheel.network.network_base import Network
 from cyberwheel.network.router import Router
 from cyberwheel.network.subnet import Subnet
+from importlib.resources import files
 
 NETWORK_CONFIG = "example_config.yaml"
 
 # TEST variables
-network = Network(name="test")
+config_path = files("cyberwheel.resources.configs.network").joinpath(
+    "integration_config.yaml"
+)
+
+# network = Network(name="test")
+network = Network.create_network_from_yaml(config_path)
 router = Router(name="core_router")
 subnet = Subnet(name="user_subnet", ip_range="192.168.0.0/24", router=router)
 
@@ -26,6 +32,13 @@ class TestEmulatorIntegration(unittest.TestCase):
     emulator = EmulatorControl(
         network=network, subnet=subnet, network_config_name=NETWORK_CONFIG
     )
+
+    # get host IP addresses from emulator
+    for h in emulator.network.get_all_hosts():
+        print(f"retrieving ip address from emulator for {h.name}")
+        host_name = h.name.replace("_", "-")
+        emu_host_ip = emulator.get_ip_address(host_name)
+        h.set_ip_from_str(emu_host_ip)
 
     def test_run_deploy_decoy_host(self) -> None:
         """

@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 from cyberwheel.emulator.actions import stdout_to_list
 from .emulate_red_action_base import EmulateRedAction
+from cyberwheel.network.network_base import Network
 
 file_path = os.path.realpath(__file__)
 dir_name = os.path.dirname(file_path)
@@ -18,9 +19,10 @@ class EmulatePingSweep(EmulateRedAction):
 
     name = "Remote System Discovery"
 
-    def __init__(self, src_host, target_host):
+    def __init__(self, src_host, target_host, network: Network):
         super().__init__(src_host, target_host)
         self.name = EmulatePingSweep.name
+        self.network = network
 
     def build_emulator_cmd(
         self,
@@ -71,6 +73,7 @@ class EmulatePingSweep(EmulateRedAction):
         result = self.run_cmd(shell_cmd)
 
         # Capture output after executing command
+        discovered_ips: list[str] = []
         if result.returncode != 0:
             self.action_results.attack_success = False
             print(result.stderr)
@@ -79,6 +82,14 @@ class EmulatePingSweep(EmulateRedAction):
             discovered_ips = stdout_to_list(result.stdout)
             print("discovered ips: ", discovered_ips)
 
-        # TODO convert IPs to [Host] and add to action_results
+        # Add discovered hosts to red action results.
+        # The Host performing ping sweep is included.
+        for discovered_ip in discovered_ips:
+            for host in self.network.get_all_hosts():
+                if str(host.ip_address) == discovered_ip:
+                    self.action_results.add_host(host)
+        print(
+            f"added discovered hosts to action results: {[host.name for host in self.action_results.discovered_hosts]}"
+        )
 
         return self.action_results
