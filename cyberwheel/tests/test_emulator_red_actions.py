@@ -10,10 +10,17 @@ from cyberwheel.emulator.actions.red_actions import (
     EmulateDataEncryptedForImpact,
     EmulateLateralMovement,
 )
+from importlib.resources import files
 from cyberwheel.network.host import Host
+from cyberwheel.network.network_base import Network
 from cyberwheel.network.router import Router
 from cyberwheel.network.subnet import Subnet
 
+# TEST variables
+config_path = files("cyberwheel.resources.configs.network").joinpath(
+    "integration_config.yaml"
+)
+network = Network.create_network_from_yaml(config_path)
 router = Router(name="192.168.1.0")
 subnet = Subnet(name="192.168.1.0", ip_range="192.168.1.0", router=router)
 
@@ -25,7 +32,7 @@ class TestEmulatorRedActions(unittest.TestCase):
         """Test ping sweep in emulator"""
         src_host = Host(name="user01", subnet=subnet, host_type=None)
 
-        red_action = EmulatePingSweep(src_host, target_host=src_host)
+        red_action = EmulatePingSweep(src_host, target_host=src_host, network=network)
         print(red_action.__class__.get_name())
 
         ping_sweep_cmd = red_action.build_emulator_cmd(
