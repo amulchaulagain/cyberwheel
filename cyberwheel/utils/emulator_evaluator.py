@@ -140,6 +140,11 @@ class EmulatorEvaluator:
         self.steps = 0
         self.obs = self.envs.reset()
 
+        print("Resetting the emulator...")
+
+        # TODO: reset each episode. This only resets at start of evaluation.
+        self.envs.envs[0].emulator.reset()
+
         print("Playing environment...")
 
         # Set up dirpath to store action logs CSV
