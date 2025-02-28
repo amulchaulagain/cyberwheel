@@ -17,6 +17,7 @@ from cyberwheel.red_actions.actions.art_killchain_phases import (
     ARTPrivilegeEscalation,
     ARTImpact,
 )
+from copy import copy
 
 class RLARTAgentResult:
     def __init__(
@@ -36,7 +37,6 @@ class RLARTAgentResult:
         self.target_host = target_host
         self.success = success
         self.obs = obs
-
 
 class HostView:
     def __init__(
@@ -68,6 +68,78 @@ class HostView:
             return 0
 
 
+class RedObservation:
+    def __init__(self, max_size: int):
+        self.obs : dict[str, HostView] = {}
+        self.max_size = max_size
+        self.obs_vec : list[int] = [0] * max_size
+        self.obs_index: dict[str, int] = {}
+        self.size : int = 0
+        #print(len(self.obs_vec))
+
+    def add_host(
+            self,
+            host: str,
+            type: str = "unknown",
+            sweeped: bool = False,
+            scanned: bool = False,
+            discovered: bool = False,
+            on_host: bool = False,
+            escalated: bool = False,
+            impacted: bool = False,
+    ):
+        self.obs[host] = HostView(name=host, type=type, sweeped=sweeped, scanned=scanned, discovered=discovered, on_host=on_host, escalated=escalated, impacted=impacted)
+        self.obs_index[host] = self.size
+        view = self.obs[host]
+        #print(len(self.obs_vec))
+        self.obs_vec[self.size:(self.size + 7)] = [
+                view.get_type(),
+                int(view.sweeped),
+                int(view.scanned),
+                int(view.discovered),
+                int(view.on_host),
+                int(view.escalated),
+                int(view.impacted),
+            ]
+        self.size += 7
+        #print(len(self.obs_vec))
+        #print(list(self.obs.keys()))
+        #print(self.obs_vec)
+        pass
+
+    def update_host(self, host: str, **kwargs):
+        view = self.obs[host]
+        view.type = kwargs.get("type", view.type)
+        view.sweeped = kwargs.get("sweeped", view.sweeped)
+        view.scanned = kwargs.get("scanned", view.scanned)
+        view.discovered = kwargs.get("discovered", view.discovered)
+        view.on_host = kwargs.get("on_host", view.on_host)
+        view.escalated = kwargs.get("escalated", view.escalated)
+        view.impacted = kwargs.get("impacted", view.impacted)
+
+        host_index = self.obs_index[host]
+        self.obs_vec[host_index:host_index+7] = self.get_view_obs(view)
+
+    def get_view_obs(self, view: HostView) -> list[int]:
+        view_obs = [
+                view.get_type(),
+                int(view.sweeped),
+                int(view.scanned),
+                int(view.discovered),
+                int(view.on_host),
+                int(view.escalated),
+                int(view.impacted),
+            ]
+        return view_obs
+
+    def reset(self, entry_host: str):
+        self.obs = {}
+        self.obs_index = {}
+        self.obs_vec = [0] * self.max_size
+        self.size = 0
+        self.add_host(entry_host, on_host=True)
+
+
 class RLARTAgent(ARTAgent):
     """
     Filler
@@ -75,11 +147,9 @@ class RLARTAgent(ARTAgent):
 
     def __init__(self, network: Network, args) -> None:
         super().__init__(network, args, service_mapping=args.service_mapping)
-
-        self.observation = {}
-        self.observation[self.entry_host.name] = HostView(self.entry_host.name, on_host=True)
-        self.obs_size = 7
-        self.tracked_hosts = self.network.get_all_hostnames()
+        self.tracked_hosts = self.network.hosts.keys()
+        self.observation = RedObservation(len(self.network.hosts) * 15)
+        self.observation.add_host(self.entry_host.name, on_host=True)
     
     def from_yaml(self) -> None:
         with open(self.config, "r") as f:
@@ -97,7 +167,7 @@ class RLARTAgent(ARTAgent):
 
         self.reward_map = {}
 
-        self.entry_host: Host = self.network.get_node_from_name(contents["entry_host"]) if "entry_host" in contents and contents["entry_host"] else self.network.get_random_user_host()
+        self.entry_host: Host = self.network.hosts[contents["entry_host"]] if "entry_host" in contents and contents["entry_host"] else self.network.get_random_user_host()
         self.current_host : Host = self.entry_host
 
         # Initialize the action space
@@ -114,7 +184,7 @@ class RLARTAgent(ARTAgent):
             action
         )  # Selects ART Action, should include the action and target host (based on view?)
         source_host = self.current_host
-        target_host = self.network.get_node_from_name(target_host_name)
+        target_host = self.network.hosts[target_host_name]
         success = False
         if self.validate_action(art_action, target_host_name):
             if art_action == ARTPingSweep or art_action == ARTPortScan:
@@ -144,44 +214,46 @@ class RLARTAgent(ARTAgent):
         src_host = result.src_host.name
         target_host = result.target_host.name
         if action == ARTPingSweep:  # Adds pingsweeped hosts to obs
-            self.observation[target_host].sweeped = True
+            self.observation.update_host(target_host, sweeped=True)
             hosts = result.metadata["sweeped_hosts"]
             interfaced_hosts = result.metadata["interfaced_hosts"]
-            for h in set(hosts) - self.observation.keys():
-                self.observation[h] = HostView(h, sweeped=True)
+            for h in hosts:
+                if h in self.observation.obs.keys():
+                    continue
+                self.observation.add_host(h, sweeped=True)
                 self.action_space.add_host(h)
-            for h in set(interfaced_hosts):
-                self.observation[h] = HostView(h)
+            for h in interfaced_hosts:
+                if h in self.observation.obs.keys():
+                    continue
+                self.observation.add_host(h)
                 self.action_space.add_host(h)
         elif action == ARTPortScan:  # Scans target host
-            self.observation[target_host].scanned = True
+            self.observation.update_host(target_host, scanned=True)
         elif action == ARTDiscovery:  # Discovers host type
-            self.observation[target_host].discovered = True
-            self.observation[target_host].type = self.network.get_node_from_name(
-                target_host
-            ).host_type.name
+            self.observation.update_host(target_host, discovered=True, type=result.target_host.host_type.name)
         elif action == ARTLateralMovement:  # Moves to target host
-            self.observation[target_host].on_host = True
-            self.observation[src_host].on_host = False
+            self.observation.update_host(target_host, on_host=True)
+            self.observation.update_host(src_host, on_host=False)
             self.current_host = result.target_host
         elif action == ARTPrivilegeEscalation:
-            self.observation[target_host].escalated = True
+            self.observation.update_host(target_host, escalated=True)
         elif action == ARTImpact:
-            self.observation[target_host].impacted = True
+            self.observation.update_host(target_host, impacted=True)
 
     def handle_network_change(self):
-        current_hosts = set(self.network.get_all_hosts())
+        current_hosts = self.network.hosts.keys()
         new_hosts = current_hosts - self.tracked_hosts
         for h in new_hosts:
-            self.services_map[h.name] = self.get_valid_techniques_by_host(
-                h, self.all_kcps
+            host = self.network.hosts[h]
+            self.services_map[h] = self.get_valid_techniques_by_host(
+                host, self.all_kcps
             )
-            self.observation[h.name] = HostView(h.name, sweeped=True)
-            self.action_space.add_host(h.name)
+            self.observation.add_host(h, sweeped=True)
+            self.action_space.add_host(h)
         self.tracked_hosts = current_hosts
 
     def validate_action(self, action: ARTKillChainPhase, target_host: str) -> bool:
-        host_view = self.observation[target_host]
+        host_view = self.observation.obs[target_host]
         if action == ARTPingSweep:  # valid if host.sweeped == False
             return not host_view.sweeped
         elif (
@@ -235,28 +307,12 @@ class RLARTAgent(ARTAgent):
         """
         Takes red agent view of network and transforms it into the obs vector.
         """
-        obs = []
-        for view in self.observation.values():
-            obs += [
-                view.get_type(),
-                int(view.sweeped),
-                int(view.scanned),
-                int(view.discovered),
-                int(view.on_host),
-                int(view.escalated),
-                int(view.impacted),
-            ]
-        self.obs_size = len(obs)
-        #TODO
-        obs = obs + [0] * (200 - self.obs_size)
-        _obs = np.array(obs, dtype=np.int64)
+        _obs = np.array(self.observation.obs_vec, dtype=np.int64)
         #_obs = np.array(obs, dtype=np.float64) # TODO
         return _obs
 
     def reset(self, entry_host: Host, network: Network):
         self.network = network
         self.current_host = entry_host
-        self.observation = {}
-        self.observation[entry_host.name] = HostView(entry_host.name, on_host=True)
-        self.obs_size = 7
+        self.observation.reset(entry_host.name)
         self.action_space.reset(entry_host.name)

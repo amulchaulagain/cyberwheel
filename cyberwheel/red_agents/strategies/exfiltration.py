@@ -23,7 +23,7 @@ class Exfiltration(RedStrategy):
         ):
             target_host = agent_obj.current_host
         elif agent_obj.unknowns.length() > 0:
-            target_host = agent_obj.history.mapping[agent_obj.unknowns.get_random()]
+            target_host = agent_obj.network.hosts[agent_obj.unknowns.get_random()]
         return target_host
 
     @classmethod

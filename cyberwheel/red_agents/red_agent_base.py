@@ -145,7 +145,6 @@ class AgentHistory:
             []
         )  # List of StepInfo objects detailing step information by step
         self.red_action_history: List[RedActionResults] = []
-        self.mapping = {}
         self.hosts = (
             {}
         )  # Hosts discovered, and whether or not they've been scanned successfully yet
@@ -158,8 +157,6 @@ class AgentHistory:
             ip_address=initial_host.ip_address
         )
         self.subnets[initial_host.subnet.name] = KnownSubnetInfo()
-        self.mapping[initial_host.name] = initial_host
-        self.mapping[initial_host.subnet.name] = initial_host.subnet
 
     def update_step(
         self,

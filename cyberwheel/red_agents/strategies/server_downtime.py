@@ -27,11 +27,11 @@ class ServerDowntime(RedStrategy):
         ):
             target_host = agent_obj.current_host
         elif agent_obj.unimpacted_servers.length() > 0:
-            target_host = agent_obj.history.mapping[
+            target_host = agent_obj.network.hosts[
                 agent_obj.unimpacted_servers.get_random()
             ]  # O(1)
         elif agent_obj.unknowns.length() > 0:
-            target_host = agent_obj.history.mapping[
+            target_host = agent_obj.network.hosts[
                 agent_obj.unknowns.get_random()
             ]  # O(1)
         return target_host

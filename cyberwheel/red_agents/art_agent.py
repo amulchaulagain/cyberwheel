@@ -92,7 +92,6 @@ class ARTAgent(RedAgent):
 
         self.from_yaml()
 
-        self.initial_host_names = set(self.network.get_host_names())
         self.history: AgentHistory = AgentHistory(initial_host=self.entry_host)
         self.unimpacted_servers = HybridSetList()
         self.unknowns = HybridSetList()
@@ -101,7 +100,7 @@ class ARTAgent(RedAgent):
         if service_mapping == {} and not self.campaign: # Probably good to use YAML for this as well
             self.services_map = {}
             self.tracked_hosts = set()
-            for host in self.network.get_all_hosts():
+            for _, host in self.network.hosts.items():
                 self.tracked_hosts.add(host.name)
                 self.services_map[host.name] = {}
                 for kcp in self.all_kcps:
@@ -113,7 +112,7 @@ class ARTAgent(RedAgent):
                             self.services_map[host.name][kcp].append(mid)
         else:
             self.services_map = service_mapping
-            self.tracked_hosts = set(service_mapping.keys())
+            self.tracked_hosts = service_mapping.keys()
     
     def from_yaml(self) -> None:
         with open(self.config, "r") as r:
@@ -123,7 +122,7 @@ class ARTAgent(RedAgent):
         self.all_kcps = []
         self.reward_map = {}
 
-        self.entry_host: Host = self.network.get_node_from_name(contents["entry_host"]) if "entry_host" in contents else self.network.get_random_user_host()
+        self.entry_host: Host = self.network.hosts[contents["entry_host"]] if "entry_host" in contents else self.network.get_random_user_host()
         self.current_host : Host = self.entry_host
 
         for k, v in contents['actions'].items():
@@ -154,7 +153,7 @@ class ARTAgent(RedAgent):
             ARTLateralMovement,
         ]
         service_mapping = {}
-        for host in network.get_all_hosts():
+        for _, host in network.hosts.items():
             service_mapping[host.name] = {}
             for kcp in killchain:
                 service_mapping[host.name][kcp] = []
@@ -183,31 +182,30 @@ class ARTAgent(RedAgent):
         """
         Does a 'check' at every step to initialize any newly added decoys to view.
         """
-        current_hosts = set(self.network.get_host_names())
+        current_hosts = self.network.hosts.keys()
 
         new_hosts = current_hosts - self.tracked_hosts
 
         new_host = None
         network_change = False
         for host_name in new_hosts:
-            h: Host = self.network.get_node_from_name(host_name)
+            h: Host = self.network.hosts[host_name]
             if not self.campaign:
-                self.services_map[h.name] = self.get_valid_techniques_by_host(
+                self.services_map[host_name] = self.get_valid_techniques_by_host(
                     h, self.all_kcps
                 )
             scanned_subnets = [
-                self.history.mapping[s]
+                s
                 for s, v in self.history.subnets.items()
                 if v.is_scanned()
             ]
-            if h.subnet in scanned_subnets:
+            if h.subnet.name in scanned_subnets:
                 network_change = True
                 new_host = h
-            self.tracked_hosts.add(h.name)
+            self.tracked_hosts.add(host_name)
         if (
             network_change and new_host != None
         ):  # Add the new host to self.history if the subnet is scanned. Else do nothing.
-            self.history.mapping[new_host.name] = new_host
             self.history.hosts[new_host.name] = KnownHostInfo()
             self.unknowns.add(new_host.name)
 
@@ -241,8 +239,6 @@ class ARTAgent(RedAgent):
                         self.unknowns.add(h.name)
                     else:
                         self.history.hosts[h.name].ping_sweeped = True
-                    if h.name not in self.history.mapping:
-                        self.history.mapping[h.name] = h
             return action_results, ARTPingSweep
         elif not self.history.hosts[target_host.name].ports_scanned:
             action_results = ARTPortScan(self.current_host, target_host).sim_execute()
@@ -331,18 +327,14 @@ class ARTAgent(RedAgent):
                     self.history.hosts[host_name].is_leader = self.leader.name == host_name if self.leader else False
                 elif k == "subnet_scanned":
                     if metadata.name not in self.history.subnets.keys():
-                        self.history.mapping[metadata.name] = metadata
-                        self.history.subnets[metadata.name] = KnownSubnetInfo(scanned=True)
-                        self.history.subnets[metadata.name].connected_hosts = metadata.connected_hosts
-                        self.history.subnets[metadata.name].available_ips = metadata.available_ips
-                        self.history.subnets[metadata.name].scan()
-                    elif metadata.name not in self.history.mapping.keys():
-                        self.history.mapping[metadata.name] = metadata
-                        self.history.subnets[metadata.name] = KnownSubnetInfo(scanned=False)
+                        subnet_data = KnownSubnetInfo(scanned=True)
+                        subnet_data.connected_hosts = metadata.connected_hosts
+                        subnet_data.available_ips = metadata.available_ips
+                        subnet_data.scan()
+                        self.history.subnets[metadata.name] = subnet_data
 
                     for h in metadata.connected_hosts:
                         if h.name not in self.history.hosts.keys():
-                            self.history.mapping[h.name] = h
                             self.history.hosts[h.name] = KnownHostInfo()
                             self.unknowns.add(h.name)
                 elif k == "ip_address":
@@ -351,7 +343,6 @@ class ARTAgent(RedAgent):
                             ip_address=metadata.ip_address
                         )
                         self.unknowns.add(host_name)
-                        self.history.mapping[host_name] = metadata
 
     def get_reward_map(self) -> RewardMap:
         """
@@ -368,7 +359,6 @@ class ARTAgent(RedAgent):
         self.network = network
         self.current_host = entry_host
         self.history: AgentHistory = AgentHistory(initial_host=entry_host)
-        self.initial_host_names = set(self.network.get_host_names())
         self.unimpacted_servers = HybridSetList()
         self.unknowns = HybridSetList()
         self.leader = leader

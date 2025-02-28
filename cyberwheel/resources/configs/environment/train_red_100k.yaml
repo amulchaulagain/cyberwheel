@@ -1,5 +1,5 @@
 # Training Parameters
-experiment_name: RLRedAgent_ServerDowntime_50H
+experiment_name: RLRedAgent_ServerDowntime_100kH
 seed: 1 # The seed to use for the experiment
 deterministic: false # Whether or not the training is deterministic
 device: cuda:0 # Which device to train on

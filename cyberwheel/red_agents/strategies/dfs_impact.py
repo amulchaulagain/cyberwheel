@@ -26,7 +26,7 @@ class DFSImpact(RedStrategy):
             ]
             if len(unimpacted_hosts) > 0:
                 target_host_name = random.choice(unimpacted_hosts)
-                target_host = agent_obj.history.mapping[target_host_name]
+                target_host = agent_obj.network.hosts[target_host_name]
                 return target_host
         return agent_obj.current_host
 

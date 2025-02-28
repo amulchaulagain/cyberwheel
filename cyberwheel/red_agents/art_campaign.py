@@ -37,8 +37,8 @@ class ARTCampaign(ARTAgent):
     def from_yaml(self) -> None:
         with open(self.config, "r") as f:
             config = yaml.safe_load(f)
-        self.entry_host = self.network.get_node_from_name(config["entry_host"]) if config["entry_host"] else self.network.get_random_user_host()
-        self.leader = self.network.get_node_from_name(config["leader"]) if config["leader"] else self.network.get_random_server_host()
+        self.entry_host = self.network.hosts[config["entry_host"]] if config["entry_host"] else self.network.get_random_user_host()
+        self.leader = self.network.hosts[config["leader"]] if config["leader"] else self.network.get_random_server_host()
         sm = importlib.import_module("cyberwheel.red_agents.strategies")
         self.strategy = getattr(sm, config['strategy'])
 

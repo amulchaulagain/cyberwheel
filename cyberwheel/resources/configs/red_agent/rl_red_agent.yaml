@@ -30,5 +30,5 @@ actions: # All actions in this killchain (pingsweep -> impact) are required.
       immediate: 100
       recurring: 0
 action_space: RedDiscreteActionSpace
-entry_host: # optional; defaults to random user
+entry_host: host1 # optional; defaults to random user
 leader: server1 # optional; defaults to random server

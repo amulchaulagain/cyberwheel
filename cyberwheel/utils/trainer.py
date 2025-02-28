@@ -70,6 +70,7 @@ class Trainer:
         total_reward = 0
         # Standard evaluation loop to estimate mean episodic return
         for episode in range(self.args.eval_episodes):
+            episode_start_time = time.time()
             obs, _ = env.reset()
             for step in range(self.args.num_steps):
                 obs = torch.Tensor(obs).to(eval_device)
@@ -80,10 +81,14 @@ class Trainer:
                 action, _, _, _ = agent.get_action_and_value(
                     obs, action_mask=action_masks
                 )
+                eval_step_start_time = time.time()
                 obs, rew, done, _, info = env.step(action)
+                #print(f"Evaluation step took: \t\t{time.time() - eval_step_start_time}")
                 total_reward += rew
             episode_rewards.append(total_reward)
             total_reward = 0
+            episode_time = time.time() - episode_start_time
+            print(f"Evaluation ep took: \t\t{episode_time}")
 
         episodic_return = float(sum(episode_rewards)) / self.args.eval_episodes
         return episodic_return
@@ -133,7 +138,7 @@ class Trainer:
             ARTLateralMovement,
         ]
         service_mapping = {}
-        for host in network.get_all_hosts():
+        for _, host in network.hosts.items():
             service_mapping[host.name] = {}
             for kcp in killchain:
                 service_mapping[host.name][kcp] = []
@@ -294,13 +299,16 @@ class Trainer:
             # TRY NOT TO MODIFY: execute the game and log data.
             # Execute the selected action in the environment to collect experience for training.
             temp_action = action.cpu().numpy()
+            train_step_start_time = time.time()
             self.next_obs, reward, done, _, info = self.envs.step(temp_action)
+            print(f"Training step took: \t\t{time.time() - train_step_start_time}")
             self.rewards[step] = torch.tensor(reward).to(self.device).view(-1)
             self.next_obs, self.next_done = torch.Tensor(self.next_obs).to(self.device), torch.Tensor(
                 done
             ).to(self.device)
         end_time = time.time_ns()
         episode_time = (end_time - episode_start) / (10**9)
+        print(f"Training ep took: \t\t{episode_time}")
 
         # Calculate and log the mean reward for this episode.
         mean_rew = self.rewards.sum(axis=0).mean()

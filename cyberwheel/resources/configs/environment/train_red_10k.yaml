@@ -1,19 +1,19 @@
 # Training Parameters
-experiment_name: RLRedAgent_ServerDowntime_50H
+experiment_name: RLRedAgent_ServerDowntime_10kH
 seed: 1 # The seed to use for the experiment
 deterministic: false # Whether or not the training is deterministic
-device: cuda:0 # Which device to train on
+device: cuda:1 # Which device to train on
 async_env: true # Whether to run the environments in parallel
-total_timesteps: 50000000 # Total number of steps to run throughout training
-num_saves: 100 # Number of times the model is evaluated and saved during the training run
+total_timesteps: 40000000000 # Total number of steps to run throughout training
+num_saves: 10 # Number of times the model is evaluated and saved during the training run
 num_envs: 128 # Number of game environments to run at once (parallel if async_env == true)
-num_steps: 200 # Number of steps to run per episode
+num_steps: 150000 # Number of steps to run per episode
 eval_episodes: 10 # Number of episodes to run in an evaluation
 resume: false # When training with an existing model_name, whether to resume training that model, or overrwrite it
 
 # Environment Parameters
 environment: CyberwheelRedRL # Environment class to use
-network_config: 15-host-network.yaml # Network configuration filename in config/network
+network_config: 10000-host-network.yaml # Network configuration filename in config/network
 host_config: host_defs_services.yaml # Host configuration filename in config/host_definitions
 decoy_config: decoy_hosts.yaml # Decoy configuration filename in config/detector
 red_agent: rl_red_agent.yaml # Red agent configuration filename in config/red_agent

@@ -364,18 +364,18 @@ def evaluate_cyberwheel():
                 red_action_src = info["final_info"][0]["red_action_src"]
                 red_action_dest = info["final_info"][0]["red_action_dst"]
                 red_action_success = info["final_info"][0]["red_action_success"]
-                net = info["final_info"][0]["network"]
+                #net = info["final_info"][0]["network"]
                 # history = info["final_info"][0]["history"]
-                killchain = info["final_info"][0]["killchain"]
+                #killchain = info["final_info"][0]["killchain"]
             else:
                 blue_action = info["blue_action"][0]
                 red_action_type = info["red_action"][0]
                 red_action_src = info["red_action_src"][0]
                 red_action_dest = info["red_action_dst"][0]
                 red_action_success = info["red_action_success"][0]
-                net = info["network"][0]
+                #net = info["network"][0]
                 # history = info["history"][0]
-                killchain = info["killchain"][0]
+                #killchain = info["killchain"][0]
 
             full_episodes.append(episode)
             full_steps.append(step)
