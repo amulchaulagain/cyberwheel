@@ -63,6 +63,15 @@ class EmulatorControl:
         print("Emulator host initialization is complete.")
         return True
 
+    def reset(self) -> bool:
+        """Sequence of actions to reset the emulator for each episode"""
+
+        print("removing decoys...")
+        decoy_names = self._get_decoy_host_names()
+        success = self._reset_decoys(decoy_names)
+
+        return success
+
     def run_blue_action(
         self,
         action_name: str,
@@ -237,3 +246,18 @@ class EmulatorControl:
             # print(result.stdout)
             print(f"Successfully enrolled {host_name} to fleet server.")
             return True
+
+    def _reset_decoys(self, hostnames: list[str]) -> bool:
+        """Reset decoys by turning off network "ens2" interface"""
+
+        for decoy_hostname in hostnames:
+            action = EmulateRemoveDecoyHost(network=self.network, configs={})
+            shell_cmd = action.build_emulator_cmd(decoy_hostname=decoy_hostname)
+            result = action.emulator_execute(shell_cmd)
+            if result.success:
+                continue
+            else:
+                return False
+
+        return True
+

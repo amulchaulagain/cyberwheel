@@ -30,6 +30,17 @@ class TestEmulatorSetup(unittest.TestCase):
 
         self.assertTrue(success_flag)
 
+    def test_reset(self) -> None:
+        """
+        Test reset sequence
+        """
+        emulator = EmulatorControl(
+            network=network, subnet=subnet, network_config_name=NETWORK_CONFIG
+        )
+        success_flag = emulator.reset()
+
+        self.assertTrue(success_flag)
+
     def test_get_ip_address(self) -> None:
         """
         Test retrieving IP address from emulator.
