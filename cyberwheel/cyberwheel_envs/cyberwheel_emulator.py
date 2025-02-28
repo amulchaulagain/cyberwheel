@@ -42,7 +42,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         self.args = args
         self.max_steps = 30
 
-        valid_targets = [h.name for h in self.network.get_all_hosts()]
+        valid_targets = [h.name for h in self.network.get_all_hosts()] + ["decoy1", "decoy2"]
 
         self.red_agent = ARTCampaign(self.network, args)
 
