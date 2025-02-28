@@ -214,4 +214,6 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
 
         self.reward_calculator.reset()
 
+        self.emulator.reset()
+
         return self._reset_obs(), {}
