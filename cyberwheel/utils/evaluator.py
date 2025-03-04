@@ -24,7 +24,7 @@ from cyberwheel.red_actions.actions import (
 )
 from cyberwheel.red_actions import art_techniques
 from cyberwheel.red_agents import ARTAgent
-from cyberwheel.visualize import visualize
+from cyberwheel.utils.visualize import visualize
 
 
 def get_action_mask(action_space_size, action_masks):
