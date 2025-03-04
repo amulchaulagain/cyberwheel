@@ -1,18 +1,17 @@
 # Training Parameters
-experiment_name: # The experiment name
+experiment_name: test_decoy_deployment # The experiment name
 seed: 1 # The seed to use for the experiment
 deterministic: false # Whether or not the training is deterministic
-device: cpu # Which device to train on
-async_env: false # Whether to run the environments in parallel
-total_timesteps: 1000000 # Total number of steps to run throughout training
-num_saves: 10 # Number of times the model is evaluated and saved during the training run
-num_envs: 1 # Number of game environments to run at once (parallel if async_env == true)
+device: cuda:0 # Which device to train on
+async_env: true # Whether to run the environments in parallel
+total_timesteps: 100000000 # Total number of steps to run throughout training
+num_saves: 100 # Number of times the model is evaluated and saved during the training run
+num_envs: 128 # Number of game environments to run at once (parallel if async_env == true)
 num_steps: 100 # Number of steps to run per episode
 eval_episodes: 10 # Number of episodes to run in an evaluation
-resume: false # When training with an existing model_name, whether to resume training that model, or overrwrite it
 
 # Environment Parameters
-environment: CyberwheelRedRL # Environment class to use
+environment: CyberwheelRL # Environment class to use
 network_config: 15-host-network.yaml # Network configuration filename in config/network
 host_config: host_defs_services.yaml # Host configuration filename in config/host_definitions
 decoy_config: decoy_hosts.yaml # Decoy configuration filename in config/detector
@@ -20,11 +19,9 @@ red_agent: art_agent.yaml # Red agent configuration filename in config/red_agent
 train_red: false
 campaign: false
 valid_targets: all
-blue_agent: dynamic_blue_agent.yaml # Blue agent configuration filename in config/blue_agent
+blue_agent: rl_blue_agent.yaml # Blue agent configuration filename in config/blue_agent
 train_blue: true
-min_decoys: 2 # TODO: Is this still being used?
-max_decoys: 3 # TODO: Is this still being used?
-reward_function: RLRedReward # The reward function
+reward_function: RLReward # The reward function
 reward_scaling: 10.0 # The Reward scaling
 detector_config: detector_handler.yaml # Detector configuration filename in config/detector
 
@@ -46,5 +43,5 @@ target_kl: null # The target KL Divergence Threshold
 
 # Weights & Biases Parameters (optional)
 track: false
-wandb_project_name: # The W&B project name if tracking
-wandb_entity: # The W&B entity if tracking
+wandb_project_name: Cyberwheel # The W&B project name if tracking
+wandb_entity: oeschsec # The W&B entity if tracking

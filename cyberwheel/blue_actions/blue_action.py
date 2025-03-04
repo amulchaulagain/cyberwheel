@@ -14,7 +14,7 @@ def generate_id() -> str:
     return uuid.uuid4().hex
 
 class BlueActionReturn():
-    def __init__(self, id="", success=False, recurring=0) -> None:
+    def __init__(self, id="", success=False, recurring=0, target=None) -> None:
         """
         The output of blue actions.
 
@@ -26,6 +26,7 @@ class BlueActionReturn():
         self.id = id
         self.success = success
         self.recurring = recurring
+        self.target = target
 
 class BlueAction(ABC):
     def __init__(self, network: Network, configs: Dict[str, any] = {})-> None:

@@ -8,6 +8,7 @@ from importlib.resources import files
 from cyberwheel.red_agents import ARTAgent
 from cyberwheel.network.network_base import Network, Host
 from cyberwheel.red_actions.red_base import RedActionResults
+from cyberwheel.red_agents.red_agent_base import RedAgentResult
 from cyberwheel.red_actions.technique import Technique
 from cyberwheel.red_agents.strategies import RedStrategy, BruteForce
 from cyberwheel.red_actions import art_techniques
@@ -37,8 +38,10 @@ class ARTCampaign(ARTAgent):
     def from_yaml(self) -> None:
         with open(self.config, "r") as f:
             config = yaml.safe_load(f)
-        self.entry_host = self.network.hosts[config["entry_host"]] if config["entry_host"] else self.network.get_random_user_host()
-        self.leader = self.network.hosts[config["leader"]] if config["leader"] else self.network.get_random_server_host()
+        self.entry_host: str = config["entry_host"]
+        self.current_host : Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
+        self.leader = config["leader"]
+        self.leader_host = self.network.hosts[config["leader"]] if self.leader.lower() != "random" else self.network.get_random_server_host()
         sm = importlib.import_module("cyberwheel.red_agents.strategies")
         self.strategy = getattr(sm, config['strategy'])
 
@@ -63,7 +66,7 @@ class ARTCampaign(ARTAgent):
                 config["lateral_movement_atomic_test"]
             )
             self.lateral_movement_reward = config["lateral_movement_reward"]
-        else:
+        else: # TODO: Lateral Movement not functional yet
             self.lateral_movement_technique = None
             self.lateral_movement_atomic_test = None
             self.lateral_movement_reward = 0.0
@@ -113,7 +116,7 @@ class ARTCampaign(ARTAgent):
         # TODO: Add metadata depending on killchain phase
         return action_results, technique_class
 
-    def act(self) -> type[Technique]:
+    def act(self, policy_action=None) -> RedAgentResult:
         """
         This defines the red agent's action at each step of the simulation.
         It will
@@ -141,7 +144,13 @@ class ARTCampaign(ARTAgent):
 
         #print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
         self.history.update_step(action, action_results)
-        return action
+        return RedAgentResult(
+            action, 
+            source_host, 
+            target_host, 
+            success,
+            action_results=action_results
+        )  # Returns what ARTAgent act() should, probably. Or the observation space?
 
     @classmethod
     def create_campaign_from_yaml(

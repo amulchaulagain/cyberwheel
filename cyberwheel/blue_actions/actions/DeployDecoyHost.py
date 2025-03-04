@@ -15,13 +15,22 @@ def get_host_types() -> List[Dict[str, any]]:
 
 
 class DeployDecoyHost(SubnetAction):
+    """
+    This class represents the action for deploying a decoy Host in the network.
+    """
     def __init__(self, network: Network, configs: Dict[str, any], **kwargs) -> None:
         super().__init__(network, configs)
         self.define_configs()
         self.define_services()
-        self.decoy_list = kwargs.get("decoy_list", [])
+        self.decoy_list : list[str] = kwargs.get("decoy_list", [])
 
     def execute(self, subnet: Subnet, **kwargs) ->  BlueActionReturn:
+        """
+        This executes the action to deploy a decoy host.
+
+        When ran, this function will add a decoy Host to the
+        network with a UUID name.
+        """
         name = generate_id()
         if "server" in self.type.lower():
             host_type = HostType(
@@ -37,19 +46,4 @@ class DeployDecoyHost(SubnetAction):
 
         self.host = self.network.create_decoy_host(name, subnet, host_type)
         self.decoy_list.append(name)
-        return BlueActionReturn(name, True, 1)
-
-class IsolateDecoyHost(SubnetAction):
-    def __init__(self, network: Network, configs: Dict[str, any], **kwargs) -> None:
-        super().__init__(network, configs)
-        self.define_configs()
-        self.define_services()
-        self.isolate_data = kwargs.get("isolate_data", [])
-
-    def execute(self, subnet: Subnet, **kwargs) ->  BlueActionReturn:
-        name = generate_id()
-        host_type = HostType(
-            name=name, services=self.services, decoy=True, cve_list=self.cves
-        )
-        self.host = self.network.create_decoy_host(name, subnet, host_type)
-        return BlueActionReturn(name, self.isolate_data.append_decoy(self.host, subnet), 1)
+        return BlueActionReturn(name, True, 1, target=subnet.name)

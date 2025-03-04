@@ -51,7 +51,7 @@ class DiscreteActionSpace(ActionSpace):
                 return ASReturn(name, ac.action, args=[self.hosts[index]])
             elif ac.type == "subnet":
                 index = (action - ac.lower_bound) % self.num_subnets
-                return ASReturn(name, ac.action, args=[self.subnets[index]])
+                return ASReturn(name, ac.action, args=[self.network.subnets[self.subnets[index]]])
             elif ac.type == "range":
                 index = (action - ac.lower_bound) % (ac.upper_bound - ac.lower_bound)
                 return ASReturn(name, ac.action, args=[index])

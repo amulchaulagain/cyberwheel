@@ -265,7 +265,5 @@ def display_click_data(clickData, style):
         }, text
     return {"display": "none"}, ""
 
-
-port = sys.argv[1]
-debug = True
-app.run(debug=debug, port=port)
+def run_visualization_server(port):
+    app.run(debug=True, port=port)

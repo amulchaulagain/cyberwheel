@@ -4,39 +4,38 @@ import matplotlib.pyplot as plt
 import pickle
 
 from cyberwheel.network.network_base import Network, Host
-from cyberwheel.red_agents.red_agent_base import AgentHistory
+from cyberwheel.red_agents.red_agent_base import AgentHistory, KnownHostInfo
 from typing import Any
 from importlib.resources import files
+from cyberwheel.observation import RedObservation
 
-
-def color_map(state) -> str:
+def color_map(host_view) -> str:
     """
     Maps the state of the Host with a corresponding color.
 
-    Pingsweep & PortScan    -->     Green
-    Discovery               -->     Yellow
-    Privilege Escalation    -->     Orange
-    Impact                  -->     Red
+    sweeped or scanned          -->     Green
+    discovered                  -->     Yellow
+    escalated                   -->     Orange
+    impacted                    -->     Red
     """
-    if state == "ARTDiscovery":
-        return "yellow"
-    elif state == "ARTPingSweep" or state == "ARTPortScan":
-        return "green"
-    elif state == "ARTPrivilegeEscalation":
-        return "orange"
-    elif state == "ARTImpact":
+    if host_view.impacted:
         return "red"
+    elif host_view.escalated:
+        return "orange"
+    elif host_view.discovered:
+        return "yellow"
+    elif host_view.scanned:
+        return "green"
+    elif host_view.sweeped:
+        return "green"
     else:
         return "gray"
 
-
 def visualize(
-    network: Network,
     episode: int,
     step: int,
     experiment_name: str,
-    history: AgentHistory,
-    killchain: list[Any],
+    info: dict[str, Any],
 ):
     """
     A function to visualize the state of the network at a given episode/step.
@@ -56,47 +55,24 @@ def visualize(
     experiment_dir = files("cyberwheel.graphs").joinpath(experiment_name)
     if not os.path.exists(experiment_dir):
         os.mkdir(experiment_dir)
+    
+    host_info = info["host_info"]
+    network: Network = info["network"]
+
+    source_host = info["source_host"]
+    target_host = info["target_host"]
+    step_commands = info["commands"]
 
     # Initialize network graph and environment state information
     G = network.graph
 
-    host_info = history.hosts
-    subnet_info = history.subnets
-    last_step_info = history.history[-1]
-    source_host = last_step_info["src_host"]
-    target_host = last_step_info["target_host"]
-    current_action = last_step_info["action"]
-    mitre_id = last_step_info["techniques"]["mitre_id"]
-    technique = last_step_info["techniques"]["technique"]
-    step_commands = last_step_info["techniques"]["commands"]
+    # TODO: Need the hosts ob (key: hostname, values: ), subnets obs (may not actually exist here...), and step info(source, target, action, commands)
 
-    if (
-        current_action == "ARTLateralMovement"
-    ):  # If Lateral Movement, change host position in visualization
-        source_host = target_host
-
-    # Set colors of hosts and subnets
     host_color = {}
-    subnet_color = {}
-    for hostname in host_info:
-        temp_action = "nothing yet"
-        if host_info[hostname].last_step == -1:
-            if host_info[hostname].ports_scanned or host_info[hostname].ping_sweeped:
-                temp_action = (
-                    "ARTPingSweep"
-                    if host_info[hostname].ping_sweeped
-                    else "ARTPortScan"
-                )
-            else:
-                temp_action = "nothing"
-        elif host_info[hostname].last_step >= len(killchain):
-            temp_action = "ARTImpact"
-        else:
-            temp_action = killchain[host_info[hostname].last_step].__name__
-        host_color[hostname] = color_map(temp_action)
-    subnet_color = {
-        k: "yellow" if subnet_info[k].scanned else "gray" for k in subnet_info
-    }
+    on_host = ""
+    for h, host_view in host_info.items():
+        host_color[h] = color_map(host_view)
+        on_host = h if host_view.on_host else source_host
 
     # Set design of nodes in graph based on state
     colors = []
@@ -112,8 +88,8 @@ def visualize(
 
         edgecolor = "black"
         linewidth = 2
-        if "subnet" in node_name and node_name in subnet_color:
-            color = subnet_color[node_name]
+        if "subnet" in node_name:
+            color = "gray"
             state = "Scanned" if color == "yellow" else "Safe"
         else:
             if node_name in host_color:
@@ -127,10 +103,11 @@ def visualize(
                 elif color == "red":
                     state = "Impact"
                 else:
+                    color = "gray"
                     state = "Safe"
             else:
                 color = "gray"
-        if node_name == source_host:
+        if node_name == on_host:
             edgecolor = "blue"
             linewidth = 4
             state += "<br>Red Agent Position<br>"

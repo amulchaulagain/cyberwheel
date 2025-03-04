@@ -3,9 +3,8 @@ from gym.core import ActType
 from gym import Space
 
 from cyberwheel.blue_actions.blue_action import BlueAction
-from cyberwheel.red_actions.actions.art_killchain_phases import (
+from cyberwheel.red_actions.actions import (
     ARTKillChainPhase,
-    ARTAction,
 )
 from cyberwheel.network.network_base import Network
 

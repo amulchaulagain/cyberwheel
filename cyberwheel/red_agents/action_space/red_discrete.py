@@ -2,7 +2,7 @@ from gym import Space
 from gym.spaces import Discrete
 from gym.core import ActType
 
-from cyberwheel.red_actions.actions.art_killchain_phases import ARTKillChainPhase
+from cyberwheel.red_actions.actions import ARTKillChainPhase
 
 class RedDiscreteActionSpace:
     def __init__(self, actions: list[ARTKillChainPhase], entry_host: str) -> None:

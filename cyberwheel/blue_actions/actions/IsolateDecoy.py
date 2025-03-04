@@ -6,6 +6,7 @@ from cyberwheel.network.network_base import Network
 
 
 class IsolateDecoy(StandaloneAction):
+    # TODO: Test if this works
     def __init__(self, network: Network, configs: Dict[str, any], **kwargs) -> None:
         super().__init__(network, configs)
         self.isolate_data = kwargs.get("isolate_data")

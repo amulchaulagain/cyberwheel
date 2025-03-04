@@ -4,13 +4,30 @@ import yaml
 
 from importlib.resources import files
 from typing import Dict, List, Any
-from gym import Space
+from gym import Space, spaces
 
 from cyberwheel.blue_agents.blue_agent import BlueAgent, BlueAgentResult
 from cyberwheel.reward.reward_base import RewardMap
-from cyberwheel.network.network_base import Network
+from cyberwheel.network.network_base import Network, Host
 from cyberwheel.blue_agents.action_space.action_space import ActionSpace
+from cyberwheel.observation import BlueObservation
 
+
+def host_to_index_mapping(network: Network) -> Dict[Host, int]:
+    """
+    This will help with constructing the obs_vec.
+    It will need to be called and save during __init__()
+    because deploying decoy hosts may affect the order of
+    the list network.get_non_decoy_hosts() returns.
+    This might not be the case, but this will ensure the
+    original indices are preserved.
+    """
+    mapping: Dict[Host, int] = {}
+    i = 0
+    for host in network.hosts.keys() - network.decoys.keys():
+        mapping[host] = i
+        i += 1
+    return mapping
 
 class _ActionConfigInfo():
     def __init__(self, 
@@ -30,7 +47,7 @@ class _ActionConfigInfo():
     def __str__(self) -> str:
         return f"config: {self.configs}, immediate_reward: {self.immediate_reward}, reccuring_reward: {self.recurring_reward}, action_type: {self.action_type}"
 
-class DynamicBlueAgent(BlueAgent):
+class RLBlueAgent(BlueAgent):
     """
     The purpose of this blue agent is to prevent having to create new blue agents everytime a new 
     blue action is introduced. The idea is to have a config file specify what blue actions this instance
@@ -48,6 +65,8 @@ class DynamicBlueAgent(BlueAgent):
         super().__init__()
         self.config = files("cyberwheel.resources.configs.blue_agent").joinpath(args.blue_agent)
         self.network = network
+
+        self.observation = BlueObservation(2 * len(self.network.hosts), host_to_index_mapping(self.network), args.detector_config)
 
         self.configs: Dict[str, Any] = {}
         self.action_space: ActionSpace = None
@@ -153,12 +172,11 @@ class DynamicBlueAgent(BlueAgent):
             )
 
     def act(self, action: int) -> BlueAgentResult:
+        self.observation.detector.reset()
         asc_return = self.action_space.select_action(action)
         result = asc_return.action.execute(*asc_return.args, **asc_return.kwargs)
-        id = result.id
-        success = result.success
-        recurring = result.recurring
-        return BlueAgentResult(asc_return.name, id, success, recurring)
+        
+        return BlueAgentResult(asc_return.name, result.id, result.success, result.recurring, target=result.target)
     
     def get_reward_map(self) -> RewardMap:
         return self.reward_map
@@ -169,6 +187,11 @@ class DynamicBlueAgent(BlueAgent):
     def create_action_space(self, action_space_size: int) -> Space:
         return self.action_space.create_action_space(action_space_size)
     
+    def get_observation_space(self, red_agent_result):
+        alerts = self.observation.detector.obs([red_agent_result.action_results.detector_alert])
+        return self.observation.create_obs_vector(alerts)
+    
     def reset(self):
         for v in self.shared_data.values():
             v.clear()
+        self.observation.reset()

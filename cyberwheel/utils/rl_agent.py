@@ -5,10 +5,11 @@ import numpy as np
 from torch.distributions.categorical import Categorical
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-        """Initialise neural network weights using orthogonal initialization. Works well in practice."""
-        torch.nn.init.orthogonal_(layer.weight, std)
-        torch.nn.init.constant_(layer.bias, bias_const)
-        return layer
+            """Initialise neural network weights using orthogonal initialization. Works well in practice."""
+            torch.nn.init.orthogonal_(layer.weight, std)
+            torch.nn.init.constant_(layer.bias, bias_const)
+            return layer
+
 
 class RLAgent(nn.Module):
     """
@@ -60,4 +61,4 @@ class RLAgent(nn.Module):
         probs = Categorical(logits=logits)
         if action is None:
             action = probs.sample()
-        return action, probs.log_prob(action), probs.entropy(), self.critic(x)    
+        return action, probs.log_prob(action), probs.entropy(), self.critic(x)

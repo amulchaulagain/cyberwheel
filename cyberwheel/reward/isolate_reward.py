@@ -1,6 +1,6 @@
 from typing import Dict, List, NewType, Tuple
 
-from cyberwheel.reward.reward import RewardCalculator, RewardMap
+from cyberwheel.reward import RewardCalculator, RewardMap
 
 class IsolateReward(RewardCalculator):
     def __init__(

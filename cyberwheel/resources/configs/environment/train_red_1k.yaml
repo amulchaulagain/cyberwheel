@@ -9,10 +9,9 @@ num_saves: 10 # Number of times the model is evaluated and saved during the trai
 num_envs: 1 # Number of game environments to run at once (parallel if async_env == true)
 num_steps: 200 # 15000 # Number of steps to run per episode
 eval_episodes: 10 # Number of episodes to run in an evaluation
-resume: false # When training with an existing model_name, whether to resume training that model, or overrwrite it
 
 # Environment Parameters
-environment: CyberwheelRedRL # Environment class to use
+environment: CyberwheelRL # Environment class to use
 network_config: 1000-host-network.yaml # Network configuration filename in config/network
 host_config: host_defs_services.yaml # Host configuration filename in config/host_definitions
 decoy_config: decoy_hosts.yaml # Decoy configuration filename in config/detector
@@ -24,7 +23,7 @@ blue_agent: inactive_blue_agent.yaml # Blue agent configuration filename in conf
 train_blue: false
 min_decoys: 2 # TODO: Is this still being used?
 max_decoys: 3 # TODO: Is this still being used?
-reward_function: RLRedReward # The reward function
+reward_function: RLReward # The reward function
 reward_scaling: 10.0 # The Reward scaling
 detector_config: detector_handler.yaml # Detector configuration filename in config/detector
 

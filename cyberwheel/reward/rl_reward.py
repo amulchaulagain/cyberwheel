@@ -6,7 +6,7 @@ from cyberwheel.reward.reward_base import (
 from cyberwheel.network.host import Host
 
 
-class RLRedReward(Reward):
+class RLReward(Reward):
     def __init__(
         self,
         red_rewards: RewardMap,
@@ -23,8 +23,6 @@ class RLRedReward(Reward):
         red_success: str,
         blue_success: bool,
         target_host: Host,
-        red_id: str = -1,
-        red_recurring: int = 0,
         blue_id: str = -1,
         blue_recurring: int = 0,
     ) -> int | float:
@@ -32,21 +30,18 @@ class RLRedReward(Reward):
         decoy = target_host.decoy
         if red_success and not decoy and target_host_name in self.valid_targets:  # If red action succeeded on a real Host
             r = self.red_rewards[red_action][0]
+            r_recurring = self.red_rewards[red_action][1]
         else:
             r = 0
+            r_recurring = 0
 
         if blue_success:
             b = self.blue_rewards[blue_action][0]
         else:
-            b = 0 # -100?
-
-        if len(self.blue_recurring_actions) < 1:
-            b -= 0
+            b = 0
         
-        if red_recurring == -1:
-            self.remove_recurring_red_action(red_id)
-        elif red_recurring == 1:
-            self.add_recurring_red_action(red_id, red_action, decoy)
+        if r_recurring != 0:
+            self.add_recurring_red_action('0', red_action, decoy)
 
         if blue_recurring == -1:
             self.remove_recurring_blue_action(blue_id)
@@ -60,7 +55,7 @@ class RLRedReward(Reward):
         for ra in self.blue_recurring_actions:
             sum += self.blue_rewards[ra.action][1]
         for ra in self.red_recurring_actions:
-            if ra[1]:
+            if ra[1]: # If host is a decoy
                 sum -= self.red_rewards[ra[0].action][1] * 10
             else:
                 sum += self.red_rewards[ra[0].action][1]
@@ -77,12 +72,6 @@ class RLRedReward(Reward):
 
     def add_recurring_red_action(self, id: str, red_action: str, is_decoy: bool) -> None:
         self.red_recurring_actions.append((RecurringAction(id, red_action), is_decoy))
-    
-    def remove_recurring_red_action(self, id: str) -> None:
-        for i in range(len(self.red_recurring_actions)):
-            if self.red_recurring_actions[i].id == id:
-                self.red_recurring_actions.pop(i)
-                break
 
     def reset(self) -> None:
         self.blue_recurring_actions = []

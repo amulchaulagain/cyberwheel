@@ -108,7 +108,8 @@ class Network:
         """
         try:
             self.graph.remove_node(host.name)
-            return self.hosts.pop(host, None)
+            self.decoys.pop(host.name, None)
+            return self.hosts.pop(host.name, None)
         except nx.NetworkXError as e:
             # TODO: raise custom exception?
             raise e
@@ -532,6 +533,8 @@ class Network:
         :param list[FirewallRule] **firewall_rules:
         :param list[Service] **services:
         """
+        #print(name)
+        #print(subnet)
         host = Host(
             name,
             subnet,
@@ -581,7 +584,7 @@ class Network:
         :param IPv4Address | IPv6Address **dns_server:
         """
         host = self.add_host_to_subnet(*args, decoy=True, **kwargs)
-        self.decoys[host.name, host]
+        self.decoys[host.name] = host
         return host
 
     def remove_decoy_host(self, host: Host) -> None:
@@ -599,9 +602,7 @@ class Network:
         #self.decoys.remove(i)
 
     def reset(self):
-        #self.hosts = self.hosts - self.decoys # Remove decoys from host tracking
-
-        for decoy in self.decoys:
+        for decoy in list(self.decoys.values()):
             self.remove_host_from_subnet(decoy)
         self.decoys = {}
 

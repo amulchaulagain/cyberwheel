@@ -1,5 +1,5 @@
 # Training Parameters
-experiment_name: RLRedAgent_ServerDowntime_50H
+experiment_name: test_red_eval
 seed: 1 # The seed to use for the experiment
 deterministic: false # Whether or not the training is deterministic
 device: cuda:0 # Which device to train on
@@ -9,10 +9,9 @@ num_saves: 100 # Number of times the model is evaluated and saved during the tra
 num_envs: 128 # Number of game environments to run at once (parallel if async_env == true)
 num_steps: 200 # Number of steps to run per episode
 eval_episodes: 10 # Number of episodes to run in an evaluation
-resume: false # When training with an existing model_name, whether to resume training that model, or overrwrite it
 
 # Environment Parameters
-environment: CyberwheelRedRL # Environment class to use
+environment: CyberwheelRL # Environment class to use
 network_config: 15-host-network.yaml # Network configuration filename in config/network
 host_config: host_defs_services.yaml # Host configuration filename in config/host_definitions
 decoy_config: decoy_hosts.yaml # Decoy configuration filename in config/detector
@@ -22,9 +21,7 @@ campaign: false
 valid_targets: servers
 blue_agent: inactive_blue_agent.yaml # Blue agent configuration filename in config/blue_agent
 train_blue: false
-min_decoys: 2 # TODO: Is this still being used?
-max_decoys: 3 # TODO: Is this still being used?
-reward_function: RLRedReward # The reward function
+reward_function: RLReward # The reward function
 reward_scaling: 10.0 # The Reward scaling
 detector_config: detector_handler.yaml # Detector configuration filename in config/detector
 

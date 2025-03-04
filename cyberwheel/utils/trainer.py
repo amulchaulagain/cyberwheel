@@ -13,7 +13,7 @@ from importlib.resources import files
 
 from cyberwheel.utils import RLAgent
 from cyberwheel.network.network_base import Network
-from cyberwheel.red_actions.actions.art_killchain_phases import ARTDiscovery, ARTLateralMovement, ARTPrivilegeEscalation, ARTImpact
+from cyberwheel.red_actions.actions import ARTDiscovery, ARTLateralMovement, ARTPrivilegeEscalation, ARTImpact
 from cyberwheel.red_actions import art_techniques
 
 class Trainer:
@@ -35,9 +35,9 @@ class Trainer:
         def _init():
             if evaluation:
                 config_path = files("cyberwheel.resources.configs.network").joinpath(self.args.network_config)
-                env = self.env(self.args, network=Network.create_network_from_yaml(config_path))
+                env = self.env(self.args, network=Network.create_network_from_yaml(config_path), evaluation=True)
             else:
-                env = self.env(self.args, network=self.networks[rank])
+                env = self.env(self.args, network=self.networks[rank], evaluation=False)
             self.max_action_space_size = env.max_action_space_size
             env.reset(seed=self.args.seed + rank)  # Reset the environment with a specific seed
             env = gym.wrappers.RecordEpisodeStatistics(
@@ -52,11 +52,6 @@ class Trainer:
         action_masks[action_space_size:] = False # Invalid actions
         return action_masks
     
-    def get_observation_mask(self, observation_space_size, observation_masks):
-        observation_masks[:observation_space_size] = True # Valid actions
-        observation_masks[observation_space_size:] = False # Invalid actions
-        return observation_masks
-    
     def evaluate(self, agent):
         """Evaluate 'agent'"""
         # We evaluate on CPU because learning is already happening on GPUs.
@@ -66,7 +61,6 @@ class Trainer:
         env = self.env(self.args)
         episode_rewards = []
         action_masks = torch.zeros(self.max_action_space_size, dtype=torch.bool).to(eval_device)
-        #observation_masks = torch.zeros(200, dtype=torch.bool).to(eval_device)  # TODO
         total_reward = 0
         # Standard evaluation loop to estimate mean episodic return
         for episode in range(self.args.eval_episodes):
@@ -76,7 +70,6 @@ class Trainer:
                 obs = torch.Tensor(obs).to(eval_device)
 
                 action_masks = self.get_action_mask(env.rl_agent.action_space._action_space_size, action_masks)
-                #observation_masks = self.get_observation_mask(env.rl_agent.obs_size, observation_masks)
 
                 action, _, _, _ = agent.get_action_and_value(
                     obs, action_mask=action_masks
@@ -88,7 +81,7 @@ class Trainer:
             episode_rewards.append(total_reward)
             total_reward = 0
             episode_time = time.time() - episode_start_time
-            print(f"Evaluation ep took: \t\t{episode_time}")
+            #print(f"Evaluation ep took: \t\t{episode_time}")
 
         episodic_return = float(sum(episode_rewards)) / self.args.eval_episodes
         return episodic_return
@@ -118,8 +111,6 @@ class Trainer:
         return (
             self.args.network_config,
             self.args.decoy_config,
-            self.args.min_decoys,
-            self.args.max_decoys,
             self.args.reward_scaling,
             self.args.reward_function,
             self.args.red_agent,
@@ -153,34 +144,15 @@ class Trainer:
         # Initialize Weights and Biases tracking
         import wandb
 
-        if self.args.resume:
-            api = wandb.Api()
-            run_id = None
-            for run in api.runs(path=f"{self.args.wandb_entity}/{self.args.wandb_project_name}"):
-                if run.name == self.args.experiment_name:
-                    run_id = run.id
-                    break
-            wandb.init(
-                project=self.args.wandb_project_name,  # Can be whatever you want
-                entity=self.args.wandb_entity,
-                sync_tensorboard=True,  # Data logged to the tensorboard SummaryWriter will be sent to W&B
-                config=vars(self.args),  # Saves args as the run's configuration
-                name=self.args.experiment_name,  # Unique run name
-                monitor_gym=False,  # Does not attempt to render any episodes
-                save_code=False,
-                resume="allow",
-                id=run_id,
-            )
-        else:
-            wandb.init(
-                project=self.args.wandb_project_name,  # Can be whatever you want
-                entity=self.args.wandb_entity,
-                sync_tensorboard=True,  # Data logged to the tensorboard SummaryWriter will be sent to W&B
-                config=vars(self.args),  # Saves args as the run's configuration
-                name=self.args.experiment_name,  # Unique run name
-                monitor_gym=False,  # Does not attempt to render any episodes
-                save_code=False,
-            )
+        wandb.init(
+            project=self.args.wandb_project_name,  # Can be whatever you want
+            entity=self.args.wandb_entity,
+            sync_tensorboard=True,  # Data logged to the tensorboard SummaryWriter will be sent to W&B
+            config=vars(self.args),  # Saves args as the run's configuration
+            name=self.args.experiment_name,  # Unique run name
+            monitor_gym=False,  # Does not attempt to render any episodes
+            save_code=False,
+        )
 
     def configure_training(self):
         self.writer = SummaryWriter(
@@ -273,7 +245,7 @@ class Trainer:
         episode_start = time.time_ns()
         for step in range(0, self.args.num_steps):
             if isinstance(self.envs, gym.vector.AsyncVectorEnv):
-                action_space_sizes = self.envs.call("red_agent_action_space_size") if self.args.train_red else self.envs.call("blue_agent_action_space_size")
+                action_space_sizes = self.envs.call("rl_agent_action_space_size")
             else:
                 action_space_sizes = [
                     env.rl_agent.action_space._action_space_size for env in self.envs.envs
@@ -301,14 +273,14 @@ class Trainer:
             temp_action = action.cpu().numpy()
             train_step_start_time = time.time()
             self.next_obs, reward, done, _, info = self.envs.step(temp_action)
-            print(f"Training step took: \t\t{time.time() - train_step_start_time}")
+            #print(f"Training step took: \t\t{time.time() - train_step_start_time}")
             self.rewards[step] = torch.tensor(reward).to(self.device).view(-1)
             self.next_obs, self.next_done = torch.Tensor(self.next_obs).to(self.device), torch.Tensor(
                 done
             ).to(self.device)
         end_time = time.time_ns()
         episode_time = (end_time - episode_start) / (10**9)
-        print(f"Training ep took: \t\t{episode_time}")
+        #print(f"Training ep took: \t\t{episode_time}")
 
         # Calculate and log the mean reward for this episode.
         mean_rew = self.rewards.sum(axis=0).mean()
@@ -462,8 +434,6 @@ class Trainer:
             (
                 eval_network_config,
                 eval_decoy_config,
-                eval_min_decoys,
-                eval_max_decoys,
                 eval_reward_scaling,
                 eval_reward_function,
                 eval_red_agent,
@@ -471,7 +441,7 @@ class Trainer:
                 eval_step,
             ) = eval_results
             self.writer.add_scalar(
-                f"evaluation/{eval_network_config.split('.')[0]}_{eval_decoy_config}_{eval_reward_scaling}|{eval_min_decoys}-{eval_max_decoys}_{eval_reward_function}reward__{eval_red_agent}_episodic_return",
+                f"evaluation/{eval_network_config.split('.')[0]}_{eval_decoy_config}_{eval_reward_scaling}|{eval_reward_function}reward__{eval_red_agent}_episodic_return",
                 eval_return,
                 eval_step,
             )

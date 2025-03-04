@@ -1,5 +1,5 @@
 from cyberwheel.reward.reward_base import Reward
-from cyberwheel.red_actions.actions.art_killchain_phases import (
+from cyberwheel.red_actions.actions import (
     ARTPingSweep,
     ARTPortScan,
     ARTDiscovery,
@@ -9,7 +9,7 @@ from cyberwheel.red_actions.actions.art_killchain_phases import (
 )
 
 
-class RLRedSplitReward(Reward):
+class RLSplitReward(Reward):
     def __init__(
         self,
         red_rewards,
