@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import ipaddress as ipa
-from pydantic import BaseModel
 import random
-import json
-from typing import Union, List, Type
-from .network_object import NetworkObject
-from .service import Service
-from .subnet import Subnet
-from .process import Process
-from .command import Command
+
+from pydantic import BaseModel
+from typing import Union, List
+
+from cyberwheel.network.network_object import NetworkObject
+from cyberwheel.network.service import Service
+from cyberwheel.network.subnet import Subnet
+from cyberwheel.network.process import Process
+from cyberwheel.network.command import Command
 
 
 class HostType(BaseModel):
@@ -123,7 +124,6 @@ class Host(NetworkObject):
         def _generate_hextet() -> str:
             return "{:02x}".format(random.randint(0, 255))
 
-        # TODO: should we randomly generate all 6 hextets?
         mac_prefix = "46:6f:6f"
         return mac_prefix + ":{}:{}:{}".format(
             _generate_hextet(), _generate_hextet(), _generate_hextet()
@@ -233,6 +233,3 @@ class Host(NetworkObject):
     def remove_process(self, process_name: str):
         new_processes = [p for p in self.processes if p.name != process_name]
         self.processes = new_processes
-
-    def kill_malicious_processes(self):
-        self.processes = []

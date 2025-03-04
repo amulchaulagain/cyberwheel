@@ -9,7 +9,7 @@ def run_cyberwheel(config: str):
     override_args = parse_default_override_args()
     override_args_dict = vars(override_args)
     for arg in override_args_dict:
-        if arg in args_dict and override_args_dict[arg]:
+        if arg in args_dict and override_args_dict[arg] != None and override_args_dict[arg] != "":
             setattr(args, arg, override_args_dict[arg])
 
     # Initialize the Evaluator object

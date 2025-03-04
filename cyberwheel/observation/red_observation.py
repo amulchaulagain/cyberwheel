@@ -1,8 +1,7 @@
 import numpy as np
-from typing import Dict, Iterable
 
-from cyberwheel.detectors.alert import Alert
-from cyberwheel.network.host import Host
+from typing import Iterable
+
 from cyberwheel.observation.observation import Observation
 
 class HostView:

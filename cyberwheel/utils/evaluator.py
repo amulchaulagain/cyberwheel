@@ -1,29 +1,16 @@
-import torch
-import random
+
 import gym
 import time
-import os
 import importlib
-import wandb
-import numpy as np
 import pandas as pd
+import torch
+import wandb
 
-from copy import deepcopy
-from torch.utils.tensorboard import SummaryWriter
-from torch import optim, nn
 from importlib.resources import files
 from tqdm import tqdm
 
-from cyberwheel.utils import RLAgent
 from cyberwheel.network.network_base import Network
-from cyberwheel.red_actions.actions import (
-    ARTDiscovery,
-    ARTLateralMovement,
-    ARTPrivilegeEscalation,
-    ARTImpact,
-)
-from cyberwheel.red_actions import art_techniques
-from cyberwheel.red_agents import ARTAgent
+from cyberwheel.utils import RLAgent, get_service_map
 from cyberwheel.utils.visualize import visualize
 
 
@@ -53,7 +40,7 @@ class Evaluator:
         """
 
         def _init():
-            config_path = files("cyberwheel.resources.configs.network").joinpath(
+            config_path = files("cyberwheel.data.configs.network").joinpath(
                 self.args.network_config
             )
             env = self.env(
@@ -72,46 +59,24 @@ class Evaluator:
 
         return _init
 
-    def get_service_map(self, network: Network):
-        """
-        Class function to get the service mapping based on host attributes.
-        """
-        killchain = [
-            ARTDiscovery,
-            ARTPrivilegeEscalation,
-            ARTImpact,
-            ARTLateralMovement,
-        ]
-        service_mapping = {}
-        for host in network.hosts.values():
-            service_mapping[host.name] = {}
-            for kcp in killchain:
-                service_mapping[host.name][kcp] = []
-                kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
-                for mid in kcp_valid_techniques:
-                    technique = art_techniques.technique_mapping[mid]
-                    if len(host.host_type.cve_list & technique.cve_list) > 0:
-                        service_mapping[host.name][kcp].append(mid)
-        return service_mapping
-
     def configure_evaluation(self):
         self.device = torch.device("cpu")
         print(f"Using device {self.device}")
 
         # Set up network and Host-Technique mapping outside of environment.
         # This keeps the time-consuming processes from running for each environment.
-        network_config = files("cyberwheel.resources.configs.network").joinpath(
+        network_config = files("cyberwheel.data.configs.network").joinpath(
             self.args.network_config
         )
         network = Network.create_network_from_yaml(network_config)
 
-        self.args.service_mapping = self.get_service_map(network)
+        self.args.service_mapping = get_service_map(network)
         env_funcs = [self.make_env(i) for i in range(1)]
         self.envs = gym.vector.SyncVectorEnv(env_funcs)
 
         self.agent = RLAgent(self.envs).to(self.device)
 
-        experiment_name = self.args.experiment
+        experiment_name = self.args.experiment_name
 
         agent_filename = f"{self.args.checkpoint}.pt"
 
@@ -123,13 +88,13 @@ class Evaluator:
             )
             model = run.file(agent_filename)
             model.download(
-                files("cyberwheel.models").joinpath(experiment_name), exist_ok=True
+                files("cyberwheel.data.models").joinpath(experiment_name), exist_ok=True
             )
 
         # Load model from models/ directory
         self.agent.load_state_dict(
             torch.load(
-                files(f"cyberwheel.models.{experiment_name}").joinpath(agent_filename),
+                files(f"cyberwheel.data.models.{experiment_name}").joinpath(agent_filename),
                 map_location=self.device,
             )
         )
@@ -148,8 +113,8 @@ class Evaluator:
         if self.args.graph_name != None:
             self.now_str = self.args.graph_name
         else:
-            self.now_str = f"{experiment_name}_evaluate_{self.args.network_config.split('.')[0]}_{self.args.red_agent}_scaling{int(self.args.reward_scaling)}_{self.args.reward_function}reward"
-        self.log_file = files("cyberwheel.action_logs").joinpath(f"{self.now_str}.csv")
+            self.now_str = f"{experiment_name}_evaluate_{self.args.network_config.split('.')[0]}_{self.args.red_agent}_{self.args.reward_function}reward"
+        self.log_file = files("cyberwheel.data.action_logs").joinpath(f"{self.now_str}.csv")
 
         self.actions_df = pd.DataFrame()
         self.full_episodes = []
@@ -227,7 +192,7 @@ class Evaluator:
                 if self.args.visualize:
                     host_info = self.envs.envs[0].red_agent.observation.obs if self.args.train_red else history.hosts
                     step_info = {"source_host": red_action_src, "target_host": red_action_dest, "red_action": red_action_type, "commands": commands, "network": net, "host_info": host_info, "commands": commands}
-                    visualize(episode, step, self.args.experiment, step_info)
+                    visualize(episode, step, self.args.experiment_name, step_info)
                     pass
 
                 self.total_reward += rew
@@ -252,7 +217,7 @@ class Evaluator:
             }
         )
 
-        # Save action metadata to CSV in action_logs/
+        # Save action metadata to CSV in action_logs
         self.actions_df.to_csv(self.log_file)
 
         self.total_time = time.time() - self.start_time

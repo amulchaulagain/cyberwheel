@@ -1,15 +1,18 @@
-from cyberwheel.reward.reward_base import Reward
 from cyberwheel.red_actions.actions import (
     ARTPingSweep,
     ARTPortScan,
     ARTDiscovery,
     ARTLateralMovement,
     ARTPrivilegeEscalation,
-    ARTImpact,
+    ARTImpact
 )
-
+from cyberwheel.reward.reward_base import Reward
 
 class RLSplitReward(Reward):
+    """
+    Splits reward function depending on how much of the network red agent has explored.
+    TODO: Needs testing
+    """
     def __init__(
         self,
         red_rewards,

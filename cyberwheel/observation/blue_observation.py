@@ -1,19 +1,20 @@
 import numpy as np
+
 from typing import Dict, Iterable
+from importlib.resources import files
 
 from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.host import Host
 from cyberwheel.observation.observation import Observation
 from cyberwheel.detectors.handler import DetectorHandler
 
-from importlib.resources import files
 
 class BlueObservation(Observation):
     def __init__(self, shape: int, mapping: Dict[Host, int], detector_config: str) -> None:
         self.shape = shape
         self.mapping = mapping
         self.obs_vec = np.zeros(shape)
-        self.detector = DetectorHandler(files("cyberwheel.resources.configs.detector").joinpath(detector_config))
+        self.detector = DetectorHandler(files("cyberwheel.data.configs.detector").joinpath(detector_config))
 
     def create_obs_vector(self, alerts: Iterable[Alert]) -> Iterable:
         # Refresh the non-history portion of the obs_vec

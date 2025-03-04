@@ -1,13 +1,11 @@
-from ipaddress import IPv4Address, IPv6Address
-import networkx as nx
-import numpy as np
 import random
-from abc import ABC, abstractmethod
-from typing import Type, List, Tuple, Any, Iterable
 
-from ray import init
+from abc import ABC, abstractmethod
+from ipaddress import IPv4Address, IPv6Address
+from typing import Type, List, Any, Iterable
+
 from cyberwheel.red_actions.red_base import ARTAction
-from cyberwheel.network.network_base import Host, Subnet
+from cyberwheel.network.network_base import Host
 from cyberwheel.network.service import Service
 from cyberwheel.red_actions.red_base import RedActionResults
 from cyberwheel.red_actions.actions import ARTKillChainPhase

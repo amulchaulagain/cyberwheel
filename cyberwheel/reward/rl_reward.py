@@ -1,9 +1,5 @@
-from cyberwheel.reward.reward_base import (
-    Reward,
-    RewardMap,
-    RecurringAction,
-)
 from cyberwheel.network.host import Host
+from cyberwheel.reward.reward_base import Reward, RewardMap, RecurringAction
 
 
 class RLReward(Reward):

@@ -87,7 +87,7 @@ class ARTAgent(RedAgent):
         """
         self.name: str = name
         self.network = network
-        self.config = files("cyberwheel.resources.configs.red_agent").joinpath(
+        self.config = files("cyberwheel.data.configs.red_agent").joinpath(
             args.red_agent
         )
 
@@ -142,30 +142,6 @@ class ARTAgent(RedAgent):
 
         self.leader: Host = contents.get("leader", "random")
         self.leader_host: Host = self.network.hosts[self.leader] if self.leader.lower() != "random" else self.network.get_random_server_host()
-
-
-    @classmethod
-    def get_service_map(cls, network: Network):
-        """
-        Class function to get the service mapping based on host attributes.
-        """
-        killchain = [
-            ARTDiscovery,
-            ARTPrivilegeEscalation,
-            ARTImpact,
-            ARTLateralMovement,
-        ]
-        service_mapping = {}
-        for _, host in network.hosts.items():
-            service_mapping[host.name] = {}
-            for kcp in killchain:
-                service_mapping[host.name][kcp] = []
-                kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
-                for mid in kcp_valid_techniques:
-                    technique = art_techniques.technique_mapping[mid]
-                    if len(host.host_type.cve_list & technique.cve_list) > 0:
-                        service_mapping[host.name][kcp].append(mid)
-        return service_mapping
 
     def get_valid_techniques_by_host(self, host, all_kcps):
         """
@@ -371,7 +347,6 @@ class ARTAgent(RedAgent):
         """
         Resets the red agent back to blank slate.
         """
-        #self.network = network # TODO: test if reset in env works here
         self.current_host : Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
         self.history: AgentHistory = AgentHistory(initial_host=self.current_host)
         self.unimpacted_servers = HybridSetList()

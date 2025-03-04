@@ -8,7 +8,7 @@ class YAMLConfig:
     """
 
     def __init__(self, config_file: str):
-        self.config_file = files("cyberwheel.resources.configs.environment").joinpath(
+        self.config_file = files("cyberwheel.data.configs.environment").joinpath(
             config_file
         )
 

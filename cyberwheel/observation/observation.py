@@ -1,10 +1,10 @@
-from abc import abstractmethod
-from typing import Iterable, Dict
 import numpy as np
+
+from abc import abstractmethod
+from typing import Iterable
 
 from cyberwheel.network.network_base import Network
 from cyberwheel.network.host import Host
-from cyberwheel.detectors.alert import Alert
 
 
 class Observation:

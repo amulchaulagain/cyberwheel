@@ -6,20 +6,11 @@ import random
 
 class ARTPortScan(ARTKillChainPhase):
     """
-    PortScan Killchain Phase Attack. As described by MITRE: # TODO: change comment
+    PortScan Killchain Phase Attack. As described by MITRE:
 
-    The adversary is trying to gain higher-level permissions.
-
-    Privilege Escalation consists of techniques that adversaries use to gain higher-level permissions on a system or network.
-    Adversaries can often enter and explore a network with unprivileged access but require elevated permissions to follow
-    through on their objectives. Common approaches are to take advantage of system weaknesses, misconfigurations, and
-    vulnerabilities. Examples of elevated access include:
-    - SYSTEM/root level
-    - local administrator
-    - user account with admin-like access
-    - user accounts with access to specific system or perform specific function
-
-    These techniques often overlap with Persistence techniques, as OS features that let an adversary persist can execute in an elevated context.
+    Adversaries may attempt to get a listing of services running on remote hosts and local network infrastructure devices,
+    including those that may be vulnerable to remote software exploitation. Common methods to acquire this information 
+    include port and/or vulnerability scans using tools that are brought onto a system.
     """
 
     name: str = "portscan"
@@ -38,7 +29,6 @@ class ARTPortScan(ARTKillChainPhase):
         self.action_results.modify_alert(dst=host)
 
         host_os = host.os
-        action_type = self.name
         art_technique = art_techniques.technique_mapping["T1046"]
         mitre_id = art_technique.mitre_id
         processes = []

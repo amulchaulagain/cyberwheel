@@ -4,11 +4,8 @@ import numpy as np
 
 from typing import Iterable
 
-from cyberwheel.red_agents import ARTAgent
-from cyberwheel.red_actions.red_base import RedActionResults
-from cyberwheel.red_agents.red_agent_base import RedAgentResult
-from cyberwheel.reward.reward_base import RewardMap
 from cyberwheel.network.network_base import Network, Host
+from cyberwheel.observation import RedObservation
 from cyberwheel.red_actions.actions import (
     ARTKillChainPhase,
     ARTPingSweep,
@@ -16,10 +13,13 @@ from cyberwheel.red_actions.actions import (
     ARTDiscovery,
     ARTLateralMovement,
     ARTPrivilegeEscalation,
-    ARTImpact,
+    ARTImpact
 )
-from cyberwheel.observation import RedObservation
-from copy import copy
+from cyberwheel.red_actions.red_base import RedActionResults
+from cyberwheel.red_agents import ARTAgent
+from cyberwheel.red_agents.red_agent_base import RedAgentResult
+from cyberwheel.reward.reward_base import RewardMap
+
 
 class RLARTAgent(ARTAgent):
     """

@@ -13,8 +13,7 @@ from importlib.resources import files
 
 from cyberwheel.utils import RLAgent
 from cyberwheel.network.network_base import Network
-from cyberwheel.red_actions.actions import ARTDiscovery, ARTLateralMovement, ARTPrivilegeEscalation, ARTImpact
-from cyberwheel.red_actions import art_techniques
+from cyberwheel.utils import get_service_map
 
 class Trainer:
     def __init__(self, args):
@@ -34,7 +33,7 @@ class Trainer:
 
         def _init():
             if evaluation:
-                config_path = files("cyberwheel.resources.configs.network").joinpath(self.args.network_config)
+                config_path = files("cyberwheel.data.configs.network").joinpath(self.args.network_config)
                 env = self.env(self.args, network=Network.create_network_from_yaml(config_path), evaluation=True)
             else:
                 env = self.env(self.args, network=self.networks[rank], evaluation=False)
@@ -111,34 +110,11 @@ class Trainer:
         return (
             self.args.network_config,
             self.args.decoy_config,
-            self.args.reward_scaling,
             self.args.reward_function,
             self.args.red_agent,
             result,
             globalstep,
         )
-    
-    def get_service_map(self, network: Network):
-        """
-        Class function to get the service mapping based on host attributes.
-        """
-        killchain = [
-            ARTDiscovery,
-            ARTPrivilegeEscalation,
-            ARTImpact,
-            ARTLateralMovement,
-        ]
-        service_mapping = {}
-        for _, host in network.hosts.items():
-            service_mapping[host.name] = {}
-            for kcp in killchain:
-                service_mapping[host.name][kcp] = []
-                kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
-                for mid in kcp_valid_techniques:
-                    technique = art_techniques.technique_mapping[mid]
-                    if len(host.host_type.cve_list & technique.cve_list) > 0:
-                        service_mapping[host.name][kcp].append(mid)
-        return service_mapping
     
     def wandb_setup(self):
         # Initialize Weights and Biases tracking
@@ -156,7 +132,7 @@ class Trainer:
 
     def configure_training(self):
         self.writer = SummaryWriter(
-            files("cyberwheel.runs").joinpath(self.args.experiment_name)
+            files("cyberwheel.data.runs").joinpath(self.args.experiment_name)
         )  # Logs data to tensorboard and W&B
         self.writer.add_text(
             "hyperparameters",
@@ -177,7 +153,7 @@ class Trainer:
         # Environment setup
 
         # Load network from yaml here
-        network_config = files("cyberwheel.resources.configs.network").joinpath(
+        network_config = files("cyberwheel.data.configs.network").joinpath(
             self.args.network_config
         )
 
@@ -187,7 +163,7 @@ class Trainer:
         self.networks = [deepcopy(network) for i in range(self.args.num_envs)]
 
         print("Mapping attack validity to hosts...", end=" ")
-        self.args.service_mapping = self.get_service_map(network)
+        self.args.service_mapping = get_service_map(network)
         print("done")
 
         print("Defining environment(s) and beginning training:", end="\n\n")
@@ -405,7 +381,7 @@ class Trainer:
         if (update - 1) % self.args.save_frequency == 0:
             start_eval = time.time()
             # Save the model
-            run_path = files("cyberwheel.models").joinpath(self.args.experiment_name)
+            run_path = files("cyberwheel.data.models").joinpath(self.args.experiment_name)
             if not os.path.exists(run_path):
                 os.makedirs(run_path)
             agent_path = run_path.joinpath("agent.pt")
@@ -434,14 +410,13 @@ class Trainer:
             (
                 eval_network_config,
                 eval_decoy_config,
-                eval_reward_scaling,
                 eval_reward_function,
                 eval_red_agent,
                 eval_return,
                 eval_step,
             ) = eval_results
             self.writer.add_scalar(
-                f"evaluation/{eval_network_config.split('.')[0]}_{eval_decoy_config}_{eval_reward_scaling}|{eval_reward_function}reward__{eval_red_agent}_episodic_return",
+                f"evaluation/{eval_network_config.split('.')[0]}_{eval_decoy_config}|{eval_reward_function}reward__{eval_red_agent}_episodic_return",
                 eval_return,
                 eval_step,
             )

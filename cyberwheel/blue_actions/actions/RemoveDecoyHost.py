@@ -6,7 +6,6 @@ from cyberwheel.network.subnet import Subnet
 
 
 class RemoveDecoyHost(SubnetAction):
-    # TODO: Test that this works. Also test that red agent fails when trying to go to isolated host
     def __init__(self, network: Network, configs: Dict[str, any]) -> None:
         super().__init__(network, configs)
 

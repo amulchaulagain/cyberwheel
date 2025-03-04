@@ -1,6 +1,7 @@
+import uuid
+
 from abc import abstractmethod, ABC
 from typing import  Dict
-import uuid
 
 from cyberwheel.network.network_base import Network
 from cyberwheel.network.host import Host

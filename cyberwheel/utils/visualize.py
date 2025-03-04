@@ -52,7 +52,7 @@ def visualize(
     window_size = (15, 7)  # Set size of visualization window
 
     # Create `graphs/experiment_name` directory if it doesn't exist
-    experiment_dir = files("cyberwheel.graphs").joinpath(experiment_name)
+    experiment_dir = files("cyberwheel.data.graphs").joinpath(experiment_name)
     if not os.path.exists(experiment_dir):
         os.mkdir(experiment_dir)
     
@@ -65,8 +65,6 @@ def visualize(
 
     # Initialize network graph and environment state information
     G = network.graph
-
-    # TODO: Need the hosts ob (key: hostname, values: ), subnets obs (may not actually exist here...), and step info(source, target, action, commands)
 
     host_color = {}
     on_host = ""

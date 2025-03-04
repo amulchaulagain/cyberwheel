@@ -3,7 +3,7 @@ import importlib
 import yaml
 
 from importlib.resources import files
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Iterable
 from gym import Space, spaces
 
 from cyberwheel.blue_agents.blue_agent import BlueAgent, BlueAgentResult
@@ -63,7 +63,7 @@ class RLBlueAgent(BlueAgent):
     """
     def __init__(self, network: Network, args) -> None:
         super().__init__()
-        self.config = files("cyberwheel.resources.configs.blue_agent").joinpath(args.blue_agent)
+        self.config = files("cyberwheel.data.configs.blue_agent").joinpath(args.blue_agent)
         self.network = network
 
         self.observation = BlueObservation(2 * len(self.network.hosts), host_to_index_mapping(self.network), args.detector_config)
@@ -75,7 +75,7 @@ class RLBlueAgent(BlueAgent):
         self._init_blue_actions()
         self._init_reward_map()
 
-    def from_yaml(self):
+    def from_yaml(self) -> None:
         with open(self.config, "r") as r:
             contents = yaml.safe_load(r)      
         
@@ -134,14 +134,14 @@ class RLBlueAgent(BlueAgent):
 
                     self.shared_data[k] = data_type(**kwargs)
             
-    def _init_blue_actions(self)-> None:
+    def _init_blue_actions(self) -> None:
         for action_class, action_info in self.actions:
             # Check configs and read them if they are new
             action_configs = {}
             for name, config in action_info.configs.items():
                 # Skip configs that have already been seen
                 if not config in self.configs:
-                    conf_file = files(f"cyberwheel.resources.configs.{name}").joinpath(
+                    conf_file = files(f"cyberwheel.data.configs.{name}").joinpath(
                         config
                     )
                     with open(conf_file, "r") as f:
@@ -187,11 +187,11 @@ class RLBlueAgent(BlueAgent):
     def create_action_space(self, action_space_size: int) -> Space:
         return self.action_space.create_action_space(action_space_size)
     
-    def get_observation_space(self, red_agent_result):
+    def get_observation_space(self, red_agent_result) -> Iterable:
         alerts = self.observation.detector.obs([red_agent_result.action_results.detector_alert])
         return self.observation.create_obs_vector(alerts)
     
-    def reset(self):
+    def reset(self) -> None:
         for v in self.shared_data.values():
             v.clear()
         self.observation.reset()

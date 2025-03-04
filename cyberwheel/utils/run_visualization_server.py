@@ -1,16 +1,16 @@
-from dash import Dash, html, dcc, dash_table, callback, Input, Output, State
-import plotly.graph_objects as go
 import dash
 import os
 import pandas as pd
 import pickle
-import sys
+import plotly.graph_objects as go
+
+from dash import Dash, html, dcc, dash_table, callback, Input, Output, State
 from importlib.resources import files
 
 
 def main_page_layout():
     graph_list = []
-    basepath = files("cyberwheel").joinpath("graphs")
+    basepath = files("cyberwheel.data").joinpath("graphs")
     for path in os.scandir(basepath):
         if os.path.isdir(path.path) and any(
             ".pickle" in g for g in os.listdir(path.path)
@@ -50,7 +50,7 @@ app.layout = html.Div(
 def graph_page_layout(graph_name: str):
     num_episodes = set()
     num_steps = set()
-    for filename in os.listdir(files("cyberwheel.graphs").joinpath(graph_name)):
+    for filename in os.listdir(files("cyberwheel.data.graphs").joinpath(graph_name)):
         if ".pickle" not in filename:
             continue
         episode = int(filename.split("_")[0])
@@ -126,7 +126,7 @@ def display_page(pathname):
     State("state-graph-name", "children"),
 )
 def update_datatable(episode, graph_name):
-    df = pd.read_csv(files("cyberwheel.action_logs").joinpath(f"{graph_name}.csv"))
+    df = pd.read_csv(files("cyberwheel.data.action_logs").joinpath(f"{graph_name}.csv"))
     df = df.drop(df.columns[df.columns.str.contains("Unnamed", case=False)], axis=1)
     df = df[df["episode"] == episode]
     return dash_table.DataTable(
@@ -143,7 +143,7 @@ def update_datatable(episode, graph_name):
 def update_graph(episode, step, graph_name):
     G = None
     with open(
-        files(f"cyberwheel.graphs.{graph_name}").joinpath(f"{episode}_{step}.pickle"),
+        files(f"cyberwheel.data.graphs.{graph_name}").joinpath(f"{episode}_{step}.pickle"),
         "rb",
     ) as f:
         G = pickle.load(f)

@@ -1,26 +1,15 @@
-from importlib.resources import files
-from gym import spaces
 import gym
-from typing import Dict, List, Iterable
-import yaml
 import numpy as np
 import importlib
 
-from .cyberwheel import Cyberwheel
+from typing import Iterable, Any 
+from gym import spaces
+
+from cyberwheel.cyberwheel_envs.cyberwheel import Cyberwheel
 from cyberwheel.blue_agents import RLBlueAgent, InactiveBlueAgent
-from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.network_base import Network
-from cyberwheel.network.host import Host
 from cyberwheel.red_agents import RLARTAgent, ARTAgent, ARTCampaign
 from cyberwheel.utils import YAMLConfig
-
-
-def decoy_alerted(alerts: List[Alert]) -> bool:
-    for alert in alerts:
-        for dst_host in alert.dst_hosts:
-            if dst_host.decoy:
-                return True
-    return False
 
 
 class CyberwheelRL(gym.Env, Cyberwheel):
@@ -70,7 +59,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         self.evaluation = evaluation
         self.total = 0
     
-    def initialize_agents(self):
+    def initialize_agents(self) -> None:
         args = self.args
         if args.train_red:
             self.red_agent = RLARTAgent(self.network, args)
@@ -93,7 +82,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             self.max_action_space_size = len(self.network.subnets) * 2
             self.action_space = self.blue_agent.create_action_space(self.max_action_space_size)
 
-    def step(self, action):
+    def step(self, action: int) -> tuple[Iterable, int | float, bool, bool, dict[str, Any]]:
         """
         Steps through environment.
         1. Blue agent runs action
@@ -141,7 +130,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
         return obs_vec, reward, done, False, info
 
-    def reset(self, seed=None, options=None):
+    def reset(self, seed=None, options=None) -> tuple[Iterable, dict]:
         self.current_step = 0
         self.network.reset()
         self.red_agent.reset()
@@ -153,8 +142,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         else:
             return self.blue_agent.observation.reset(), {} # TODO
         
-    # if you open any other processes close them here
-    def close(self):
+    def close(self) -> None:
         pass
 
     @property

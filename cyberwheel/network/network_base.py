@@ -27,7 +27,6 @@ class Network:
         self.graph : nx.DiGraph = graph if graph else nx.DiGraph(name=name)
         self.name : str = name
         
-        # TODO: Either deprecate or make remove/isolate functionality work.
         self.disconnected_nodes: list[Host] = []
         self.isolated_hosts: list[Host] = []
 
@@ -35,12 +34,12 @@ class Network:
         self.subnets : dict[str, Subnet] = {name:subnet for name, subnet in self if isinstance(subnet, Subnet)}
         self.decoys : dict[str, Host] = {hn:host for hn, host in self.hosts if host.decoy}
 
-        self.user_hosts : set[str] = {hn for hn, host in self.hosts if "workstation" in host.host_type.name.lower() or "user" in host.host_type.name.lower()} # TODO: Look into using enum for host type
-        self.server_hosts : set[Host] = {hn for hn, host in self.hosts if "server" in host.host_type.name.lower()} # TODO: Look into using enum for host type
+        self.user_hosts : set[str] = {hn for hn, host in self.hosts if "workstation" in host.host_type.name.lower() or "user" in host.host_type.name.lower()}
+        self.server_hosts : set[Host] = {hn for hn, host in self.hosts if "server" in host.host_type.name.lower()}
 
     def __iter__(self):
         #print(self.graph.nodes.items())
-        #return iter(self.graph.nodes("data").items()) # TODO: Test that this returns node_name, node_obj tuple
+        #return iter(self.graph.nodes("data").items())
         return iter(self.graph.nodes.items())
 
     def __len__(self):
@@ -111,7 +110,6 @@ class Network:
             self.decoys.pop(host.name, None)
             return self.hosts.pop(host.name, None)
         except nx.NetworkXError as e:
-            # TODO: raise custom exception?
             raise e
 
     def connect_nodes(self, node1, node2):
@@ -239,7 +237,7 @@ class Network:
     @classmethod
     def create_network_from_yaml(cls, network_config=None, host_config="host_defs_services.yaml"):  # type: ignore
         if network_config is None:
-            config_dir = files("cyberwheel.resources.configs.network")
+            config_dir = files("cyberwheel.data.configs.network")
             network_config: PosixPath = config_dir.joinpath(
                 "example_config.yaml"
             )  # type:ignore
@@ -256,7 +254,7 @@ class Network:
         # Create an instance of the Network class
         network = cls(name=config["network"].get("name"))
 
-        conf_dir = files("cyberwheel.resources.configs.host_definitions")
+        conf_dir = files("cyberwheel.data.configs.host_definitions")
         conf_file = conf_dir.joinpath(host_config)
         with open(conf_file) as f:
             type_config = yaml.safe_load(f)
@@ -350,7 +348,6 @@ class Network:
                             decoy=service.get("decoy"),
                         )
                     )
-            # TODO: Maybe integrate with routers instead
             interfaces = []
             if h in config["interfaces"]:
                 interfaces = config["interfaces"][h]
@@ -379,7 +376,6 @@ class Network:
         try:
             return self.graph.nodes[node]["data"]
         except KeyError as e:
-            # TODO: raise custom exception? return None?
             print(f"{node} not found in {self.name}")
             raise e
 
@@ -465,7 +461,6 @@ class Network:
             # except NameError:
             #    return True
 
-            # TODO: catch any common exceptions (KeyError, etc.)
             # loop over each rule/element in firewall_rules
             for rule in dest.firewall_rules:
                 # break if src doesn't match
@@ -682,7 +677,7 @@ class Network:
         services_list = host_type.get("services", [])
 
         windows_services = {}
-        config_dir = files("cyberwheel.resources.configs.services")
+        config_dir = files("cyberwheel.data.configs.services")
         config_file_path: PosixPath = config_dir.joinpath(
             "windows_exploitable_services.yaml"
         )  # type:ignore

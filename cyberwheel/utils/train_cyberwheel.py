@@ -17,7 +17,7 @@ def train_cyberwheel(training_config: str):
     override_args = parse_override_args()
     override_args_dict = vars(override_args)
     for arg in override_args_dict:
-        if arg in args_dict and override_args_dict[arg]:
+        if arg in args_dict and override_args_dict[arg] != None and override_args_dict[arg] != "":
             setattr(args, arg, override_args_dict[arg])
 
     args.batch_size = int(args.num_envs * args.num_steps)   # Number of environment steps to performa backprop with

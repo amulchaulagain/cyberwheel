@@ -3,16 +3,13 @@ import importlib
 
 from pathlib import PosixPath
 from typing_extensions import Self, Tuple, Type
-from importlib.resources import files
 
-from cyberwheel.red_agents import ARTAgent
-from cyberwheel.network.network_base import Network, Host
 from cyberwheel.red_actions.red_base import RedActionResults
+from cyberwheel.red_agents import ARTAgent
 from cyberwheel.red_agents.red_agent_base import RedAgentResult
+from cyberwheel.network.network_base import Network, Host
 from cyberwheel.red_actions.technique import Technique
-from cyberwheel.red_agents.strategies import RedStrategy, BruteForce
 from cyberwheel.red_actions import art_techniques
-from cyberwheel.red_actions.atomic_test import AtomicTest
 from cyberwheel.reward import RewardMap
 
 
@@ -92,7 +89,6 @@ class ARTCampaign(ARTAgent):
         action_results = RedActionResults(self.current_host, target_host)
         action_results.modify_alert(dst=target_host, src=self.current_host)
 
-        # TODO: Checking if technique will work: OS match, CVE in cve_list, Killchain check
         action_results.add_successful_action()
 
         processes = []
@@ -113,7 +109,6 @@ class ARTCampaign(ARTAgent):
                 "technique": technique_name,
             },
         )
-        # TODO: Add metadata depending on killchain phase
         return action_results, technique_class
 
     def act(self, policy_action=None) -> RedAgentResult:

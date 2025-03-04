@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from abc import abstractmethod, ABC
 from typing import Union, List, Dict, Any
+
 from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.host import Host
 from cyberwheel.network.service import Service

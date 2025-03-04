@@ -1,5 +1,6 @@
 from cyberwheel.utils.rl_agent import layer_init, RLAgent
 from cyberwheel.utils.yaml_config import YAMLConfig
+from cyberwheel.utils.get_service_map import get_service_map
 from cyberwheel.utils.parse_override_args import parse_override_args, parse_eval_override_args, parse_default_override_args
 from cyberwheel.utils.trainer import Trainer
 from cyberwheel.utils.evaluator import Evaluator

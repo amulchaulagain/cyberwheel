@@ -1,13 +1,12 @@
 from cyberwheel.red_agents.strategies.red_strategy import RedStrategy
 from cyberwheel.network.host import Host
 
-"""
-The Server Downtime strategy is to find and attack all of the Servers it can find in the network.
-Once it finds a server, it will try to impact it. Once impacted, it will look for another server.
-"""
-
 
 class ServerDowntime(RedStrategy):
+    """
+    The Server Downtime strategy is to find and attack all of the Servers it can find in the network.
+    Once it finds a server, it will try to impact it. Once impacted, it will look for another server.
+    """
     @classmethod
     def select_target(cls, agent_obj) -> Host:
         current_host_type = agent_obj.history.hosts[agent_obj.current_host.name].type
