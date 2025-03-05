@@ -1,9 +1,10 @@
 import argparse
-import sys
 
 from distutils.util import strtobool
 
-def parse_override_args():
+
+
+def parse_override_args(print_help: bool = False):
     """
     Parses through any command line arguments for training. These will override any args set in the YAML config.
     """
@@ -57,9 +58,13 @@ def parse_override_args():
     rl_group.add_argument("--max-grad-norm", type=float, help="the maximum norm for the gradient clipping")
     rl_group.add_argument("--target-kl", type=float, help="the target KL divergence threshold")
 
-    return parser.parse_args()
+    if print_help:
+        parser.parse_args()
+        parser.print_help()
+    else:
+        return parser.parse_args()
 
-def parse_eval_override_args():
+def parse_eval_override_args(print_help: bool = False):
     """
     Parses through any command line arguments for evaluating. These will override any args set in the YAML config.
     """
@@ -90,9 +95,13 @@ def parse_eval_override_args():
     parser.add_argument("--wandb-entity", help="Username where W&B model is stored. Required when downloading model from W&B", type=str)
     parser.add_argument("--wandb-project-name", help="Project name where W&B model is stored. Required when downloading model from W&B", type=str)
 
-    return parser.parse_args()
+    if print_help:
+        parser.parse_args()
+        parser.print_help()
+    else:
+        return parser.parse_args()
 
-def parse_default_override_args():
+def parse_default_override_args(print_help: bool = False):
     """
     Parses through any command line arguments for setting up environment. These will override any args set in the YAML config.
     """
@@ -106,4 +115,8 @@ def parse_default_override_args():
     parser.add_argument("--num-steps", help="Number of steps per episode for evaluation", type=int)
     parser.add_argument( "--num-episodes", help="Number of episodes to evaluate", type=int)
 
-    return parser.parse_args()
+    if print_help:
+        parser.parse_args()
+        parser.print_help()
+    else:
+        return parser.parse_args()
