@@ -17,7 +17,7 @@ actions:
       services: windows_exploitable_services.yaml
     reward:
       immediate: -20.0
-      recurring: -2.0
+      recurring: 0.0
     action_space_args:
       type: subnet
     shared_data:

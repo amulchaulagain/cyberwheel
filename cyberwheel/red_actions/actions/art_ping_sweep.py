@@ -73,14 +73,15 @@ class ARTPingSweep(ARTKillChainPhase):
         self.action_results.add_metadata(
             host.subnet.name, {"subnet_scanned": host.subnet}
         )
-        self.action_results.add_metadata(
-            "sweeped_hosts", [h.name for h in subnet_hosts]
-        )
         for each_host in subnet_hosts:
             for h in each_host.interfaces:
                 interfaces.append(h)
-        for h in interfaces:
-            self.action_results.add_metadata(h.name, {"ip_address": h})
+        #for h in interfaces:
+        #    self.action_results.add_metadata(h.name, {"ip_address": h})
+        sweeped_hosts = subnet_hosts + interfaces
+        self.action_results.add_metadata(
+            "sweeped_hosts", sweeped_hosts
+        )
         self.action_results.add_metadata(
             "interfaced_hosts", [h.name for h in interfaces]
         )

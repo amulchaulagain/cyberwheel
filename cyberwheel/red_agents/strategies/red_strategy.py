@@ -10,8 +10,3 @@ class RedStrategy(ABC):
     @abstractmethod
     def select_target(cls, agent_obj) -> Host | None:
         return None
-
-    @classmethod
-    @abstractmethod
-    def get_reward_map(cls, config) -> dict[str, tuple[int, int]]:
-        return {k: (v["reward"]["immediate"], v["reward"]["recurring"]) for k, v in config['actions'].items()}

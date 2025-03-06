@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABC
-from gym.core import ActType
-from gym import Space
+from gymnasium.core import ActType
+from gymnasium import Space
 
 from cyberwheel.blue_actions.blue_action import BlueAction
 from cyberwheel.red_actions.actions import (

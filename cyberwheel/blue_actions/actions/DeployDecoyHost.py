@@ -31,7 +31,8 @@ class DeployDecoyHost(SubnetAction):
         When ran, this function will add a decoy Host to the
         network with a UUID name.
         """
-        name = generate_id()
+        seed = kwargs.get("seed", None)
+        name = generate_id(seed=seed)
         if "server" in self.type.lower():
             host_type = HostType(
                 name="Server", services=self.services, decoy=True, cve_list=self.cves

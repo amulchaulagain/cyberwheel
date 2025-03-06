@@ -1,6 +1,6 @@
 import torch
 import random
-import gym
+import gymnasium as gym
 import time
 import os
 import importlib
@@ -11,23 +11,24 @@ from torch.utils.tensorboard import SummaryWriter
 from torch import optim, nn
 from importlib.resources import files
 
-from cyberwheel.utils import RLAgent
+from cyberwheel.utils import RLAgent, get_service_map
+from cyberwheel.utils.set_seed import set_seed
 from cyberwheel.network.network_base import Network
-from cyberwheel.utils import get_service_map
 
 class Trainer:
     def __init__(self, args):
         self.args = args
         m = importlib.import_module("cyberwheel.cyberwheel_envs")
         self.env = getattr(m, args.environment)
-    
+        self.deterministic = os.getenv("CYBERWHEEL_DETERMINISTIC", "False").lower() in ('true', '1', 't')
+        self.args.deterministic = self.deterministic
+        self.seed = 0
     def make_env(self, rank, evaluation: bool = False):
         """
         Utility function for multiprocessed env.
 
         :param env_id: the environment ID
         :param num_env: the number of environments you wish to have in subprocesses
-        :param seed: the inital seed for RNG
         :param rank: index of the subprocess
         """
 
@@ -38,7 +39,7 @@ class Trainer:
             else:
                 env = self.env(self.args, network=self.networks[rank], evaluation=False)
             self.max_action_space_size = env.max_action_space_size
-            env.reset(seed=self.args.seed + rank)  # Reset the environment with a specific seed
+            env.reset()
             env = gym.wrappers.RecordEpisodeStatistics(
                 env
             )  # This tracks the rewards of the environment that it wraps. Used for logging
@@ -51,24 +52,24 @@ class Trainer:
         action_masks[action_space_size:] = False # Invalid actions
         return action_masks
     
-    def evaluate(self, agent):
+    def evaluate(self, agent, env):
         """Evaluate 'agent'"""
         # We evaluate on CPU because learning is already happening on GPUs.
         # You can evaluate small architectures on CPU, but if you increase the neural network size,
         # you may need to do fewer evaluations at a time on GPU.
         eval_device = torch.device("cpu")
-        env = self.env(self.args)
+        #env = self.env(self.args, )
         episode_rewards = []
         action_masks = torch.zeros(self.max_action_space_size, dtype=torch.bool).to(eval_device)
         total_reward = 0
         # Standard evaluation loop to estimate mean episodic return
         for episode in range(self.args.eval_episodes):
-            episode_start_time = time.time()
+            #episode_start_time = time.time()
             obs, _ = env.reset()
             for step in range(self.args.num_steps):
                 obs = torch.Tensor(obs).to(eval_device)
 
-                action_masks = self.get_action_mask(env.rl_agent.action_space._action_space_size, action_masks)
+                action_masks = self.get_action_mask(env.envs[0].unwrapped.rl_agent.action_space._action_space_size, action_masks)
 
                 action, _, _, _ = agent.get_action_and_value(
                     obs, action_mask=action_masks
@@ -79,7 +80,7 @@ class Trainer:
                 total_reward += rew
             episode_rewards.append(total_reward)
             total_reward = 0
-            episode_time = time.time() - episode_start_time
+            #episode_time = time.time() - episode_start_time
             #print(f"Evaluation ep took: \t\t{episode_time}")
 
         episodic_return = float(sum(episode_rewards)) / self.args.eval_episodes
@@ -87,14 +88,7 @@ class Trainer:
     
     def run_evals(self, model, globalstep):
         """Evaluate 'model' on tasks listed in 'eval_queue' in a separate process"""
-        # TRY NOT TO MODIFY: seeding
         eval_device = torch.device("cpu")
-
-        # This may not be necessary, but we do it in the main training process
-        random.seed(self.args.seed)
-        np.random.seed(self.args.seed)
-        torch.manual_seed(self.args.seed)
-        torch.backends.cudnn.deterministic = self.args.deterministic
 
         env_funcs = [self.make_env(i, evaluation=True) for i in range(1)]
 
@@ -105,7 +99,7 @@ class Trainer:
         eval_agent.load_state_dict(model)
         eval_agent.eval()
         # Evaluate the agent
-        result = self.evaluate(eval_agent)
+        result = self.evaluate(eval_agent, sample_env)
         # Store evaluation parameters and results
         return (
             self.args.network_config,
@@ -140,12 +134,14 @@ class Trainer:
             % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
         )
         # Seeding
-        random.seed(self.args.seed)
-        np.random.seed(self.args.seed)
-        torch.manual_seed(self.args.seed)
-        torch.backends.cudnn.deterministic = self.args.deterministic
+        if self.deterministic:
+            set_seed(self.seed)
+            torch.backends.cudnn.deterministic = True
+        else:
+            torch.backends.cudnn.deterministic = False
+            #torch.set_num_threads(1)
 
-        # Use a GPU if available. You can choose a specific GPU (for example, the 1st GPU) by setting --device to "cuda:0"
+        # Use a GPU if available. You can choose a specific GPU with CUDA, for example by setting --device to "cuda:0"
         # Defaults to 'cpu'
         self.device = self.args.device
         print(f"Using device {self.device}")
@@ -205,7 +201,7 @@ class Trainer:
         ).to(self.device)
         self.global_step = 0
         self.start_time = time.time()
-        self.resets = np.array(self.envs.reset()[0])
+        self.resets = np.array(self.envs.reset(seed=[self.seed + i for i in range(self.args.num_envs)])[0])
         self.next_obs = torch.Tensor(self.resets).to(self.device)
         self.next_done = torch.zeros(self.args.num_envs).to(self.device)
 
@@ -220,11 +216,16 @@ class Trainer:
         # Run an episode in each environment. This loop collects experience which is later used for optimization.
         episode_start = time.time_ns()
         for step in range(0, self.args.num_steps):
+
+            if self.deterministic:
+                set_seed(self.seed)
+            self.seed += self.args.num_envs
+            
             if isinstance(self.envs, gym.vector.AsyncVectorEnv):
                 action_space_sizes = self.envs.call("rl_agent_action_space_size")
             else:
                 action_space_sizes = [
-                    env.rl_agent.action_space._action_space_size for env in self.envs.envs
+                    env.unwrapped.rl_agent.action_space._action_space_size for env in self.envs.envs
                 ]
 
             for i, action_space_size in enumerate(action_space_sizes):
@@ -247,7 +248,7 @@ class Trainer:
             # TRY NOT TO MODIFY: execute the game and log data.
             # Execute the selected action in the environment to collect experience for training.
             temp_action = action.cpu().numpy()
-            train_step_start_time = time.time()
+            #train_step_start_time = time.time()
             self.next_obs, reward, done, _, info = self.envs.step(temp_action)
             #print(f"Training step took: \t\t{time.time() - train_step_start_time}")
             self.rewards[step] = torch.tensor(reward).to(self.device).view(-1)
@@ -259,6 +260,8 @@ class Trainer:
         #print(f"Training ep took: \t\t{episode_time}")
 
         # Calculate and log the mean reward for this episode.
+        #print(self.rewards.sum(axis=0))
+        #print(self.rewards.sum(axis=0).mean())
         mean_rew = self.rewards.sum(axis=0).mean()
         print(f"global_step={self.global_step}, episodic_return={mean_rew}")
         self.writer.add_scalar("charts/episodic_return", mean_rew, self.global_step)

@@ -9,17 +9,7 @@ This script will train cyberwheel. Using the args from the config file passed, i
 with intermittent evaluations/saves. If tracking to W&B, this will be logged in your W&B project for each training run.
 """
 # Allows using command line to override args in the YAML config
-def train_cyberwheel(training_config: str):
-    args = YAMLConfig(training_config)
-    args.parse_config()
-    args_dict = vars(args)
-
-    override_args = parse_override_args()
-    override_args_dict = vars(override_args)
-    for arg in override_args_dict:
-        if arg in args_dict and override_args_dict[arg] != None and override_args_dict[arg] != "":
-            setattr(args, arg, override_args_dict[arg])
-
+def train_cyberwheel(args: YAMLConfig):
     args.batch_size = int(args.num_envs * args.num_steps)   # Number of environment steps to performa backprop with
     args.minibatch_size = int(args.batch_size // args.num_minibatches)  # Number of environments steps to perform backprop with in each epoch
     args.num_updates = args.total_timesteps // args.batch_size  # Total number of policy update phases
@@ -32,7 +22,7 @@ def train_cyberwheel(training_config: str):
     if not args.experiment_name:
         args.experiment_name = f"{os.path.basename(__file__).rstrip('.py')}_{args.seed}_{int(time.time())}"
 
-    args.evaluation = False # TODO
+    args.evaluation = False
 
     # Initialize the Trainer object
     trainer = Trainer(args)

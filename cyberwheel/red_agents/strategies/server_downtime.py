@@ -20,28 +20,15 @@ class ServerDowntime(RedStrategy):
         target_host = agent_obj.current_host
         if (
             current_host_type == "Unknown"
-            or agent_obj.unimpacted_servers.check_membership(
-                agent_obj.current_host.name
-            )
+            or agent_obj.current_host.name in agent_obj.unimpacted_servers
         ):
             target_host = agent_obj.current_host
-        elif agent_obj.unimpacted_servers.length() > 0:
+        elif len(agent_obj.unimpacted_servers) > 0:
             target_host = agent_obj.network.hosts[
                 agent_obj.unimpacted_servers.get_random()
             ]  # O(1)
-        elif agent_obj.unknowns.length() > 0:
+        elif len(agent_obj.unknowns) > 0:
             target_host = agent_obj.network.hosts[
                 agent_obj.unknowns.get_random()
             ]  # O(1)
         return target_host
-
-    @classmethod
-    def get_reward_map(cls) -> dict[str, tuple[int, int]]:
-        return {
-            "pingsweep": (-1, 0),
-            "portscan": (-1, 0),
-            "discovery": (-2, 0),
-            "lateral-movement": (-4, 0),
-            "privilege-escalation": (-6, 0),
-            "impact": (-8, -4),
-        }

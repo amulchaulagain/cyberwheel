@@ -1,15 +1,18 @@
-import gym
+import gymnasium as gym
 import numpy as np
 import importlib
 
 from typing import Iterable, Any 
-from gym import spaces
+from gymnasium import spaces
 
 from cyberwheel.cyberwheel_envs.cyberwheel import Cyberwheel
 from cyberwheel.blue_agents import RLBlueAgent, InactiveBlueAgent
 from cyberwheel.network.network_base import Network
 from cyberwheel.red_agents import RLARTAgent, ARTAgent, ARTCampaign
-from cyberwheel.utils import YAMLConfig
+from cyberwheel.utils import YAMLConfig, HybridSetList
+from cyberwheel.utils.set_seed import set_seed
+
+import pandas as pd
 
 
 class CyberwheelRL(gym.Env, Cyberwheel):
@@ -37,24 +40,14 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         """
         super().__init__(args, network=network)
 
-        if args.valid_targets == "servers":
-            valid_targets = self.network.server_hosts
-        elif args.valid_targets == "users":
-            valid_targets = self.network.user_hosts
-        elif type(args.valid_targets) is list:
-            valid_targets = set(args.valid_targets)
-        elif type(args.valid_targets) is str:
-            valid_targets = {args.valid_targets}
-        else:
-            valid_targets = self.network.hosts.keys()
-
         reward_function = args.reward_function
         rfm = importlib.import_module("cyberwheel.reward")
 
         self.reward_calculator = getattr(rfm, reward_function)(
             self.red_agent.get_reward_map(), 
             self.blue_agent.get_reward_map(),
-            valid_targets)
+            self.args.valid_targets,
+            self.network)
 
         self.evaluation = evaluation
         self.total = 0
@@ -71,6 +64,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
             self.max_action_space_size = len(self.network.hosts) * self.red_agent.action_space.num_actions * 2
             self.action_space = self.red_agent.action_space.create_action_space(self.max_action_space_size)
+            self.reward_sign = -1
         else:
             self.red_agent = ARTCampaign(self.network, args) if args.campaign else ARTAgent(self.network, args)
             self.blue_agent = RLBlueAgent(self.network, args)
@@ -81,6 +75,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
             self.max_action_space_size = len(self.network.subnets) * 2
             self.action_space = self.blue_agent.create_action_space(self.max_action_space_size)
+            self.reward_sign = 1
 
     def step(self, action: int) -> tuple[Iterable, int | float, bool, bool, dict[str, Any]]:
         """
@@ -88,7 +83,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         1. Blue agent runs action
         2. Red agent runs action
         3. Calculate reward based on red/blue actions and network state
-        4. Convert Alerts from Detector into observation space
+        4. Get obs from Red or Blue Observation
         5. Return obs and related metadata
         """
         blue_agent_result = self.blue_agent.act(action)
@@ -97,7 +92,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
         obs_vec = self.red_agent.get_observation_space() if self.args.train_red else self.blue_agent.get_observation_space(red_agent_result)
 
-        reward = self.reward_calculator.calculate_reward(
+        reward = self.reward_sign * self.reward_calculator.calculate_reward(
             red_agent_result.action.get_name(),
             blue_agent_result.name,
             red_agent_result.success,
@@ -106,6 +101,24 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             blue_id=blue_agent_result.id,
             blue_recurring=blue_agent_result.recurring
         )
+
+        #temp_data = {
+        #            "step": [self.current_step],
+        #            "red_action": [red_agent_result.action.get_name()],
+        #            "red_src": [red_agent_result.src_host.name],
+        #            "red_dst": [red_agent_result.target_host.name],
+        #            "red_success": [red_agent_result.success],
+        #            "blue_action": [blue_agent_result.name],
+        #            "blue_src": [blue_agent_result.target],
+        #            "blue_dst": [blue_agent_result.id],
+        #            "blue_success": [blue_agent_result.success],
+        #            "reward": [reward],
+        #            "blue_obs": [str(obs_vec)]}
+        #temp_df = pd.DataFrame(temp_data)
+        #temp_df.to_csv('determinism_2.csv', mode='a', index=False, header=False, sep=';')
+        #print(f"Red Agent:\t{}\t\t\t--\t{}\t\t\t->{}\t--\t{}\t{}")
+        #print(f"Blue Agent:\t{}\t\t\t--\t{}\t\t \t->{}\t--\t{reward}\t{}")
+        #print("----------------------------------------------------------------------------------------------------------------------------------------------------------")
 
         self.total += reward
 
@@ -131,6 +144,8 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         return obs_vec, reward, done, False, info
 
     def reset(self, seed=None, options=None) -> tuple[Iterable, dict]:
+        if seed is not None:
+            set_seed(seed)
         self.current_step = 0
         self.network.reset()
         self.red_agent.reset()

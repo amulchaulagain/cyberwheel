@@ -102,17 +102,13 @@ class RLARTAgent(ARTAgent):
         if action == ARTPingSweep:  # Adds pingsweeped hosts to obs
             self.observation.update_host(target_host, sweeped=True)
             hosts = result.metadata["sweeped_hosts"]
-            interfaced_hosts = result.metadata["interfaced_hosts"]
             for h in hosts:
-                if h in self.observation.obs.keys():
+                h_name = h.name
+                if h_name in self.observation.obs.keys():
                     continue
-                self.observation.add_host(h, sweeped=True)
-                self.action_space.add_host(h)
-            for h in interfaced_hosts:
-                if h in self.observation.obs.keys():
-                    continue
-                self.observation.add_host(h)
-                self.action_space.add_host(h)
+                sweeped = h.subnet.name == result.target_host.subnet.name
+                self.observation.add_host(h_name, sweeped=sweeped)
+                self.action_space.add_host(h_name)
         elif action == ARTPortScan:  # Scans target host
             self.observation.update_host(target_host, scanned=True)
         elif action == ARTDiscovery:  # Discovers host type

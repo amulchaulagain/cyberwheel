@@ -12,7 +12,7 @@ actions: # All actions in this killchain (pingsweep -> impact) are required.
   discovery:
     class: ARTDiscovery
     reward:
-      immediate: -5
+      immediate: 0
       recurring: 0
   lateral-movement:
     class: ARTLateralMovement
@@ -27,8 +27,8 @@ actions: # All actions in this killchain (pingsweep -> impact) are required.
   impact:
     class: ARTImpact
     reward:
-      immediate: -10
+      immediate: 10
       recurring: 0
 strategy: Exfiltration
-entry_host: host1 # optional; defaults to random user
-leader: server1 # optional; defaults to random server
+entry_host: random # optional; defaults to random user
+leader: random # optional; defaults to random server

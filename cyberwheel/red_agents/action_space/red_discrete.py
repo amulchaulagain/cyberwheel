@@ -1,6 +1,6 @@
-from gym import Space
-from gym.spaces import Discrete
-from gym.core import ActType
+from gymnasium import Space
+from gymnasium.spaces import Discrete
+from gymnasium.core import ActType
 
 from cyberwheel.red_actions.actions import ARTKillChainPhase
 

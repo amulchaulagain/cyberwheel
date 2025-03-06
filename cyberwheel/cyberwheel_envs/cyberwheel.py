@@ -23,7 +23,7 @@ class Cyberwheel:
         host_conf_file = files(
             "cyberwheel.data.configs.host_definitions"
         ).joinpath(args.host_config)
-
+        
         self.network = network if network else Network.create_network_from_yaml(network_conf_file)
         with open(host_conf_file, "r") as f:
             self.host_defs = yaml.safe_load(f)["host_types"]

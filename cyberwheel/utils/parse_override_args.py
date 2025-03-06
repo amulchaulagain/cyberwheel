@@ -1,7 +1,27 @@
 import argparse
+import os
 
 from distutils.util import strtobool
 
+from cyberwheel.utils import YAMLConfig
+
+def parse(config, mode: str = 'train'):
+    args = YAMLConfig(config)
+    args.parse_config()
+    args_dict = vars(args)
+
+    override_args = parse_eval_override_args() if mode == 'evaluate' else parse_override_args() if mode == 'train' else parse_default_override_args() if mode == 'run' else args
+    override_args_dict = vars(override_args)
+    for arg in override_args_dict:
+        if arg in args_dict and override_args_dict[arg] != None and override_args_dict[arg] != "":
+            setattr(args, arg, override_args_dict[arg])
+
+    if args.deterministic:
+        os.environ["CYBERWHEEL_DETERMINISTIC"] = 'true'
+    else:
+        os.environ["CYBERWHEEL_DETERMINISTIC"] = 'false'
+
+    return args
 
 
 def parse_override_args(print_help: bool = False):
@@ -16,7 +36,7 @@ def parse_override_args(print_help: bool = False):
     # Training Parameters
     training_group.add_argument("--experiment-name", type=str, help="The name of the experiment. This will be the name the model is saved locally and on W&B.")
     training_group.add_argument("--seed", type=int, help="seed of the experiment")
-    training_group.add_argument("--deterministic", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, `torch.backends.cudnn.deterministic=False`")
+    training_group.add_argument("--deterministic", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, `torch.backends.cudnn.deterministic=True`")
     training_group.add_argument("--device", type=str, help="Choose the device used for optimization. Choose 'cuda', 'cpu', or specify a gpu with 'cuda:0'")
     training_group.add_argument("--async-env", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, uses AsyncVectorEnv instead of SyncVectorEnv")
     training_group.add_argument("--track", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, this experiment will be tracked with Weights and Biases")
@@ -78,6 +98,8 @@ def parse_eval_override_args(print_help: bool = False):
     parser.add_argument("--train-blue", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="toggle if you want to train the blue agent")
     parser.add_argument("--campaign", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, uses ARTCampaign as red agent")
     parser.add_argument("--seed", type=int, help="seed of the experiment")
+    parser.add_argument("--deterministic", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, `torch.backends.cudnn.deterministic=True`")
+
 
     parser.add_argument("--download-model", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="Download agent model from WandB. If present, requires --run, --wandb-entity, --wandb-project-name flags.")
     parser.add_argument("--checkpoint", help="Which checkpoint of the model to evaluate. Defaults to 'agent' (latest).")
@@ -114,6 +136,8 @@ def parse_default_override_args(print_help: bool = False):
     parser.add_argument("--host-config", help="Input the host config filename", type=str)
     parser.add_argument("--num-steps", help="Number of steps per episode for evaluation", type=int)
     parser.add_argument( "--num-episodes", help="Number of episodes to evaluate", type=int)
+    parser.add_argument("--deterministic", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, `torch.backends.cudnn.deterministic=True`")
+
 
     if print_help:
         parser.parse_args()

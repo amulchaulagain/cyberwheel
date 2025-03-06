@@ -16,6 +16,7 @@ from cyberwheel.network.network_object import NetworkObject, FirewallRule
 from cyberwheel.network.router import Router
 from cyberwheel.network.service import Service
 from cyberwheel.network.subnet import Subnet
+from cyberwheel.utils.hybrid_set_list import HybridSetList
 
 class Network:
 
@@ -34,8 +35,8 @@ class Network:
         self.subnets : dict[str, Subnet] = {name:subnet for name, subnet in self if isinstance(subnet, Subnet)}
         self.decoys : dict[str, Host] = {hn:host for hn, host in self.hosts if host.decoy}
 
-        self.user_hosts : set[str] = {hn for hn, host in self.hosts if "workstation" in host.host_type.name.lower() or "user" in host.host_type.name.lower()}
-        self.server_hosts : set[Host] = {hn for hn, host in self.hosts if "server" in host.host_type.name.lower()}
+        self.user_hosts : HybridSetList = HybridSetList({hn for hn, host in self.hosts if "workstation" in host.host_type.name.lower() or "user" in host.host_type.name.lower()})
+        self.server_hosts : HybridSetList = HybridSetList({hn for hn, host in self.hosts if "server" in host.host_type.name.lower()})
 
     def __iter__(self):
         #print(self.graph.nodes.items())
@@ -88,6 +89,8 @@ class Network:
         """
         self.add_node(host)
         self.hosts[host.name] = host
+        if host.decoy:
+            return
         host_type = host.host_type.name.lower()
         if "server" in host_type:
             self.server_hosts.add(host.name)
@@ -132,61 +135,28 @@ class Network:
     def is_subnet_reachable(self, subnet1, subnet2):
         return nx.has_path(self.graph, subnet1.name, subnet2.name)
 
-    def get_random_host(self):
-        return random.choice(list(self.hosts.values))
+    def get_random_host(self): # Does not support determinism yet
+        return self.hosts[random.choice(list(self.hosts.keys()))]
 
     def get_random_user_host(self):
-        hosts = self.get_hosts()
-        user_hosts = []
-        for h in hosts:
-            if h.host_type.name != None and "workstation" in h.host_type.name.lower():
-                user_hosts.append(h)
-        random_host = random.choice(user_hosts)
-        return random_host
+        return self.hosts[self.user_hosts.get_random()]
 
     def get_random_server_host(self):
-        hosts = self.get_hosts()
-        server_hosts = []
-        for h in hosts:
-            if h.host_type.name != None and "server" in h.host_type.name.lower():
-                server_hosts.append(h)
-        random_host = random.choice(server_hosts)
-        return random_host
-
-    def get_hosts(self) -> list[Host]:
-        return [
-            host for _, host in self.graph.nodes(data="data") if isinstance(host, Host)
-        ]  # type:ignore
-
-    def get_host_names(self) -> list[str]:
-        return [
-            host.name
-            for _, host in self.graph.nodes(data="data")
-            if isinstance(host, Host)
-        ]
-
-    def get_nondecoy_hosts(self) -> List[Host]:
-        return [
-            host
-            for _, host in self.graph.nodes(data="data")
-            if isinstance(host, Host) and not host.decoy
-        ]
+        return self.hosts[self.server_hosts.get_random()]
 
     def update_host_compromised_status(self, host: str, is_compromised: bool):
         try:
-            host_obj = self.get_node_from_name(host)
+            host_obj = self.hosts[host]
             host_obj.is_compromised = is_compromised
         except KeyError:
             return None  # return None if host not found
 
     def check_compromised_status(self, host_name: str) -> bool | None:
         try:
-            host_obj = self.get_node_from_name(host_name)
+            host_obj = self.hosts[host_name]
             return host_obj.is_compromised
         except KeyError:
             return None  # return None if host not found
-
-    
 
     def get_num_hosts(self):
         return len(self.hosts)

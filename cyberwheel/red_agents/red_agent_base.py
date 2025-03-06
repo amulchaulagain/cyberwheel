@@ -1,5 +1,3 @@
-import random
-
 from abc import ABC, abstractmethod
 from ipaddress import IPv4Address, IPv6Address
 from typing import Type, List, Any, Iterable
@@ -205,34 +203,3 @@ class AgentHistory:
 
     def recent_history(self) -> RedActionResults:
         return self.red_action_history[-1]
-
-
-class HybridSetList:
-    """
-    Defines a Hybrid Set/List object. This allows us to take advantage of the O(1) time complexity for
-    membership checking of sets, while taking advantage of the O(1) time complexity of random.choice()
-    of lists.
-    """
-
-    def __init__(self):
-        self.data_set = set()
-        self.data_list = []
-
-    def add(self, value):
-        if value not in self.data_set:
-            self.data_set.add(value)
-            self.data_list.append(value)
-
-    def remove(self, value):
-        if value in self.data_set:
-            self.data_set.remove(value)
-            self.data_list.remove(value)
-
-    def get_random(self):
-        return random.choice(self.data_list)
-
-    def check_membership(self, value):
-        return value in self.data_set
-
-    def length(self):
-        return len(self.data_set)

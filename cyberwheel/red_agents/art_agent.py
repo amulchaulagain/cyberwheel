@@ -23,9 +23,9 @@ from cyberwheel.red_agents.red_agent_base import (
     AgentHistory,
     KnownHostInfo,
     RedActionResults,
-    HybridSetList,
     RedAgentResult
 )
+from cyberwheel.utils import HybridSetList
 
 class ARTAgent(RedAgent):
     def __init__(
@@ -95,13 +95,14 @@ class ARTAgent(RedAgent):
 
         self.history: AgentHistory = AgentHistory(initial_host=self.current_host)
         self.unimpacted_servers = HybridSetList()
+        self.unimpacted_hosts = HybridSetList()
         self.unknowns = HybridSetList()
         self.campaign = args.campaign if hasattr(args, 'campaign') else False
         service_mapping = args.service_mapping if hasattr(args, 'service_mapping') else {}
 
         if service_mapping == {} and not self.campaign and map_services:
             self.services_map = {}
-            self.tracked_hosts = set()
+            self.tracked_hosts = HybridSetList()
             for _, host in self.network.hosts.items():
                 self.tracked_hosts.add(host.name)
                 self.services_map[host.name] = {}
@@ -114,7 +115,7 @@ class ARTAgent(RedAgent):
                             self.services_map[host.name][kcp].append(mid)
         else:
             self.services_map = service_mapping
-            self.tracked_hosts = set(service_mapping.keys())
+            self.tracked_hosts = HybridSetList(service_mapping.keys())
     
     def from_yaml(self) -> None:
         with open(self.config, "r") as r:
@@ -159,11 +160,20 @@ class ARTAgent(RedAgent):
 
     def handle_network_change(self):
         """
-        Does a 'check' at every step to initialize any newly added decoys to view.
+        Does a 'check' at every step to initialize any newly added decoys to view or remove any removed decoys
         """
         current_hosts = self.network.hosts.keys()
 
-        new_hosts = current_hosts - self.tracked_hosts
+        new_hosts = current_hosts - self.tracked_hosts.data_set
+
+        removed_hosts = (self.unknowns.data_set | self.unimpacted_hosts.data_set | self.unimpacted_servers.data_set) - self.network.hosts.keys()
+        #print(removed_hosts)
+        
+        if len(removed_hosts) > 0:
+            removed_host = removed_hosts.pop()
+            self.unknowns.remove(removed_host)
+            self.unimpacted_hosts.remove(removed_host)
+            self.unimpacted_servers.remove(removed_host)
 
         new_host = None
         network_change = False
@@ -187,6 +197,7 @@ class ARTAgent(RedAgent):
         ):  # Add the new host to self.history if the subnet is scanned. Else do nothing.
             self.history.hosts[new_host.name] = KnownHostInfo()
             self.unknowns.add(new_host.name)
+        
 
     def select_next_target(self) -> Host:
         """
@@ -211,10 +222,13 @@ class ARTAgent(RedAgent):
         if not self.history.hosts[target_host.name].sweeped:
             action_results = ARTPingSweep(self.current_host, target_host).sim_execute()
             if action_results.attack_success:
-                for h in target_host.subnet.connected_hosts:
+                for h in action_results.metadata["sweeped_hosts"]:
                     # Create Red Agent History for host if not in there
                     if h.name not in self.history.hosts:
-                        self.history.hosts[h.name] = KnownHostInfo(sweeped=True)
+                        sweeped = h.subnet.name == target_host.subnet.name
+                        self.history.hosts[h.name] = KnownHostInfo(sweeped=sweeped, ip_address=h.ip_address)
+                        if h.subnet.name not in self.history.subnets:
+                            self.history.subnets[h.subnet.name] = KnownSubnetInfo()
                         self.unknowns.add(h.name)
                     else:
                         self.history.hosts[h.name].sweeped = True
@@ -271,6 +285,7 @@ class ARTAgent(RedAgent):
                 self.add_host_info(action_results.metadata)
             if action == ARTImpact:
                 self.history.hosts[target_host.name].impacted = True
+                self.unimpacted_hosts.remove(target_host.name)
                 if self.history.hosts[target_host.name].type == "Server":
                     self.unimpacted_servers.remove(target_host.name)
             elif action == ARTPrivilegeEscalation:
@@ -328,6 +343,7 @@ class ARTAgent(RedAgent):
                         if h.name not in self.history.hosts.keys():
                             self.history.hosts[h.name] = KnownHostInfo()
                             self.unknowns.add(h.name)
+                            self.unimpacted_hosts.add(h.name)
                 elif k == "ip_address":
                     if host_name not in self.history.hosts.keys():
                         self.history.hosts[host_name] = KnownHostInfo(
@@ -341,7 +357,7 @@ class ARTAgent(RedAgent):
         It dictates which actions have the greater costs, for example Impact having -8
         while Discovery has -2.
         """
-        return self.strategy.get_reward_map()
+        return self.reward_map
 
     def reset(self):
         """
@@ -349,6 +365,7 @@ class ARTAgent(RedAgent):
         """
         self.current_host : Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
         self.history: AgentHistory = AgentHistory(initial_host=self.current_host)
-        self.unimpacted_servers = HybridSetList()
-        self.unknowns = HybridSetList()
+        self.unimpacted_servers.reset()
+        self.unimpacted_hosts.reset()
+        self.unknowns.reset()
         self.leader_host: Host = self.network.hosts[self.leader] if self.leader.lower() != "random" else self.network.get_random_server_host()

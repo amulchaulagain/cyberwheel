@@ -4,7 +4,7 @@ import yaml
 
 from importlib.resources import files
 from typing import Dict, List, Any, Iterable
-from gym import Space, spaces
+from gymnasium import Space
 
 from cyberwheel.blue_agents.blue_agent import BlueAgent, BlueAgentResult
 from cyberwheel.reward.reward_base import RewardMap
@@ -13,7 +13,7 @@ from cyberwheel.blue_agents.action_space.action_space import ActionSpace
 from cyberwheel.observation import BlueObservation
 
 
-def host_to_index_mapping(network: Network) -> Dict[Host, int]:
+def host_to_index_mapping(network: Network, deterministic: bool = False) -> Dict[Host, int]:
     """
     This will help with constructing the obs_vec.
     It will need to be called and save during __init__()
@@ -24,7 +24,13 @@ def host_to_index_mapping(network: Network) -> Dict[Host, int]:
     """
     mapping: Dict[Host, int] = {}
     i = 0
-    for host in network.hosts.keys() - network.decoys.keys():
+
+    if deterministic:
+        hosts = sorted(list(network.hosts.keys() - network.decoys.keys()))
+    else:
+        hosts = network.hosts.keys() - network.decoys.keys()
+
+    for host in hosts:
         mapping[host] = i
         i += 1
     return mapping
@@ -63,10 +69,11 @@ class RLBlueAgent(BlueAgent):
     """
     def __init__(self, network: Network, args) -> None:
         super().__init__()
+        self.args = args
         self.config = files("cyberwheel.data.configs.blue_agent").joinpath(args.blue_agent)
         self.network = network
 
-        self.observation = BlueObservation(2 * len(self.network.hosts), host_to_index_mapping(self.network), args.detector_config)
+        self.observation = BlueObservation(2 * len(self.network.hosts), host_to_index_mapping(self.network, self.args.deterministic), args.detector_config)
 
         self.configs: Dict[str, Any] = {}
         self.action_space: ActionSpace = None
@@ -174,6 +181,11 @@ class RLBlueAgent(BlueAgent):
     def act(self, action: int) -> BlueAgentResult:
         self.observation.detector.reset()
         asc_return = self.action_space.select_action(action)
+
+        if self.args.deterministic:
+            asc_return.kwargs["seed"] = self.args.seed
+            self.args.seed += 1
+        
         result = asc_return.action.execute(*asc_return.args, **asc_return.kwargs)
         
         return BlueAgentResult(asc_return.name, result.id, result.success, result.recurring, target=result.target)

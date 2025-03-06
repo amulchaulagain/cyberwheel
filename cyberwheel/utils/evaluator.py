@@ -1,10 +1,12 @@
 
-import gym
+import gymnasium as gym
 import time
 import importlib
 import pandas as pd
 import torch
 import wandb
+import os
+import random
 
 from importlib.resources import files
 from tqdm import tqdm
@@ -12,6 +14,7 @@ from tqdm import tqdm
 from cyberwheel.network.network_base import Network
 from cyberwheel.utils import RLAgent, get_service_map
 from cyberwheel.utils.visualize import visualize
+from cyberwheel.utils.set_seed import set_seed
 
 
 def get_action_mask(action_space_size, action_masks):
@@ -28,8 +31,11 @@ class Evaluator:
         self.args = args
         m = importlib.import_module("cyberwheel.cyberwheel_envs")
         self.env = getattr(m, args.environment)
+        self.deterministic = os.getenv("CYBERWHEEL_DETERMINISTIC", "False").lower() in ('true', '1', 't')
+        self.args.deterministic = self.deterministic
+        self.seed = 0
 
-    def make_env(self, rank):
+    def make_env(self, rank, network: Network):
         """
         Utility function for multiprocessed env.
 
@@ -40,12 +46,7 @@ class Evaluator:
         """
 
         def _init():
-            config_path = files("cyberwheel.data.configs.network").joinpath(
-                self.args.network_config
-            )
-            env = self.env(
-                self.args, network=Network.create_network_from_yaml(config_path)
-            )
+            env = self.env(self.args, network=network)
             env.evaluation = True
 
             self.max_action_space_size = env.max_action_space_size
@@ -60,6 +61,13 @@ class Evaluator:
         return _init
 
     def configure_evaluation(self):
+        if self.deterministic:
+            set_seed(self.seed)
+            torch.backends.cudnn.deterministic = True
+        else:
+            set_seed(random.randint(0, 999999999))
+            torch.backends.cudnn.deterministic = False
+
         self.device = torch.device("cpu")
         print(f"Using device {self.device}")
 
@@ -71,7 +79,7 @@ class Evaluator:
         network = Network.create_network_from_yaml(network_config)
 
         self.args.service_mapping = get_service_map(network)
-        env_funcs = [self.make_env(i) for i in range(1)]
+        env_funcs = [self.make_env(i, network=network) for i in range(1)]
         self.envs = gym.vector.SyncVectorEnv(env_funcs)
 
         self.agent = RLAgent(self.envs).to(self.device)
@@ -128,20 +136,23 @@ class Evaluator:
         self.full_blue_action_targets = []
         self.full_rewards = []
 
-        self.max_action_space_size = self.envs.envs[0].max_action_space_size
+        self.max_action_space_size = self.envs.envs[0].unwrapped.max_action_space_size
         self.action_mask = [False] * self.max_action_space_size
 
     def evaluate(self):
         self.start_time = time.time()
         for episode in tqdm(range(self.args.num_episodes)):
             for step in range(self.args.num_steps):
+                if self.deterministic:
+                    set_seed(self.seed)
+                self.seed += 1
                 if step == 0:
                     self.obs = self.obs[0]
 
                 self.obs = torch.Tensor(self.obs).to(self.device)
                 action_space_size = self.envs.envs[
                     0
-                ].rl_agent.action_space._action_space_size
+                ].unwrapped.rl_agent.action_space._action_space_size
 
                 self.action_mask = get_action_mask(action_space_size, self.action_mask)
 
@@ -189,10 +200,11 @@ class Evaluator:
                 self.full_rewards.append(rew)
 
                 # If generating graphs for dash server view
+                #print(self.args.visualize)
                 if self.args.visualize:
-                    host_info = self.envs.envs[0].red_agent.observation.obs if self.args.train_red else history.hosts
+                    host_info = self.envs.envs[0].unwrapped.red_agent.observation.obs if self.args.train_red else history.hosts
                     step_info = {"source_host": red_action_src, "target_host": red_action_dest, "red_action": red_action_type, "commands": commands, "network": net, "host_info": host_info, "commands": commands}
-                    visualize(episode, step, self.args.experiment_name, step_info)
+                    visualize(episode, step, self.args.graph_name, step_info)
                     pass
 
                 self.total_reward += rew

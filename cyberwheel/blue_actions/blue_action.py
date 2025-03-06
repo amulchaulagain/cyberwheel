@@ -1,4 +1,5 @@
 import uuid
+import random
 
 from abc import abstractmethod, ABC
 from typing import  Dict
@@ -8,11 +9,14 @@ from cyberwheel.network.host import Host
 from cyberwheel.network.subnet import Subnet
 from cyberwheel.network.service import Service
 
-def generate_id() -> str:
+def generate_id(seed=None) -> str:
     """
     Returns a UUID4 as string of hex digits. 
     """
-    return uuid.uuid4().hex
+    if seed is not None:
+        return uuid.UUID(int=random.getrandbits(128), version=4).hex
+    else:
+        return uuid.uuid4().hex
 
 class BlueActionReturn():
     def __init__(self, id="", success=False, recurring=0, target=None) -> None:
