@@ -2,22 +2,22 @@
 red_agent: brute_force_encryption_campaign.yaml
 blue_agent: rl_blue_agent.yaml
 environment: CyberwheelRL
-valid_targets: servers
-train_red: false
-train_blue: true
-campaign: true
+valid_targets: servers # Options: 'servers' | 'users' | 'all' | '{host_name}' | list of 'hostnames' (in YAML format)
+train_red: false # Indicates if the red agent will be the agent utilizing the policy
+train_blue: true # Indicates if the blue agent will be the agent utilizing the policy
+campaign: true # Indicates if the red agent is an ART Campaign
 seed: 1
-deterministic: true
+deterministic: false
 
 checkpoint: agent
-download_model: false
+download_model: false # If true, will download model from W&B in data/models/{experiment_name}
 run:  # required if download_model is true
 wandb_project_name:  # required if download_model is true
 wandb_entity:  # required if download_model is true
 
-experiment_name: TrainBlueAgentARTCampaign
+experiment_name: TrainBlueAgentARTCampaign # Will use model under data/models/{experiment_name}
 visualize: true
-graph_name: TrainBlueAgentARTCampaign
+graph_name: TrainBlueAgentARTCampaign # Will save visualization under data/graphs/{graph_name}
 network_config: 15-host-network.yaml
 decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml

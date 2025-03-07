@@ -7,7 +7,7 @@ train_red: true
 train_blue: false
 campaign: false
 seed: 1
-deterministic: true
+deterministic: false
 
 checkpoint: agent
 download_model: false

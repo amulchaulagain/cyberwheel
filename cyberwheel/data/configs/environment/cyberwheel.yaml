@@ -8,4 +8,4 @@ decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml
 num_steps: 50
 num_episodes: 10
-deterministic: true
+deterministic: false
