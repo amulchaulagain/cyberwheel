@@ -15,9 +15,9 @@ run: # required if download_model is true
 wandb_project_name: # required if download_model is true
 wandb_entity: # required if download_model is true
 
-experiment_name: test_decoy_strategy
+experiment_name: TrainBlueAgent
 visualize: true
-graph_name: test_decoy_strategy_1
+graph_name: TrainBlueAgent
 network_config: 15-host-network.yaml
 decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml
