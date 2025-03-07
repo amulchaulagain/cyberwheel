@@ -102,24 +102,6 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             blue_recurring=blue_agent_result.recurring
         )
 
-        #temp_data = {
-        #            "step": [self.current_step],
-        #            "red_action": [red_agent_result.action.get_name()],
-        #            "red_src": [red_agent_result.src_host.name],
-        #            "red_dst": [red_agent_result.target_host.name],
-        #            "red_success": [red_agent_result.success],
-        #            "blue_action": [blue_agent_result.name],
-        #            "blue_src": [blue_agent_result.target],
-        #            "blue_dst": [blue_agent_result.id],
-        #            "blue_success": [blue_agent_result.success],
-        #            "reward": [reward],
-        #            "blue_obs": [str(obs_vec)]}
-        #temp_df = pd.DataFrame(temp_data)
-        #temp_df.to_csv('determinism_2.csv', mode='a', index=False, header=False, sep=';')
-        #print(f"Red Agent:\t{}\t\t\t--\t{}\t\t\t->{}\t--\t{}\t{}")
-        #print(f"Blue Agent:\t{}\t\t\t--\t{}\t\t \t->{}\t--\t{reward}\t{}")
-        #print("----------------------------------------------------------------------------------------------------------------------------------------------------------")
-
         self.total += reward
 
         done = self.current_step >= self.max_steps
