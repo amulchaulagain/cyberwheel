@@ -82,9 +82,13 @@ class EmulatePingSweep(EmulateRedAction):
             discovered_ips = stdout_to_list(result.stdout)
             print("discovered ips: ", discovered_ips)
 
-        # Add discovered hosts to red action results.
-        # The Host performing ping sweep is included.
+        """
+            Add discovered hosts to red action results.
+            The Host performing ping sweep is included.
+            Decoys are not included.
+        """
         for discovered_ip in discovered_ips:
+            # NOTE: network.get_all_hosts() does not get decoys
             for host in self.network.get_all_hosts():
                 if str(host.ip_address) == discovered_ip:
                     self.action_results.add_host(host)
