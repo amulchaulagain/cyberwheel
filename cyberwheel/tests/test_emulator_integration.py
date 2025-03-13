@@ -13,7 +13,7 @@ from cyberwheel.network.router import Router
 from cyberwheel.network.subnet import Subnet
 from importlib.resources import files
 
-NETWORK_CONFIG = "example_config.yaml"
+NETWORK_CONFIG = "integration_config.yaml"
 
 # TEST variables
 config_path = files("cyberwheel.resources.configs.network").joinpath(
@@ -66,10 +66,10 @@ class TestEmulatorIntegration(unittest.TestCase):
         """
         action_name = "Remote System Discovery"
         src_host = Host(name="user01", subnet=subnet, host_type=None)
-        options = {"start_host": 2, "end_host": 11}  # will go to 2-254 if not defined
 
+        # NOTE: ping sweep range defined in emulator_control.py
         red_action_return = self.emulator.run_red_action(
-            action_name, src_host=src_host, dst_host=src_host, options=options
+            action_name, src_host=src_host, dst_host=src_host
         )
         self.assertTrue(red_action_return.attack_success)
 

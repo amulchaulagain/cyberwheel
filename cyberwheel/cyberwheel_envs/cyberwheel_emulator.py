@@ -42,7 +42,10 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         self.args = args
         self.max_steps = 30
 
-        valid_targets = [h.name for h in self.network.get_all_hosts()] + ["decoy1", "decoy2"]
+        valid_targets = [h.name for h in self.network.get_all_hosts()] + [
+            "decoy1",
+            "decoy2",
+        ]
 
         self.red_agent = ARTCampaign(self.network, args)
 
@@ -139,8 +142,6 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             f"\nEmulator Red Action: {red_action_name} from {red_action_src.name} to {red_action_dst.name}"
         )
         print("----------------------------------\n----------------------------------")
-
-        # TODO: if Ping Sweep, add options for ip range (currenlty hard coded in control file).
 
         red_action_result = self.emulator.run_red_action(
             red_action_name, red_action_src, red_action_dst, id=self.current_step
