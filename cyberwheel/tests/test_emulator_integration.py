@@ -44,8 +44,8 @@ class TestEmulatorIntegration(unittest.TestCase):
         """
         Test executing a blue action, deploy decoy host, in the emulator.
         """
-        action_name = "deploy_decoy_host"
-        src_host_name = "decoy01"
+        action_name = "deploy_decoy"
+        src_host_name = "subnet"  # random chooses decoy from subnet
 
         blue_action_return = self.emulator.run_blue_action(action_name, src_host_name)
         self.assertTrue(blue_action_return.success)

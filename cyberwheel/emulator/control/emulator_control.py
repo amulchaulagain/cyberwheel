@@ -4,7 +4,10 @@ Module defines the class and functions to perform setup actions in the emulator 
 
 from __future__ import annotations
 from cyberwheel.emulator.utils import read_config
-from cyberwheel.emulator.actions.blue_actions import EmulateDeployDecoyHost, EmulateRemoveDecoyHost
+from cyberwheel.emulator.actions.blue_actions import (
+    EmulateDeployDecoyHost,
+    EmulateRemoveDecoyHost,
+)
 from cyberwheel.emulator.actions.red_actions import (
     EmulatePingSweep,
     EmulatePortScan,
@@ -22,6 +25,8 @@ from cyberwheel.network.subnet import Subnet
 from typing import Any, Dict, List, Iterable
 import pathlib
 import subprocess
+import random
+
 
 DIR_PATH = pathlib.Path(__file__).parent.resolve()
 NETWORK_CONFIGS_PATH = f"{DIR_PATH}/../../resources/configs/network"
@@ -81,21 +86,27 @@ class EmulatorControl:
         """Lookup and execute blue actions in the emulator."""
 
         shell_cmd = ""
-        print (f"executing emulator blue action: {action_name}, id: {id}")
+        print(f"executing emulator blue action: {action_name}, id: {id}")
 
         match action_name:
-            case 'deploy_decoy':
+            case "deploy_decoy":
                 action = EmulateDeployDecoyHost(network=self.network, configs={})
-                shell_cmd = action.build_emulator_cmd(src_host_name)
+
+                # random pick decoy within subnet
+                decoy_names = self._get_decoy_host_names()
+                random_int = random.randint(0, len(decoy_names) - 1)
+                random_decoy_hostname = decoy_names[random_int]
+
+                shell_cmd = action.build_emulator_cmd(random_decoy_hostname)
                 return action.emulator_execute(shell_cmd)
-            case 'remove_decoy_host':
+            case "remove_decoy_host":
                 action = EmulateRemoveDecoyHost(network=self.network, configs={})
                 shell_cmd = action.build_emulator_cmd(src_host_name)
                 return action.emulator_execute(shell_cmd)
-            case 'nothing':
+            case "nothing":
                 return BlueActionReturn(action_name, False, 0)
             case _:
-                print('action does not exist.')
+                print("action does not exist.")
                 return BlueActionReturn(action_name, False, 0)
 
     def run_red_action(
@@ -104,19 +115,26 @@ class EmulatorControl:
         src_host: Host,
         dst_host: Host,
         id: str = "",
-        options: Dict[str, Any] = {}
+        options: Dict[str, Any] = {},
     ) -> RedActionResults:
         """Lookup and execute red actions in the emulator."""
 
         shell_cmd = ""
-        print (f"executing emulator red action: {action_name}, id: {id}")
+        print(f"executing emulator red action: {action_name}, id: {id}")
 
         match action_name:
             case "Remote System Discovery":
-                action = EmulatePingSweep(src_host=src_host, target_host=dst_host, network=self.network)
-                options = {"start_host": 2, "end_host": 11}  # will go to 2-254 if not defined
+                action = EmulatePingSweep(
+                    src_host=src_host, target_host=dst_host, network=self.network
+                )
+                options = {
+                    "start_host": 2,
+                    "end_host": 11,
+                }  # will go to 2-254 if not defined
                 shell_cmd = action.build_emulator_cmd(
-                    start_host=options['start_host'], end_host=options['end_host'], ip_range=self.subnet.ip_range
+                    start_host=options["start_host"],
+                    end_host=options["end_host"],
+                    ip_range=self.subnet.ip_range,
                 )
                 return action.emulator_execute(shell_cmd)
             case "Network Service Discovery":
@@ -124,11 +142,15 @@ class EmulatorControl:
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
             case "Sudo and Sudo Caching":
-                action = EmulateSudoandSudoCaching(src_host=src_host, target_host=dst_host)
+                action = EmulateSudoandSudoCaching(
+                    src_host=src_host, target_host=dst_host
+                )
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
             case "Data Encrypted for Impact":
-                action = EmulateDataEncryptedForImpact(src_host=src_host, target_host=dst_host)
+                action = EmulateDataEncryptedForImpact(
+                    src_host=src_host, target_host=dst_host
+                )
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
             case "LinuxLateralMovement":
@@ -136,7 +158,7 @@ class EmulatorControl:
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
             case _:
-                print('Attack does not exist.')
+                print("Attack does not exist.")
                 results = RedActionResults(src_host=src_host, target_host=dst_host)
                 results.attack_success = False
                 return results
@@ -149,7 +171,9 @@ class EmulatorControl:
         Any action done to a decoy generates an alert.
         """
 
-        emu_detector = EmulatorDectector(network_config=self.net_config_name, subnet=self.subnet)
+        emu_detector = EmulatorDectector(
+            network_config=self.net_config_name, subnet=self.subnet
+        )
 
         print("\n")
         alerts = emu_detector.obs()
@@ -260,4 +284,3 @@ class EmulatorControl:
                 return False
 
         return True
-
