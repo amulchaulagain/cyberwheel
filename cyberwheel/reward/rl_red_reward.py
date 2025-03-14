@@ -34,7 +34,7 @@ class RLRedReward(Reward):
             red_success and not decoy and target_host_name in self.valid_targets
         ):  # If red action succeeded on a real Host
             if red_action == "LinuxLateralMovement":
-                r = 15
+                r = 0
             else:
                 r = self.red_rewards[red_action][0]
         elif red_success and decoy:

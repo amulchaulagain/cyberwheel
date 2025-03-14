@@ -12,6 +12,7 @@ from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.network_base import Network
 from cyberwheel.network.host import Host
 from cyberwheel.red_agents import RLARTAgent, ARTAgent, ARTCampaign
+from cyberwheel.red_agents.rl_red_campaign import RLRedCampaign
 from cyberwheel.utils import YAMLConfig
 from cyberwheel.observation import HistoryObservation
 from cyberwheel.detectors.handler import DetectorHandler
@@ -66,7 +67,8 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         self.args = args
 
         if args.valid_targets == "servers":
-            valid_targets = [h.name for h in self.network.get_all_server_hosts()]
+            #valid_targets = [h.name for h in self.network.get_all_server_hosts()] # TODO
+            valid_targets = ["server01", "server02", "server03", "decoy01", "decoy02"]
         elif args.valid_targets == "users":
             valid_targets = [h.name for h in self.network.get_all_user_hosts()]
         elif type(args.valid_targets) is list:
@@ -77,7 +79,8 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             valid_targets = [h.name for h in self.network.get_all_hosts()]
 
         if args.train_red:
-            self.red_agent = RLARTAgent(self.network, args)
+            #self.red_agent = RLARTAgent(self.network, args) # TODO
+            self.red_agent = RLRedCampaign(self.network, args)
             self.blue_agent = InactiveBlueAgent()
             self.rl_agent = self.red_agent
             self.static_agent = self.blue_agent
@@ -180,6 +183,8 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             blue_recurring=blue_recurring,
         )
 
+        #print(f"{red_action_name} - {red_action_src} to {red_action_dst} | {reward}")
+
         self.total += reward
 
         done = self.current_step >= self.max_steps
@@ -223,7 +228,7 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         self.red_agent.reset(
             self.red_agent.entry_host,
             network=self.network,
-            leader=self.red_agent.leader,
+            #leader=self.red_agent.leader, # TODO
         )
 
         self.blue_agent.reset()
