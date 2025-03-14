@@ -105,10 +105,11 @@ Once all dependencies are installed:
     ```sh
     python3.10 -m venv venv
     source venv/bin/activate
-    pip install -R requirements.txt
+    pip install -r requirements.txt
     ```
 
 *On newer OSX systems running on silicone chips, there may be an error installing the `pygraphviz` package, with poetry not finding the graphviz configuration files. You can work around this by pip installing the pygraphviz package manually, explicitly passing graphviz config paths. [This link](https://stackoverflow.com/a/70439868) helped me work through this issue.*
+*Feel free to comment this package out of the requirements.txt if you want to use cyberwheel without the visualizations and debug this package installation separately.*
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -186,7 +187,7 @@ This will run a dash server locally on the port number passed. You can then visi
 
 #### Running
 
-Another option is to run the cyberwheel environment without any RL components. This environment is not as in-depth and exhaustive, but provides a framework to tailor the Cyberwheel environment to your use case.
+Another option is to run the cyberwheel environment without any RL components. The two agents that are currently connected to this environment are inactive red/blue agents, meaning the environment is currently running through its steps without any actions being taken. This environment is not as in-depth or exhaustive, but provides a framework to tailor the Cyberwheel environment to your use case. 
 
 ```sh
 python3 -m cyberwheel run cyberwheel.yaml
@@ -203,6 +204,7 @@ This may run long depending on hardware. For demo purposes, you can ctrl-C after
 ```sh
 python3 -m cyberwheel evaluate evaluate_blue.yaml
 ```
+This will evaluate the model under the current environment, and save the logs of the evaluation in `cyberwheel/data/action_logs/{graph_name}.csv` If the `visualizer` parameter is set to true, this will also generate and store visualizations in `cyberwheel/data/graphs/{graph_name}/` to be viewed later. (Note: The visualization generation has a longer runtime than a basic evaluation, so if you only care about the CSV logs, you can set it to false to greatly speed up the evaluation.)
 
 Once these have run, you can run the server on http://localhost:8050 by running:
 ```sh
@@ -295,15 +297,16 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 Sean Oesch - oeschts@ornl.gov
 
-Cory Watson - watsoncl1@ornl.gov
-
 Amul Chaulagain - chaulagaina@ornl.gov
+
+Phillipe Austria - austriaps@ornl.gov
 
 Matthew Dixson - dixsonmk@ornl.gov
 
 Brian Weber - weberb@ornl.gov
 
-Phillipe Austria - austriaps@ornl.gov
+Cory Watson - watsoncl1@ornl.gov
+
 
 Project Link: [https://github.com/ORNL/cyberwheel/](https://github.com/ORNL/cyberwheel/)
 
@@ -322,8 +325,8 @@ Project Link: [https://github.com/ORNL/cyberwheel/](https://github.com/ORNL/cybe
 <!-- MARKDOWN LINKS & IMAGES -->
 [issues-shield]: https://img.shields.io/github/issues/ORNL/cyberwheel.svg?style=for-the-badge
 [issues-url]: https://github.com/ORNL/cyberwheel/issues
-[license-shield]: https://img.shields.io/github/license/othneildrew/Best-README-Template.svg?style=for-the-badge
-[license-url]: https://github.com/ORNL/cyberwheel/blob/main/LICENSE
+[license-shield]: https://img.shields.io/github/license/ORNL/cyberwheel.svg?style=for-the-badge
+[license-url]: https://github.com/ORNL/cyberwheel/blob/release/LICENSE
 
 [plotly-dash]: https://img.shields.io/badge/plotly-dash-000000?style=for-the-badge&logo=plotly&logoColor=white
 [plotly-dash-url]: https://dash.plotly.com/
