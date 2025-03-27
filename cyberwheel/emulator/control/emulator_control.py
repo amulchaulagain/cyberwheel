@@ -46,6 +46,9 @@ class EmulatorControl:
         self.subnet = subnet
         self.net_config_name = network_config_name
         self.net_config = read_config(NETWORK_CONFIGS_PATH, network_config_name)
+        self.detector = EmulatorDectector(
+            network_config=network_config_name, subnet=subnet
+        )
 
     def init_hosts(self) -> bool:
         """Setup hosts and run scripts before an experiment begins."""
@@ -175,12 +178,8 @@ class EmulatorControl:
         Any action done to a decoy generates an alert.
         """
 
-        emu_detector = EmulatorDectector(
-            network_config=self.net_config_name, subnet=self.subnet
-        )
-
         print("\n")
-        alerts = emu_detector.obs()
+        alerts = self.detector.obs()
         print(f"alert count: {len(list(alerts))}")
         return alerts
 
