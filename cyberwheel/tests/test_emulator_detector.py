@@ -11,7 +11,7 @@ from pprint import pprint
 
 load_dotenv()
 
-NETWORK_CONFIG = "example_config.yaml"
+NETWORK_CONFIG = "integration_config.yaml"
 
 # Test variables
 router = Router(name="192.168.0.0")
