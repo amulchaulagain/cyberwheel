@@ -163,7 +163,12 @@ class EmulatorDectector(Detector):
             if prev_dst_ip == dst_ip:
                 continue
 
-            print("found decoy hit, creating a new alert...")
+            # skip hits that have already been
+            if hit["id"] in self.alert_ids:
+                print(f"found duplicate decoy hit, skipping id {hit['id']}")
+                continue
+
+            print("found new decoy hit, creating alert...")
             pprint(hit)
             self.alert_ids.add(hit["id"])  # save id
 
