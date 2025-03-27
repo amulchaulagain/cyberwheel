@@ -67,4 +67,5 @@ class TestEmulatorDetector(unittest.TestCase):
         print("\n")
         alerts = eoc.obs()
         print(f"alert count: {len(list(alerts))}")
+        print(f"alert ids: {eoc.alert_ids}")
         self.assertIsNotNone(alerts)

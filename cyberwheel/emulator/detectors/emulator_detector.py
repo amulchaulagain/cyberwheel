@@ -46,6 +46,9 @@ class EmulatorDectector(Detector):
         # For now, assuming detector detects for a single subnet
         self.subnet = subnet
 
+        # Keep history of alerts
+        self.alert_ids = set()
+
     def query_to_json(self, result: CompletedProcess[str]) -> Any | None:
         """Converts SIEM query reponse to JSON."""
         return json.loads(result.stdout)
@@ -162,6 +165,7 @@ class EmulatorDectector(Detector):
 
             print("found decoy hit, creating a new alert...")
             pprint(hit)
+            self.alert_ids.add(hit["id"])  # save id
 
             src_host = Host(name="src_host", subnet=self.subnet, host_type=None)
             src_host.set_ip_from_str(hit["src_ip"])
