@@ -1,6 +1,6 @@
 import torch
 import random
-import gym
+import gymnasium as gym
 import time
 import os
 import importlib
@@ -299,7 +299,7 @@ class Trainer:
                 )
             else:
                 action_space_sizes = [
-                    env.rl_agent.action_space._action_space_size
+                    env.unwrapped.rl_agent.action_space._action_space_size
                     for env in self.envs.envs
                 ]
 

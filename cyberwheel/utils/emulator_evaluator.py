@@ -1,6 +1,6 @@
 import torch
 import random
-import gym
+import gymnasium as gym
 import time
 import os
 import importlib
@@ -160,7 +160,7 @@ class EmulatorEvaluator:
         self.full_rewards = []
         self.full_blue_action_successes = []
 
-        self.max_action_space_size = self.envs.envs[0].blue_agent.action_space.max_size
+        self.max_action_space_size = self.envs.envs[0].unwrapped.blue_agent.action_space.max_size
         self.action_mask = [False] * self.max_action_space_size
 
     def evaluate(self):
@@ -173,7 +173,7 @@ class EmulatorEvaluator:
                 self.obs = torch.Tensor(self.obs).to(self.device)
                 action_space_size = self.envs.envs[
                     0
-                ].blue_agent.action_space._action_space_size
+                ].unwrapped.blue_agent.action_space._action_space_size
 
                 self.action_mask = get_action_mask(action_space_size, self.action_mask)
 

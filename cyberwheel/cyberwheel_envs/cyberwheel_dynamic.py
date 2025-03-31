@@ -1,7 +1,8 @@
 import copy
 from importlib.resources import files
-from gym import spaces
-import gym
+
+import gymnasium as gym
+from gymnasium import spaces
 from typing import Dict, Iterable, List
 import yaml
 

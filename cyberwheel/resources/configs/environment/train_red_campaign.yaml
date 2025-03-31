@@ -2,11 +2,11 @@
 experiment_name: TrainRLRedCampaign # The experiment name
 seed: 1 # The seed to use for the experiment
 deterministic: false # Whether or not the training is deterministic
-device: cpu # Which device to train on
-async_env: false # Whether to run the environments in parallel
-total_timesteps: 1000000 # Total number of steps to run throughout training
-num_saves: 10 # Number of times the model is evaluated and saved during the training run
-num_envs: 1 # Number of game environments to run at once (parallel if async_env == true)
+device: cuda:0 # Which device to train on
+async_env: true # Whether to run the environments in parallel
+total_timesteps: 100000000 # Total number of steps to run throughout training
+num_saves: 100 # Number of times the model is evaluated and saved during the training run
+num_envs: 128 # Number of game environments to run at once (parallel if async_env == true)
 num_steps: 150 # Number of steps to run per episode
 eval_episodes: 10 # Number of episodes to run in an evaluation
 resume: false # When training with an existing model_name, whether to resume training that model, or overrwrite it

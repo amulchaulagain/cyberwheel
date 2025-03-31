@@ -1,6 +1,6 @@
 from importlib.resources import files
-from gym import spaces
-import gym
+from gymnasium import spaces
+import gymnasium as gym
 from typing import Dict, List, Iterable
 import yaml
 import numpy as np
