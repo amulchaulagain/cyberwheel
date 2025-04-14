@@ -138,10 +138,10 @@ class EmulatorControl:
                     "end_host": len(all_host_names),
                 }  # will go to 2-254 if not defined
 
+                # NOTE: ip_range will come from src_host if not provided
                 shell_cmd = action.build_emulator_cmd(
                     start_host=options["start_host"],
                     end_host=options["end_host"],
-                    ip_range=self.subnet.ip_range,
                 )
                 return action.emulator_execute(shell_cmd)
             case "Network Service Discovery":
