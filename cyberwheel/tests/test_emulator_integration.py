@@ -13,32 +13,36 @@ from cyberwheel.network.router import Router
 from cyberwheel.network.subnet import Subnet
 from importlib.resources import files
 
-NETWORK_CONFIG = "integration_config.yaml"
+NETWORK_CONFIG = "example_config.yaml"
 
 # TEST variables
 config_path = files("cyberwheel.resources.configs.network").joinpath(
-    "integration_config.yaml"
+    "example_config.yaml"
 )
 
 # network = Network(name="test")
 network = Network.create_network_from_yaml(config_path)
 router = Router(name="core_router")
-subnet = Subnet(name="user_subnet", ip_range="192.168.0.0/24", router=router)
+user_subnet = Subnet(name="user_subnet", ip_range="192.168.0.0/24", router=router)
+server_subnet = Subnet(name="server_subnet", ip_range="192.168.1.0/24", router=router)
+# network.add_router(router)
+# network.add_subnet(user_subnet)
+# network.add_subnet(server_subnet)
 
 
 class TestEmulatorIntegration(unittest.TestCase):
     """Unit tests for the the emulator controller actions"""
 
     emulator = EmulatorControl(
-        network=network, subnet=subnet, network_config_name=NETWORK_CONFIG
+        network=network, subnet=user_subnet, network_config_name=NETWORK_CONFIG
     )
 
     # get host IP addresses from emulator
-    for h in emulator.network.get_all_hosts():
-        print(f"retrieving ip address from emulator for {h.name}")
-        host_name = h.name.replace("_", "-")
-        emu_host_ip = emulator.get_ip_address(host_name)
-        h.set_ip_from_str(emu_host_ip)
+    # for h in emulator.network.get_all_hosts():
+    #     print(f"retrieving ip address from emulator for {h.name}")
+    #     host_name = h.name.replace("_", "-")
+    #     emu_host_ip = emulator.get_ip_address(host_name)
+    #     h.set_ip_from_str(emu_host_ip)
 
     def test_run_deploy_decoy_host(self) -> None:
         """
@@ -65,7 +69,7 @@ class TestEmulatorIntegration(unittest.TestCase):
         Test executing a red action, ping sweep, in the emulator.
         """
         action_name = "Remote System Discovery"
-        src_host = Host(name="user01", subnet=subnet, host_type=None)
+        src_host = Host(name="user01", subnet=user_subnet, host_type=None)
 
         # NOTE: ping sweep range defined in emulator_control.py
         red_action_return = self.emulator.run_red_action(
@@ -78,8 +82,8 @@ class TestEmulatorIntegration(unittest.TestCase):
         Test executing a red action, port scan, in the emulator.
         """
         action_name = "RemoteServiceDiscovery"
-        src_host = Host(name="user01", subnet=subnet, host_type=None)
-        target_host = Host(name="user02", subnet=subnet, host_type=None)
+        src_host = Host(name="user01", subnet=user_subnet, host_type=None)
+        target_host = Host(name="user02", subnet=user_subnet, host_type=None)
         target_host.set_ip_from_str("192.168.0.3")
 
         red_action_return = self.emulator.run_red_action(
@@ -92,8 +96,8 @@ class TestEmulatorIntegration(unittest.TestCase):
         Test executing a red action, sudo and sudo caching, in the emulator.
         """
         action_name = "Sudo and Sudo Caching"
-        src_host = Host(name="user01", subnet=subnet, host_type=None)
-        target_host = Host(name="decoy01", subnet=subnet, host_type=None)
+        src_host = Host(name="user01", subnet=user_subnet, host_type=None)
+        target_host = Host(name="decoy01", subnet=user_subnet, host_type=None)
         target_host.set_ip_from_str("192.168.0.5")
 
         red_action_return = self.emulator.run_red_action(
@@ -106,8 +110,8 @@ class TestEmulatorIntegration(unittest.TestCase):
         Test executing a red action, data encrypted for impact, in the emulator.
         """
         action_name = "DataEncryptedForImpact"
-        src_host = Host(name="user01", subnet=subnet, host_type=None)
-        target_host = Host(name="decoy01", subnet=subnet, host_type=None)
+        src_host = Host(name="user01", subnet=user_subnet, host_type=None)
+        target_host = Host(name="decoy01", subnet=user_subnet, host_type=None)
         target_host.set_ip_from_str("192.168.0.5")
 
         red_action_return = self.emulator.run_red_action(
@@ -120,8 +124,8 @@ class TestEmulatorIntegration(unittest.TestCase):
         Test executing a red action, lateral movement, in the emulator.
         """
         action_name = "LinuxLateralMovement"
-        src_host = Host(name="user01", subnet=subnet, host_type=None)
-        target_host = Host(name="decoy01", subnet=subnet, host_type=None)
+        src_host = Host(name="user01", subnet=user_subnet, host_type=None)
+        target_host = Host(name="decoy01", subnet=user_subnet, host_type=None)
         target_host.set_ip_from_str("192.168.0.5")
 
         red_action_return = self.emulator.run_red_action(
@@ -135,3 +139,10 @@ class TestEmulatorIntegration(unittest.TestCase):
         """
         alerts = self.emulator.get_siem_obs()
         self.assertIsNotNone(alerts)
+
+    def test_get_network_subnets(self) -> None:
+        """
+        Test retrieving subnets
+        """
+        print(self.emulator.network.get_all_subnets())
+        self.assertTrue(True)

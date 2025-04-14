@@ -22,7 +22,7 @@ topology:
       - dmz03
       - dmz_jump_box
     # should the red agent start here or can we assume initial foothold already occured?
-    - internet:
+    # - internet:
 
 # Routers
 routers:
@@ -98,10 +98,10 @@ subnets:
     #    port: 443
 
   # should we visualize the internet as another "subnet"?
-  internet:
-    default_route:
-    ip_range: 1.0.0.0/24
-    firewall:
+  # internet:
+  #   default_route:
+  #   ip_range: 1.0.0.0/24
+  #   firewall:
 
 # Hosts
 # Decoys must be added here since they need to be pre-created in the emulator
