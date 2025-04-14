@@ -9,25 +9,24 @@ import unittest
 from cyberwheel.emulator.control import EmulatorControl
 from cyberwheel.network.host import Host
 from cyberwheel.network.network_base import Network
-from cyberwheel.network.router import Router
-from cyberwheel.network.subnet import Subnet
 from importlib.resources import files
 
-NETWORK_CONFIG = "example_config.yaml"
+# from cyberwheel.network.router import Router
+# from cyberwheel.network.subnet import Subnet
 
-# TEST variables
+################### Build Network From Config ###################
+NETWORK_CONFIG = "example_config.yaml"
 config_path = files("cyberwheel.resources.configs.network").joinpath(
     "example_config.yaml"
 )
-
-# network = Network(name="test")
 network = Network.create_network_from_yaml(config_path)
-router = Router(name="core_router")
-user_subnet = Subnet(name="user_subnet", ip_range="192.168.0.0/24", router=router)
-server_subnet = Subnet(name="server_subnet", ip_range="192.168.1.0/24", router=router)
-# network.add_router(router)
-# network.add_subnet(user_subnet)
-# network.add_subnet(server_subnet)
+user_subnet = network.get_all_subnets()[0]
+
+####################### TEST NETWORK #########################
+# network = Network(name="test")
+# router = Router(name="core_router")
+# user_subnet = Subnet(name="user_subnet", ip_range="192.168.0.0/24", router=router)
+# server_subnet = Subnet(name="server_subnet", ip_range="192.168.1.0/24", router=router)
 
 
 class TestEmulatorIntegration(unittest.TestCase):
