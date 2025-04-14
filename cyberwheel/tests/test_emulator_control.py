@@ -12,10 +12,11 @@ from importlib.resources import files
 
 NETWORK_CONFIG = "integration_config.yaml"
 
+############# Create Network Topology from Config File ##################
 config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)
 network = Network.create_network_from_yaml(config_path)
 
-# TEST variables
+################# Manually Create Network Topology ######################
 # network = Network(name="test")
 # router = Router(name="core_router")
 # subnet = Subnet(name="user_subnet", ip_range="192.168.0.0/24", router=router)
