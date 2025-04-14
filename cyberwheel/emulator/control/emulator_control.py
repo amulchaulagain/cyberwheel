@@ -129,17 +129,20 @@ class EmulatorControl:
                     src_host=src_host, target_host=dst_host, network=self.network
                 )
 
-                # limit ping sweep to the number of hosts
-                all_host_names = self._get_host_names()
+                src_host_subnet = src_host.subnet
+                ip_range = src_host_subnet.ip_range
+
+                # limit ping sweep to the number of hosts on the subnet
                 options = {
                     "start_host": 2,
-                    "end_host": len(all_host_names),
+                    "end_host": len(src_host_subnet.get_connected_hostnames()),
                 }  # will go to 2-254 if not defined
 
                 # NOTE: ip_range will come from src_host if not provided
                 shell_cmd = action.build_emulator_cmd(
                     start_host=options["start_host"],
                     end_host=options["end_host"],
+                    ip_range=ip_range,
                 )
                 return action.emulator_execute(shell_cmd)
             case "Network Service Discovery":

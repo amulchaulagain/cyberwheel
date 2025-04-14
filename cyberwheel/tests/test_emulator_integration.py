@@ -15,7 +15,7 @@ from importlib.resources import files
 # from cyberwheel.network.subnet import Subnet
 
 ################### Build Network From Config ###################
-NETWORK_CONFIG = "integration_config.yaml"
+NETWORK_CONFIG = "example_config.yaml"
 config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)
 network = Network.create_network_from_yaml(config_path)
 user_subnet = network.get_all_subnets()[0]
@@ -44,7 +44,7 @@ class TestEmulatorIntegration(unittest.TestCase):
         Test executing a blue action, deploy decoy host, in the emulator.
         """
         action_name = "deploy_decoy"
-        src_host_name = "subnet"  # random chooses decoy from subnet
+        src_host_name = "subnet"  # ignored, chooses decoy in subnet
 
         blue_action_return = self.emulator.run_blue_action(action_name, src_host_name)
         self.assertTrue(blue_action_return.success)
