@@ -129,6 +129,7 @@ class EmulatorControl:
                     src_host=src_host, target_host=dst_host, network=self.network
                 )
 
+                # Get ip_range of from subnet src_host is on
                 src_host_subnet = src_host.subnet
                 ip_range = src_host_subnet.ip_range
 
