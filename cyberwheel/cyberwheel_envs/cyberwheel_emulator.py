@@ -78,7 +78,6 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
 
         self.emulator = EmulatorControl(
             network=network,
-            subnet=network.get_all_subnets()[0],
             network_config_name=args.network_config,
         )
 
