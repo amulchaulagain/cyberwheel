@@ -41,7 +41,7 @@ class EmulatePingSweep(EmulateRedAction):
         Returns:
             shell_cmd - full shell command that runs in a subprocess.
         """
-        # if not provided manual subnet, find subnet source host is on
+        # if not provided subnet, use source host subnet ip_range for scan
         if not ip_range:
             src_host_subnet = self.src_host.subnet
             ip_range = src_host_subnet.ip_range
