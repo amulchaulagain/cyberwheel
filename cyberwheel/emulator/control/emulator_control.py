@@ -21,7 +21,6 @@ from cyberwheel.red_actions.red_base import RedActionResults
 from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.host import Host
 from cyberwheel.network.network_base import Network
-from cyberwheel.network.subnet import Subnet
 from typing import Any, Dict, List, Iterable
 import pathlib
 import subprocess
@@ -41,13 +40,12 @@ class EmulatorControl:
 
     emu_config = read_config(EMULATOR_CONFIG_PATH, EMULATOR_CONFIG)
 
-    def __init__(self, network: Network, subnet: Subnet, network_config_name: str):
+    def __init__(self, network: Network, network_config_name: str):
         self.network = network
-        self.subnet = subnet
         self.net_config_name = network_config_name
         self.net_config = read_config(NETWORK_CONFIGS_PATH, network_config_name)
         self.detector = EmulatorDectector(
-            network_config=network_config_name, subnet=subnet
+            network_config=network_config_name, network=network
         )
 
     def init_hosts(self) -> bool:

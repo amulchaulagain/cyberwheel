@@ -5,15 +5,20 @@ Module to test the EmulatorSetup class.
 import unittest
 from cyberwheel.emulator.control import EmulatorControl
 from cyberwheel.network.network_base import Network
-from cyberwheel.network.router import Router
-from cyberwheel.network.subnet import Subnet
+from importlib.resources import files
+
+# from cyberwheel.network.router import Router
+# from cyberwheel.network.subnet import Subnet
 
 NETWORK_CONFIG = "integration_config.yaml"
 
+config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)
+network = Network.create_network_from_yaml(config_path)
+
 # TEST variables
-network = Network(name="test")
-router = Router(name="core_router")
-subnet = Subnet(name="user_subnet", ip_range="192.168.0.0/24", router=router)
+# network = Network(name="test")
+# router = Router(name="core_router")
+# subnet = Subnet(name="user_subnet", ip_range="192.168.0.0/24", router=router)
 
 
 class TestEmulatorSetup(unittest.TestCase):
@@ -23,9 +28,7 @@ class TestEmulatorSetup(unittest.TestCase):
         """
         Test host setup sequence.
         """
-        emulator = EmulatorControl(
-            network=network, subnet=subnet, network_config_name=NETWORK_CONFIG
-        )
+        emulator = EmulatorControl(network=network, network_config_name=NETWORK_CONFIG)
         success_flag = emulator.init_hosts()
 
         self.assertTrue(success_flag)
@@ -34,9 +37,7 @@ class TestEmulatorSetup(unittest.TestCase):
         """
         Test reset sequence
         """
-        emulator = EmulatorControl(
-            network=network, subnet=subnet, network_config_name=NETWORK_CONFIG
-        )
+        emulator = EmulatorControl(network=network, network_config_name=NETWORK_CONFIG)
         success_flag = emulator.reset()
 
         self.assertTrue(success_flag)
@@ -45,9 +46,7 @@ class TestEmulatorSetup(unittest.TestCase):
         """
         Test retrieving IP address from emulator.
         """
-        emulator = EmulatorControl(
-            network=network, subnet=subnet, network_config_name=NETWORK_CONFIG
-        )
+        emulator = EmulatorControl(network=network, network_config_name=NETWORK_CONFIG)
 
         all_hosts = list(emulator.net_config["hosts"].keys())
         decoys = emulator.net_config["decoys"]
