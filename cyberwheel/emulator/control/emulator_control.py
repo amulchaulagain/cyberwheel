@@ -133,10 +133,11 @@ class EmulatorControl:
                 src_host_subnet = src_host.subnet
                 ip_range = src_host_subnet.ip_range
 
-                # limit ping sweep to the number of hosts on the subnet
+                # Limit ping sweep range to 'xxx.xxx.xxx.2-20' to prevent long action time.
+                # If number of hosts on the subnet is greater, update end_host.
                 options = {
                     "start_host": 2,
-                    "end_host": len(src_host_subnet.get_connected_hostnames()),
+                    "end_host": 20,
                 }  # will go to 2-254 if not defined
 
                 # NOTE: ip_range will come from src_host if not provided
