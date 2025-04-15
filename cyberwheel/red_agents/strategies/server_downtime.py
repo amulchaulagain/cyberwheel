@@ -21,8 +21,8 @@ class ServerDowntime(RedStrategy):
 
         target_host = agent_obj.current_host
         current_kc_step = agent_obj.history.hosts[target_host.name].get_next_step()
-        print(f"CURRENT HOST TYPE: {current_host_type}")
-        print(f"CURRENT HOST {target_host.name} KC STEP: {current_kc_step}")
+        #print(f"CURRENT HOST TYPE: {current_host_type}")
+        #print(f"CURRENT HOST {target_host.name} KC STEP: {current_kc_step}")
         if (
             current_host_type == "Unknown"
             or agent_obj.unimpacted_servers.check_membership(

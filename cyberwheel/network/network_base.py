@@ -336,7 +336,6 @@ class Network:
                     type,
                 )
                 network.decoys_reserve.append(d)
-
             else:
                 host = network.add_host_to_subnet(
                     name=h,
@@ -365,11 +364,23 @@ class Network:
             # TODO: raise custom exception? return None?
             print(f"{node} not found in {self.name}")
             raise e
+        
+    def get_node_from_ip(self, ip: str) -> NetworkObject | Host | Subnet | Router:
+        """
+        Return network object by name
+
+        :param str node: node.name of object
+        :returns NetworkObject:
+        """
+        for h in self.get_all_hosts():
+            print(f"{h.name}: {str(h.ip_address)} == {ip}")
+            if str(h.ip_address) == ip:
+                return h
 
     def get_all_hosts(self) -> list[Host]:
         nodes_tuple = self.graph.nodes(data="data")  # type: ignore
         hosts = [obj for _, obj in nodes_tuple if isinstance(obj, Host)]
-
+        #decoys = [obj for _, obj in ]
         return hosts
 
     def get_all_hostnames(self) -> list[Host]:
@@ -608,7 +619,8 @@ class Network:
         self.decoys.remove(i)
 
     def enable_decoy_host(self, name: str, subnet: Subnet, host_type: HostType) -> Host:
-        decoy = deepcopy(self.decoys_reserve[0])
+        i = random.randint(0, len(self.decoys_reserve - 1))
+        decoy = self.decoys_reserve.pop(i)
 
         decoy.name = name
         decoy.host_type = host_type

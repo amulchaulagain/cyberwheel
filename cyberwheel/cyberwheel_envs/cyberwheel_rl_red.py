@@ -88,7 +88,7 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
                 0, 2, shape=(len(self.red_agent.get_observation_space()),)
             )
             self.max_action_space_size = (
-                self.network.get_num_hosts()
+                self.network.size()
                 * self.red_agent.action_space.num_actions
                 * 2
             )
@@ -141,6 +141,9 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         red_recurring = 0
         blue_id = -1
         blue_recurring = 0
+
+        #print(self.observation_space.shape)
+        #print(self.max_action_space_size)
 
         # print(self.red_agent.history.hosts.keys())
 
@@ -206,6 +209,7 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         if self.args.train_blue:
             self.detector.reset()
             self.detector.reset()
+        #print(obs_vec.shape)
         return (
             obs_vec,
             reward,

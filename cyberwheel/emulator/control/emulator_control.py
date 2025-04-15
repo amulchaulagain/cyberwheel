@@ -98,7 +98,18 @@ class EmulatorControl:
                 random_decoy_hostname = decoy_names[random_int]
 
                 shell_cmd = action.build_emulator_cmd(random_decoy_hostname)
-                return action.emulator_execute(shell_cmd)
+                deploy_return = action.emulator_execute(shell_cmd)
+                if deploy_return.success:
+                    host_name = random_decoy_hostname
+                    emu_host_ip = self.get_ip_address(host_name)
+                    decoys_reserve = self.network.decoys_reserve
+                    for d in decoys_reserve:
+                        if d.name == host_name:
+                            d.set_ip_from_str(emu_host_ip)
+                            deploy_return.host = d
+                            break
+                return deploy_return
+
             case "remove_decoy_host":
                 action = EmulateRemoveDecoyHost(network=self.network, configs={})
                 shell_cmd = action.build_emulator_cmd(src_host_name)

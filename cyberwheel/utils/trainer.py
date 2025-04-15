@@ -108,7 +108,11 @@ class Trainer:
 
         # Load the agent
         sample_env = gym.vector.SyncVectorEnv(env_funcs)
-        eval_agent = RLAgent(sample_env)
+
+        obs_shape = sample_env.single_observation_space.shape
+        as_size = sample_env.envs[0].max_action_space_size
+        eval_agent = RLAgent(obs_shape, as_size)
+
         model = torch.load(model, map_location=eval_device)
         eval_agent.load_state_dict(model)
         eval_agent.eval()
@@ -240,7 +244,13 @@ class Trainer:
 
         # Create agent and optimizer
 
-        self.agent = RLAgent(self.envs).to(self.device)
+        obs_shape = self.envs.single_observation_space.shape
+        as_size = self.envs.envs[0].max_action_space_size
+
+        print(obs_shape)
+        print(as_size)
+
+        self.agent = RLAgent(obs_shape, as_size).to(self.device)
 
         # Load model from models/ directory
 
