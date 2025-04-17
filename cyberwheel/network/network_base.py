@@ -336,7 +336,6 @@ class Network:
                     type,
                 )
                 network.decoys_reserve.append(d)
-
             else:
                 host = network.add_host_to_subnet(
                     name=h,

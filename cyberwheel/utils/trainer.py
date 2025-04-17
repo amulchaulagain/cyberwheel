@@ -64,6 +64,7 @@ class Trainer:
         # We evaluate on CPU because learning is already happening on GPUs.
         # You can evaluate small architectures on CPU, but if you increase the neural network size,
         # you may need to do fewer evaluations at a time on GPU.
+        self.args.evaluation = True
         eval_device = torch.device("cpu")
         env = self.env(self.args)
         episode_rewards = []
@@ -91,6 +92,7 @@ class Trainer:
             total_reward = 0
 
         episodic_return = float(sum(episode_rewards)) / self.args.eval_episodes
+        self.args.evaluation = False
         return episodic_return
 
     def run_evals(self, model, globalstep):

@@ -48,7 +48,7 @@ class RLRedCampaign(ARTCampaign):
             "Data Encrypted for Impact": DataEncryptedforImpact.get_atomic_test("08cbf59f-85da-4369-a5f4-049cffd7709f"),
             "LinuxLateralMovement": LinuxLateralMovement.get_atomic_test("uuid")
         }
-        self.entry_host: Host = self.network.get_node_from_name("user01")
+        self.entry_host: Host = self.network.get_random_user_host()
         self.current_host : Host = self.entry_host
 
         self.leader = []
@@ -58,9 +58,9 @@ class RLRedCampaign(ARTCampaign):
         self.killchain = []
         self.reward_map = {
             "Remote System Discovery": (0.0, 0.0),
-            "Network Service Discovery": (0.0, 0.0),
+            "Network Service Discovery": (10.0, 0.0),
             "Sudo and Sudo Caching": (0.0, 0.0),
-            "Data Encrypted for Impact": (10.0, 0.0),
+            "Data Encrypted for Impact": (100.0, 0.0),
             "LinuxLateralMovement": (0.0, 0.0)
         }
 
@@ -120,6 +120,7 @@ class RLRedCampaign(ARTCampaign):
                     and host_view.discovered
                     and host_view.on_host
                     and host_view.escalated
+                    and not host_view.impacted
                 )
             else:
                 return False
@@ -182,7 +183,7 @@ class RLRedCampaign(ARTCampaign):
         self.action_space.reset(entry_host.name)
 
     def run_action(self, target_host: Host, art_action) -> Tuple[RedActionResults, Type[Technique]]:
-        self.leader = ["server01", "server02", "server03", "decoy01", "decoy02"]
+        self.leader = self.network.get_all_hostnames()
 
         technique = art_action()
         atomic_test = self.atomic_test[art_action.get_name()]

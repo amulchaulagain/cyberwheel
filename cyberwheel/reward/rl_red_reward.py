@@ -28,10 +28,11 @@ class RLRedReward(Reward):
         blue_id: str = -1,
         blue_recurring: int = 0,
     ) -> int | float:
-        target_host_name = target_host.name
+        is_valid = True # "server" in target_host.host_type.name.lower()
+        #target_host_name = target_host.name
         decoy = target_host.decoy
         if (
-            red_success and not decoy and target_host_name in self.valid_targets
+            red_success and not decoy and is_valid
         ):  # If red action succeeded on a real Host
             if red_action == "LinuxLateralMovement":
                 r = 0
@@ -39,9 +40,10 @@ class RLRedReward(Reward):
                 r = self.red_rewards[red_action][0]
         elif red_success and decoy:
             if red_action == "LinuxLateralMovement":
-                r = -500
+                r = -2
             else:
-                r = -500  # -2 * self.red_rewards[red_action][0]
+                r = -20 # * self.red_rewards[red_action][0]
+            #print("red attacked a decoy")
         else:
             r = 0
 
@@ -62,6 +64,8 @@ class RLRedReward(Reward):
             self.remove_recurring_blue_action(blue_id)
         elif blue_recurring == 1:
             self.add_recurring_blue_action(blue_id, blue_action)
+
+        #print(f"red: {r}\nblue: {b}\n{red_action}\n{target_host_name}\n")
 
         return r + b + self.sum_recurring()
 

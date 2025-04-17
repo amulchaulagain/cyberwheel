@@ -5,6 +5,7 @@ from typing import Dict, List, Iterable
 import yaml
 import numpy as np
 import importlib
+import math
 
 from .cyberwheel import Cyberwheel
 from cyberwheel.blue_agents import DynamicBlueAgent, InactiveBlueAgent
@@ -68,7 +69,8 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
 
         if args.valid_targets == "servers":
             #valid_targets = [h.name for h in self.network.get_all_server_hosts()] # TODO
-            valid_targets = ["server01", "server02", "server03", "decoy01", "decoy02"]
+            #valid_targets = ["server01", "server02", "server03", "decoy01", "decoy02"]
+            valid_targets = [h.name for h in self.network.get_all_hosts() if "server" in h.host_type.name.lower()]
         elif args.valid_targets == "users":
             valid_targets = [h.name for h in self.network.get_all_user_hosts()]
         elif type(args.valid_targets) is list:
@@ -113,6 +115,8 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             ).joinpath(args.detector_config)
             self.detector = DetectorHandler(detector_conf_file)
             self.observation_space = spaces.Box(0, 1, shape=(2 * self.network.size(),))
+            print(self.network.size())
+            print(self.max_action_space_size)
             self.alert_converter = HistoryObservation(
                 self.observation_space.shape, host_to_index_mapping(self.network)
             )
@@ -182,8 +186,14 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
             blue_id=blue_id,
             blue_recurring=blue_recurring,
         )
+        # TODO: Remove these after testing emulation stuff
+        #print(self.current_step) 
+        k = 0.01
+        reward = reward * math.exp(-k * self.current_step) if self.args.train_red else -1 * reward
 
-        #print(f"{red_action_name} - {red_action_src} to {red_action_dst} | {reward}")
+        if self.evaluation:
+            print(f"{red_action_name} - {red_action_src} to {red_action_dst} | {reward}")
+        #print(f"{blue_action_name} - {blue_action_success} | {reward}")
 
         self.total += reward
 
@@ -224,9 +234,9 @@ class CyberwheelRedRL(gym.Env, Cyberwheel):
         self.total = 0
         self.current_step = 0
         self.network.reset()
-
+        random_host = self.network.get_random_user_host()
         self.red_agent.reset(
-            self.red_agent.entry_host,
+            random_host,
             network=self.network,
             #leader=self.red_agent.leader, # TODO
         )
