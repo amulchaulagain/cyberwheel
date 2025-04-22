@@ -290,3 +290,11 @@ class EmulatorControl:
                 return False
 
         return True
+
+    def _host_has_multi_interface(self, src_host: Host) -> bool:
+        interfaces = self.net_config["interfaces"]
+        if src_host.name in interfaces.keys():
+            print(f"{src_host.name} has interface to {interfaces[src_host.name]}")
+            return True
+
+        return False
