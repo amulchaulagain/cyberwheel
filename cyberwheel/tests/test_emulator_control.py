@@ -84,5 +84,6 @@ class TestEmulatorControl(unittest.TestCase):
                 src_host=src_host, options=options
             )
             self.assertTrue(results.attack_success)
+            return
 
         self.assertTrue(False)
