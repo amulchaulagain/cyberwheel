@@ -73,6 +73,16 @@ class TestEmulatorControl(unittest.TestCase):
         src_host = Host(name="user01", subnet=user_subnet, host_type=None)
         src_host.set_ip_from_str("192.168.0.2")
 
-        emulator._host_has_multi_interface(src_host=src_host)
+        has_multi_interfaces = emulator._host_has_multi_interfaces(src_host=src_host)
 
-        self.assertTrue(True)
+        options = {
+            "start_host": 2,
+            "end_host": 10,
+        }  # will go to 2-254 if not defined
+        if has_multi_interfaces:
+            results = emulator._multi_subnet_ping_sweep(
+                src_host=src_host, options=options
+            )
+            self.assertTrue(results.attack_success)
+
+        self.assertTrue(False)

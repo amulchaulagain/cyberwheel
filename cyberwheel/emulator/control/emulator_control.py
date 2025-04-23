@@ -291,10 +291,48 @@ class EmulatorControl:
 
         return True
 
-    def _host_has_multi_interface(self, src_host: Host) -> bool:
+    def _host_has_multi_interfaces(self, src_host: Host) -> bool:
         interfaces = self.net_config["interfaces"]
         if src_host.name in interfaces.keys():
-            print(f"{src_host.name} has interface to {interfaces[src_host.name]}")
+            print(f"{src_host.name} has interface to {interfaces[src_host.name]}\n")
             return True
 
         return False
+
+    def _multi_subnet_ping_sweep(self, src_host: Host, options: Dict[str, Any] = {}):
+        interfaces = self.net_config["interfaces"]
+        connected_hosts = interfaces[src_host.name]
+        ip_ranges_to_scan = set()
+        all_discovered_hosts: list[Host] = []
+
+        for host_name in connected_hosts:
+            conn_host = self.network.get_node_from_name(host_name)
+            ip_range = conn_host.subnet.ip_range
+            ip_ranges_to_scan.add(ip_range)
+
+        action = EmulatePingSweep(
+            src_host=src_host, target_host=src_host, network=self.network
+        )
+        src_host_ip_range = src_host.subnet.ip_range
+
+        # Execute ping sweep on source host subnet
+        shell_cmd = action.build_emulator_cmd(
+            start_host=options["start_host"],
+            end_host=options["end_host"],
+            ip_range=src_host_ip_range,
+        )
+        action.emulator_execute(shell_cmd)
+        all_discovered_hosts.extend(action.action_results.discovered_hosts)
+
+        # Execute ping sweep on connected host's subnet
+        for ip_range in ip_ranges_to_scan:
+            shell_cmd = action.build_emulator_cmd(
+                start_host=options["start_host"],
+                end_host=options["end_host"],
+                ip_range=ip_range,
+            )
+            action.emulator_execute(shell_cmd)
+            all_discovered_hosts.extend(action.action_results.discovered_hosts)
+
+        action.action_results.discovered_hosts = all_discovered_hosts
+        return action.action_results
