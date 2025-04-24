@@ -6,7 +6,7 @@ device: cuda:1 # Which device to train on
 async_env: true # Whether to run the environments in parallel
 total_timesteps: 100000000 # Total number of steps to run throughout training
 num_saves: 100 # Number of times the model is evaluated and saved during the training run
-num_envs: 128 # Number of game environments to run at once (parallel if async_env == true)
+num_envs: 1 # Number of game environments to run at once (parallel if async_env == true)
 num_steps: 100 # Number of steps to run per episode
 eval_episodes: 10 # Number of episodes to run in an evaluation
 resume: false # When training with an existing model_name, whether to resume training that model, or overrwrite it
@@ -45,6 +45,6 @@ max_grad_norm: 0.5 # The maximum norm for the gradient clipping
 target_kl: null # The target KL Divergence Threshold
 
 # Weights & Biases Parameters (optional)
-track: true
+track: false
 wandb_project_name: Cyberwheel # The W&B project name if tracking
 wandb_entity: oeschsec # The W&B entity if tracking

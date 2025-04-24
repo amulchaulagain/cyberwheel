@@ -4,3 +4,4 @@ from .emulate_sudo_and_sudo_caching import EmulateSudoandSudoCaching
 from .emulate_data_encrypted_for_impact import EmulateDataEncryptedForImpact
 from .emulate_lateral_movement import EmulateLateralMovement
 from .emulate_red_action_base import EmulateRedAction
+from .emulate_ping import EmulatePing
