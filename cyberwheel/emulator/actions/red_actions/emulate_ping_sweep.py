@@ -28,7 +28,7 @@ class EmulatePingSweep(EmulateRedAction):
         self,
         start_host: int = 2,
         end_host: int = 254,
-        ip_range: str = "192.168.0.0/24",
+        ip_range: str = "",
     ):
         """
         Construct shell command to execute ping sweep script on emulator host VM.
@@ -41,7 +41,12 @@ class EmulatePingSweep(EmulateRedAction):
         Returns:
             shell_cmd - full shell command that runs in a subprocess.
         """
-        # TODO: update to parse network address
+        # if not provided subnet, use source host subnet ip_range for scan
+        if not ip_range:
+            src_host_subnet = self.src_host.subnet
+            ip_range = src_host_subnet.ip_range
+
+        # remove CIDR
         ip_split = ip_range.split(".")
         subnet = ".".join(ip_split[:-1])  # drop last element
 

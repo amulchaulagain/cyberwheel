@@ -36,7 +36,7 @@ class TestEmulatorRedActions(unittest.TestCase):
         print(red_action.__class__.get_name())
 
         ping_sweep_cmd = red_action.build_emulator_cmd(
-            start_host=3, end_host=6, ip_range="192.168.0.0/24"
+            start_host=3, end_host=9, ip_range="192.168.0.0/24"
         )
 
         results = red_action.emulator_execute(ping_sweep_cmd)
@@ -84,8 +84,8 @@ class TestEmulatorRedActions(unittest.TestCase):
     def test_lateral_movement(self) -> None:
         """Test data lateral movement in emulator"""
         attacker = Host(name="user01", subnet=subnet, host_type=None)
-        user_host = Host(name="user02", subnet=subnet, host_type=None)
-        user_host.set_ip_from_str("192.168.0.3")
+        user_host = Host(name="decoy01", subnet=subnet, host_type=None)
+        user_host.set_ip_from_str("192.168.0.8")
 
         red_action = EmulateLateralMovement(src_host=attacker, target_host=user_host)
         print(red_action.__class__.get_name())

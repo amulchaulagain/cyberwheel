@@ -21,7 +21,6 @@ from cyberwheel.red_actions.red_base import RedActionResults
 from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.host import Host
 from cyberwheel.network.network_base import Network
-from cyberwheel.network.subnet import Subnet
 from typing import Any, Dict, List, Iterable
 import pathlib
 import subprocess
@@ -41,11 +40,13 @@ class EmulatorControl:
 
     emu_config = read_config(EMULATOR_CONFIG_PATH, EMULATOR_CONFIG)
 
-    def __init__(self, network: Network, subnet: Subnet, network_config_name: str):
+    def __init__(self, network: Network, network_config_name: str):
         self.network = network
-        self.subnet = subnet
         self.net_config_name = network_config_name
         self.net_config = read_config(NETWORK_CONFIGS_PATH, network_config_name)
+        self.detector = EmulatorDectector(
+            network_config=network_config_name, network=network
+        )
 
     def init_hosts(self) -> bool:
         """Setup hosts and run scripts before an experiment begins."""
@@ -128,17 +129,22 @@ class EmulatorControl:
                     src_host=src_host, target_host=dst_host, network=self.network
                 )
 
-                # limit ping sweep to the number of hosts
-                all_host_names = self._get_host_names()
+                # Get ip_range of from subnet src_host is on
+                src_host_subnet = src_host.subnet
+                ip_range = src_host_subnet.ip_range
+
+                # Limit ping sweep range to 'xxx.xxx.xxx.2-20' to prevent long action time.
+                # If number of hosts on the subnet is greater, update end_host.
                 options = {
                     "start_host": 2,
-                    "end_host": len(all_host_names),
+                    "end_host": 20,
                 }  # will go to 2-254 if not defined
 
+                # NOTE: ip_range will come from src_host if not provided
                 shell_cmd = action.build_emulator_cmd(
                     start_host=options["start_host"],
                     end_host=options["end_host"],
-                    ip_range=self.subnet.ip_range,
+                    ip_range=ip_range,
                 )
                 return action.emulator_execute(shell_cmd)
             case "Network Service Discovery":
@@ -175,12 +181,8 @@ class EmulatorControl:
         Any action done to a decoy generates an alert.
         """
 
-        emu_detector = EmulatorDectector(
-            network_config=self.net_config_name, subnet=self.subnet
-        )
-
         print("\n")
-        alerts = emu_detector.obs()
+        alerts = self.detector.obs()
         print(f"alert count: {len(list(alerts))}")
         return alerts
 
@@ -288,3 +290,49 @@ class EmulatorControl:
                 return False
 
         return True
+
+    def _host_has_multi_interfaces(self, src_host: Host) -> bool:
+        interfaces = self.net_config["interfaces"]
+        if src_host.name in interfaces.keys():
+            print(f"{src_host.name} has interface to {interfaces[src_host.name]}\n")
+            return True
+
+        return False
+
+    def _multi_subnet_ping_sweep(self, src_host: Host, options: Dict[str, Any] = {}):
+        interfaces = self.net_config["interfaces"]
+        connected_hosts = interfaces[src_host.name]
+        ip_ranges_to_scan = set()
+        all_discovered_hosts: list[Host] = []
+
+        for host_name in connected_hosts:
+            conn_host = self.network.get_node_from_name(host_name)
+            ip_range = conn_host.subnet.ip_range
+            ip_ranges_to_scan.add(ip_range)
+
+        action = EmulatePingSweep(
+            src_host=src_host, target_host=src_host, network=self.network
+        )
+        src_host_ip_range = src_host.subnet.ip_range
+
+        # Execute ping sweep on source host subnet
+        shell_cmd = action.build_emulator_cmd(
+            start_host=options["start_host"],
+            end_host=options["end_host"],
+            ip_range=src_host_ip_range,
+        )
+        action.emulator_execute(shell_cmd)
+        all_discovered_hosts.extend(action.action_results.discovered_hosts)
+
+        # Execute ping sweep on connected host's subnet
+        for ip_range in ip_ranges_to_scan:
+            shell_cmd = action.build_emulator_cmd(
+                start_host=options["start_host"],
+                end_host=options["end_host"],
+                ip_range=ip_range,
+            )
+            action.emulator_execute(shell_cmd)
+            all_discovered_hosts.extend(action.action_results.discovered_hosts)
+
+        action.action_results.discovered_hosts = all_discovered_hosts
+        return action.action_results

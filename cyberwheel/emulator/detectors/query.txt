@@ -7,7 +7,8 @@
             {\"term\": {\"process.args\": \"ping\"}},
             {\"term\": {\"process.args\": \"nmap\"}},
             {\"term\": {\"process.args\": \"/etc/sudoers\"}},
-            {\"term\": {\"process.args\": \"ccencrypt\"}}
+            {\"term\": {\"process.args\": \"ccencrypt\"}},
+            {\"term\": {\"process.args\": \"ssh\"}}
           ]}
         },{
           \"range\": {
