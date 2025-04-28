@@ -137,6 +137,11 @@ class EmulatorControl:
 
         match action_name:
             case "Remote System Discovery":
+                """
+                This action will execute ping sweep and subsequent pings
+                if the host as multiple network interfaces with connected hosts.
+                Extra interfaces are defined in the network config.
+                """
                 action = EmulatePingSweep(
                     src_host=src_host, target_host=dst_host, network=self.network
                 )
@@ -332,9 +337,10 @@ class EmulatorControl:
         return True
 
     def _host_has_multi_interfaces(self, src_host: Host) -> bool:
+        """Return True if host as multiple interfaces"""
         interfaces = self.net_config["interfaces"]
         if src_host.name in interfaces.keys():
-            print(f"{src_host.name} has interface to {interfaces[src_host.name]}\n")
+            print(f"{src_host.name} has interface to {interfaces[src_host.name]}")
             return True
 
         return False
