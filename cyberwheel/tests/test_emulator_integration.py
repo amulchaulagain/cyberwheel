@@ -15,7 +15,7 @@ from importlib.resources import files
 # from cyberwheel.network.subnet import Subnet
 
 ################### Build Network From Config ###################
-NETWORK_CONFIG = "integration_config.yaml"
+NETWORK_CONFIG = "example_config.yaml"
 config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)
 network = Network.create_network_from_yaml(config_path)
 user_subnet = network.get_all_subnets()[0]
@@ -69,6 +69,26 @@ class TestEmulatorIntegration(unittest.TestCase):
         # NOTE: ping sweep range defined in emulator_control.py
         red_action_return = self.emulator.run_red_action(
             action_name, src_host=src_host, dst_host=src_host
+        )
+        self.assertTrue(red_action_return.attack_success)
+
+    def test_run_multi_subnet_ping_sweep(self) -> None:
+        """
+        Test executing multi-subnet ping sweep, in the emulator.
+        """
+        # action_name = "Remote System Discovery"
+        src_host = Host(name="user01", subnet=user_subnet, host_type=None)
+
+        # NOTE: ping sweep range defined in emulator_control.py
+        options = {
+            "start_host": 2,
+            "end_host": 10,
+        }  # will go to 2-254 if not defined
+        red_action_return = self.emulator._multi_subnet_ping_sweep(
+            src_host=src_host, options=options
+        )
+        print(
+            f"all discovered hosts: {[host.name for host in red_action_return.discovered_hosts]}"
         )
         self.assertTrue(red_action_return.attack_success)
 
