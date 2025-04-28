@@ -76,16 +76,15 @@ class TestEmulatorIntegration(unittest.TestCase):
         """
         Test executing multi-subnet ping sweep, in the emulator.
         """
-        # action_name = "Remote System Discovery"
+        action_name = "Remote System Discovery"
         src_host = Host(name="user01", subnet=user_subnet, host_type=None)
-
-        # NOTE: ping sweep range defined in emulator_control.py
         options = {
             "start_host": 2,
             "end_host": 10,
-        }  # will go to 2-254 if not defined
-        red_action_return = self.emulator._multi_subnet_ping_sweep(
-            src_host=src_host, options=options
+        }
+
+        red_action_return = self.emulator.run_red_action(
+            action_name, src_host=src_host, dst_host=src_host, options=options
         )
         print(
             f"all discovered hosts: {[host.name for host in red_action_return.discovered_hosts]}"

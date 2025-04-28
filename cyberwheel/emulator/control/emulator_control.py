@@ -147,10 +147,11 @@ class EmulatorControl:
 
                 # Limit ping sweep range to 'xxx.xxx.xxx.2-20' to prevent long action time.
                 # If number of hosts on the subnet is greater, update end_host.
-                options = {
-                    "start_host": 2,
-                    "end_host": 20,
-                }  # will go to 2-254 if not defined
+                if not options:
+                    options = {
+                        "start_host": 2,
+                        "end_host": 10,
+                    }  # will go to 2-254 if not defined
 
                 # NOTE: ip_range will come from src_host if not provided
                 shell_cmd = action.build_emulator_cmd(
@@ -158,7 +159,34 @@ class EmulatorControl:
                     end_host=options["end_host"],
                     ip_range=ip_range,
                 )
-                return action.emulator_execute(shell_cmd)
+                action_results = action.emulator_execute(shell_cmd)
+
+                if not self._host_has_multi_interfaces(src_host):
+                    return action_results
+
+                # Host has another interface defined in config and will ping each connected host
+                interfaces = self.net_config["interfaces"]
+                connected_hosts = interfaces[src_host.name]
+
+                # Collect all discovered hosts from original ping sweep
+                all_discovered_hosts: list[Host] = []
+                all_discovered_hosts.extend(action.action_results.discovered_hosts)
+
+                # Execute ping
+                shell_cmd = action.build_emulator_cmd()
+                for host_name in connected_hosts:
+                    conn_host = self.network.get_node_from_name(host_name)
+                    ping = EmulatePing(
+                        src_host=src_host, target_host=conn_host, network=self.network
+                    )
+
+                    shell_cmd = ping.build_emulator_cmd()
+                    ping.emulator_execute(shell_cmd)
+                    all_discovered_hosts.extend(ping.action_results.discovered_hosts)
+
+                # Combine all discovered hosts
+                action.action_results.discovered_hosts = all_discovered_hosts
+                return action.action_results
             case "Network Service Discovery":
                 action = EmulatePortScan(src_host=src_host, target_host=dst_host)
                 shell_cmd = action.build_emulator_cmd()
@@ -310,41 +338,3 @@ class EmulatorControl:
             return True
 
         return False
-
-    def _multi_subnet_ping_sweep(self, src_host: Host, options: Dict[str, Any] = {}):
-        ping_sweep = EmulatePingSweep(
-            src_host=src_host, target_host=src_host, network=self.network
-        )
-        src_host_ip_range = src_host.subnet.ip_range
-
-        # Execute ping sweep
-        shell_cmd = ping_sweep.build_emulator_cmd(
-            start_host=options["start_host"],
-            end_host=options["end_host"],
-            ip_range=src_host_ip_range,
-        )
-        ping_sweep.emulator_execute(shell_cmd)
-
-        # College discovered hosts
-        shell_cmd = ping_sweep.build_emulator_cmd()
-        all_discovered_hosts: list[Host] = []
-        all_discovered_hosts.extend(ping_sweep.action_results.discovered_hosts)
-
-        interfaces = self.net_config["interfaces"]
-        connected_hosts = interfaces[src_host.name]
-
-        # Execute ping
-        shell_cmd = ping_sweep.build_emulator_cmd()
-        for host_name in connected_hosts:
-            conn_host = self.network.get_node_from_name(host_name)
-            ping = EmulatePing(
-                src_host=src_host, target_host=conn_host, network=self.network
-            )
-
-            shell_cmd = ping.build_emulator_cmd()
-            ping.emulator_execute(shell_cmd)
-            all_discovered_hosts.extend(ping.action_results.discovered_hosts)
-
-        # Combine all discovered hosts
-        ping_sweep.action_results.discovered_hosts = all_discovered_hosts
-        return ping_sweep.action_results
