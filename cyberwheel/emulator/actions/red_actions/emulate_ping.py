@@ -25,24 +25,14 @@ class EmulatePing(EmulateRedAction):
         self.network = network
         self.host = None
 
-    def build_emulator_cmd(
-        self,
-        decoy_ip: int = 2,
-    ):
+    def build_emulator_cmd(self):
         """
-        Construct shell command to execute ping sweep script on emulator host VM.
-
-        Argruments:
-            start_host - start ip range value (e.g. 1)
-            end_host - end ip range value (e.g. start_host< value <=254)
-            subnet - host subnet (e.g. 192.168.1)
+        Construct shell command to execute ping single sweep in the emulator.
 
         Returns:
             shell_cmd - full shell command that runs in a subprocess.
         """
-        # TODO: update to parse network address
-        action_cmd = f"ping -c 1 {decoy_ip} >/dev/null && echo {decoy_ip}"
-
+        action_cmd = f"ping -c 1 {self.target_host.ip_address} >/dev/null && echo {self.target_host.ip_address}"
         shell_cmd = self.prefix_emulator_cmd(action_cmd)
         return shell_cmd
 
