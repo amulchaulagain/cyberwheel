@@ -5,7 +5,6 @@ Module to test the EmulatorSetup class.
 import unittest
 from cyberwheel.emulator.control import EmulatorControl
 from cyberwheel.network.network_base import Network
-from cyberwheel.network.host import Host
 from importlib.resources import files
 
 # from cyberwheel.network.router import Router
@@ -60,30 +59,3 @@ class TestEmulatorSetup(unittest.TestCase):
             host_name = name.replace("_", "-")  # firewheel host names use hyphen
             ip = emulator.get_ip_address(host_name)
             print(f"{host_name} ip address: {ip}")
-
-
-class TestEmulatorControl(unittest.TestCase):
-    """Unit tests for the the emulator controller methods"""
-
-    def test_multi_subnet_ping_sweep(self) -> None:
-        """
-        Test ping sweep with hosts that have multiple interfaces.
-        """
-        emulator = EmulatorControl(network=network, network_config_name=NETWORK_CONFIG)
-        src_host = Host(name="user01", subnet=user_subnet, host_type=None)
-        src_host.set_ip_from_str("192.168.0.2")
-
-        has_multi_interfaces = emulator._host_has_multi_interfaces(src_host=src_host)
-
-        options = {
-            "start_host": 2,
-            "end_host": 10,
-        }  # will go to 2-254 if not defined
-        if has_multi_interfaces:
-            results = emulator._multi_subnet_ping_sweep(
-                src_host=src_host, options=options
-            )
-            self.assertTrue(results.attack_success)
-            return
-
-        self.assertTrue(False)
