@@ -171,7 +171,9 @@ class EmulatorDectector(Detector):
 
             # get the source Host
             src_hostname = hit["hostname"]
-            src_host = self.network.get_node_from_name(src_hostname)
+            # hosts defined with underscores in config file (dashes used in emulator)
+            src_hostname_underscore = src_hostname.replace("-", "_")
+            src_host = self.network.get_node_from_name(src_hostname_underscore)
 
             # find decoy in network topology
             decoys = self.network.get_decoys()

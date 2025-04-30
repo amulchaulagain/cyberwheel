@@ -45,7 +45,11 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         self.args = args
         self.max_steps = 30
 
-        valid_targets = [h.name for h in self.network.get_all_hosts() if "server" in h.host_type.name.lower()] + [
+        valid_targets = [
+            h.name
+            for h in self.network.get_all_hosts()
+            if "server" in h.host_type.name.lower()
+        ] + [
             "decoy01",
             "decoy02",
         ]
@@ -67,13 +71,23 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         self.blue_agent = DynamicBlueAgent(self.network, args)
 
         self.observation_space = spaces.Box(0, 1, shape=(2 * self.network.size(),))
-        self.blue_alert_converter = HistoryObservation(self.observation_space.shape, host_to_index_mapping(self.network))
+        self.blue_alert_converter = HistoryObservation(
+            self.observation_space.shape, host_to_index_mapping(self.network)
+        )
         self.blue_max_action_space_size = self.network.get_num_subnets() * 2
-        self.action_space = self.blue_agent.create_action_space(self.blue_max_action_space_size)
-        
-        self.red_observation_space = spaces.Box(0, 2, shape=(len(self.red_agent.get_observation_space()),))
-        self.red_max_action_space_size = self.network.size() * self.red_agent.action_space.num_actions * 2
-        self.red_action_space = self.red_agent.action_space.create_action_space(self.red_max_action_space_size)
+        self.action_space = self.blue_agent.create_action_space(
+            self.blue_max_action_space_size
+        )
+
+        self.red_observation_space = spaces.Box(
+            0, 2, shape=(len(self.red_agent.get_observation_space()),)
+        )
+        self.red_max_action_space_size = (
+            self.network.size() * self.red_agent.action_space.num_actions * 2
+        )
+        self.red_action_space = self.red_agent.action_space.create_action_space(
+            self.red_max_action_space_size
+        )
 
         reward_function = args.reward_function
         rfm = importlib.import_module("cyberwheel.reward")
@@ -87,7 +101,6 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         self.evaluation = args.evaluation
         self.red_action = None
 
-
     def step(self, blue_action):
         """
         Steps through environment.
@@ -97,48 +110,68 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         4. Convert Alerts from Detector into observation space
         5. Return obs and related metadata
         """
-        #print([h.name for h in self.network.get_all_hosts()])
+        # print([h.name for h in self.network.get_all_hosts()])
         blue_action_info = self.blue_agent.action_space.select_action(blue_action)
         blue_action_name = blue_action_info.name
 
-        blue_action_src = blue_action_info.args[0] if blue_action_name != "nothing" else None
+        blue_action_src = (
+            blue_action_info.args[0] if blue_action_name != "nothing" else None
+        )
 
         print(f"\n\nEmulator Blue Action: {blue_action_name} on {blue_action_src}")
-        blue_action_result = self.emulator.run_blue_action(blue_action_name, blue_action_src, id=self.current_step)  # TODO
+        blue_action_result = self.emulator.run_blue_action(
+            blue_action_name, blue_action_src, id=self.current_step
+        )  # TODO
 
         blue_action_success = blue_action_result.success
 
         # TODO: Use the following action metadata to execute the correct command in emulator
         red_agent_result = self.red_agent.select_action(self.red_action)
 
-        #red_action_result, red_action_type = self.red_agent.run_action(red_agent_result.target_host, red_agent_result.action)
+        # red_action_result, red_action_type = self.red_agent.run_action(red_agent_result.target_host, red_agent_result.action)
         red_action_name = red_agent_result.action.get_name()
         red_action_src = red_agent_result.src_host
         red_action_dst = red_agent_result.target_host
         print(f"Validated Success: {red_agent_result.success}")
         if red_agent_result.success:
-            red_action_result = self.emulator.run_red_action(red_action_name, red_action_src, red_action_dst, id=self.current_step)  # TODO
+            red_action_result = self.emulator.run_red_action(
+                red_action_name, red_action_src, red_action_dst, id=self.current_step
+            )  # TODO
             red_action_success = red_action_result.attack_success
         else:
-            red_action_result = RedActionResults(red_agent_result.src_host, red_agent_result.target_host)
+            red_action_result = RedActionResults(
+                red_agent_result.src_host, red_agent_result.target_host
+            )
             red_action_success = False
-        
-        if blue_action_success and blue_action_name == "deploy_decoy" and not (red_action_name == "Remote System Discovery" and red_action_success):
-            ping_decoy = EmulatePing(src_host=red_action_src, target_host=red_action_dst, network=self.network)
-            cmd = ping_decoy.build_emulator_cmd(str(blue_action_result.host.ip_address))
+
+        if (
+            blue_action_success
+            and blue_action_name == "deploy_decoy"
+            and not (
+                red_action_name == "Remote System Discovery" and red_action_success
+            )
+        ):
+            ping_decoy = EmulatePing(
+                src_host=red_action_src,
+                target_host=blue_action_result.host,
+                network=self.network,
+            )
+            cmd = ping_decoy.build_emulator_cmd()
             result = ping_decoy.emulator_execute(cmd)
             self.red_agent.add_host(blue_action_result.host)
-        
+
         red_action_result.action = red_agent_result.action
-        
+
         red_obs_vec = self.red_agent.resolve_action(red_action_result)
 
-        print(f"\n\nEmulator Red Action: {red_action_name} from {red_action_src.name} -> {red_action_dst.name} - {red_action_success}")
+        print(
+            f"\n\nEmulator Red Action: {red_action_name} from {red_action_src.name} -> {red_action_dst.name} - {red_action_success}"
+        )
 
         blue_obs_vec = self.blue_alert_converter.create_obs_vector(
             self.emulator.get_siem_obs()
         )  # TODO
-        #red_obs_vec = self.red_agent.get_observation_space()
+        # red_obs_vec = self.red_agent.get_observation_space()
         # obs_vec = [0] * (2 * len(self.network.get_all_hosts()))
 
         reward = self.reward_calculator.calculate_reward(
@@ -171,7 +204,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
                 "blue_action_success": blue_action_success,
                 "red_action_success": red_action_success,
                 "red_obs": red_obs_vec,
-                "blue_obs": blue_obs_vec
+                "blue_obs": blue_obs_vec,
             },
         )
 

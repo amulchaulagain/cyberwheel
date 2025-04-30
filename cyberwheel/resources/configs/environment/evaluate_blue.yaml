@@ -1,16 +1,20 @@
 # Evaluation Parameters
-red_agent: server_encryption.yaml
+red_agent: rl_red_campaign.yaml
 blue_agent: dynamic_blue_agent.yaml
 environment: CyberwheelEmulator
-valid_targets:
+valid_targets: servers
 train_red: false
 train_blue: true
+red_model: EmuRedRandom #Smart
+blue_model: SmartEmuBlue1
 campaign: true
 seed: 1
 
 checkpoint: agent
 download_model: true
-run: wimxl5kg
+# run: wimxl5kg
+red_run: 8d05enq4
+blue_run: wimxl5kg
 wandb_project_name: Cyberwheel # required if download_model is true
 wandb_entity: oeschsec # required if download_model is true
 
