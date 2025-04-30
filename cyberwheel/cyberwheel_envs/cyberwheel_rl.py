@@ -13,6 +13,7 @@ from cyberwheel.utils import YAMLConfig, HybridSetList
 from cyberwheel.utils.set_seed import set_seed
 
 import pandas as pd
+import random
 
 
 class CyberwheelRL(gym.Env, Cyberwheel):
@@ -22,7 +23,9 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         self,
         args: YAMLConfig,
         network: Network = None,
-        evaluation: bool = False
+        evaluation: bool = False,
+        networks : dict = {},
+        rank: int = 0
     ):
         """
         The CyberwheelRL class is used to define the Cyberwheel environment. It allows you to use a YAML
@@ -39,13 +42,13 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             - Default: None
         """
         super().__init__(args, network=network)
-
+        self.networks = networks
         reward_function = args.reward_function
         rfm = importlib.import_module("cyberwheel.reward")
 
         self.reward_calculator = getattr(rfm, reward_function)(
-            self.red_agent.get_reward_map(), 
-            self.blue_agent.get_reward_map(),
+            self.red_agent, 
+            self.blue_agent,
             self.args.valid_targets,
             self.network)
 
@@ -62,7 +65,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
             self.observation_space = spaces.MultiDiscrete(np.array([3] * self.red_agent.observation.max_size))
 
-            self.max_action_space_size = len(self.network.hosts) * self.red_agent.action_space.num_actions * 2
+            self.max_action_space_size = 500 * self.red_agent.action_space.num_actions * 2 # TODO: num_hosts
             self.action_space = self.red_agent.action_space.create_action_space(self.max_action_space_size)
             self.reward_sign = -1
         else:
@@ -73,7 +76,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
             self.observation_space = spaces.MultiBinary(self.blue_agent.observation.shape)
 
-            self.max_action_space_size = len(self.network.subnets) * 2
+            self.max_action_space_size = 60 * 2 # TODO: num_subnets
             self.action_space = self.blue_agent.create_action_space(self.max_action_space_size)
             self.reward_sign = 1
 
@@ -129,15 +132,21 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         if seed is not None:
             set_seed(seed)
         self.current_step = 0
+
         self.network.reset()
-        self.red_agent.reset()
-        self.blue_agent.reset()
+        network = random.choice(list(self.networks.values()))
+        print(f"Random Network: {network.name}")
+
+        self.network = network
+
+        self.red_agent.reset(network, self.args.service_mapping[network.name])
+        self.blue_agent.reset(network)
         self.reward_calculator.reset()
         self.total = 0
         if self.args.train_red:
             return self.red_agent.observation.obs_vec, {}
         else:
-            return self.blue_agent.observation.reset(), {} # TODO
+            return self.blue_agent.observation.obs_vec, {} # TODO
         
     def close(self) -> None:
         pass

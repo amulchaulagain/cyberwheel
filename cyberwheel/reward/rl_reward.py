@@ -6,14 +6,16 @@ from cyberwheel.utils.hybrid_set_list import HybridSetList
 class RLReward(Reward):
     def __init__(
         self,
-        red_rewards: RewardMap,
-        blue_rewards: RewardMap,
+        red_agent,
+        blue_agent,
         valid_targets: list[str] | str,
-        network: Network
+        network: Network,
     ) -> None:
-        super().__init__(red_rewards, blue_rewards)
+        super().__init__(red_agent.get_reward_map(), blue_agent.get_reward_map())
         self.valid_targets = valid_targets
         self.network = network
+        self.red_agent = red_agent
+        self.blue_agent = blue_agent
 
     def calculate_reward(
         self,

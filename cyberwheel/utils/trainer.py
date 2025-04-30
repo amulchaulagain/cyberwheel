@@ -22,7 +22,7 @@ class Trainer:
         self.env = getattr(m, args.environment)
         self.deterministic = os.getenv("CYBERWHEEL_DETERMINISTIC", "False").lower() in ('true', '1', 't')
         self.args.deterministic = self.deterministic
-        self.seed = 0
+        self.seed = args.seed
     def make_env(self, rank, evaluation: bool = False):
         """
         Utility function for multiprocessed env.
@@ -34,10 +34,11 @@ class Trainer:
 
         def _init():
             if evaluation:
-                config_path = files("cyberwheel.data.configs.network").joinpath(self.args.network_config)
-                env = self.env(self.args, network=Network.create_network_from_yaml(config_path), evaluation=True)
+                config_file = self.args.network_config if isinstance(self.args.network_config, str) else random.choice(self.args.network_config)
+                config_path = files("cyberwheel.data.configs.network").joinpath(config_file) # TODO: If multiple network configs, run 1 eval for each network
+                env = self.env(self.args, network=Network.create_network_from_yaml(config_path), evaluation=True, networks={name: net[0] for name, net in self.networks.items()})
             else:
-                env = self.env(self.args, network=self.networks[rank], evaluation=False)
+                env = self.env(self.args, network=random.choice(list(self.networks.values()))[rank], evaluation=False, networks={name: net[rank] for name, net in self.networks.items()})
             self.max_action_space_size = env.max_action_space_size
             env.reset()
             env = gym.wrappers.RecordEpisodeStatistics(
@@ -89,24 +90,27 @@ class Trainer:
     def run_evals(self, model, globalstep):
         """Evaluate 'model' on tasks listed in 'eval_queue' in a separate process"""
         eval_device = torch.device("cpu")
-
-        env_funcs = [self.make_env(i, evaluation=True) for i in range(1)]
-
-        # Load the agent
-        sample_env = gym.vector.SyncVectorEnv(env_funcs)
-        eval_agent = RLAgent(sample_env)
         model = torch.load(model, map_location=eval_device)
-        eval_agent.load_state_dict(model)
-        eval_agent.eval()
-        # Evaluate the agent
-        result = self.evaluate(eval_agent, sample_env)
-        # Store evaluation parameters and results
+        results = {}
+        for network_name in self.networks:
+            env_funcs = [self.make_env(i, evaluation=True) for i in range(1)]
+
+            # Load the agent
+            sample_env = gym.vector.SyncVectorEnv(env_funcs)
+            eval_agent = RLAgent(sample_env)
+            
+            eval_agent.load_state_dict(model)
+            eval_agent.eval()
+            # Evaluate the agent
+            result = self.evaluate(eval_agent, sample_env)
+            # Store evaluation parameters and results
+            results[network_name] = result
+            
         return (
-            self.args.network_config,
             self.args.decoy_config,
             self.args.reward_function,
             self.args.red_agent,
-            result,
+            results,
             globalstep,
         )
     
@@ -149,18 +153,29 @@ class Trainer:
         # Environment setup
 
         # Load network from yaml here
-        network_config = files("cyberwheel.data.configs.network").joinpath(
-            self.args.network_config
-        )
+        network_configs = []
+        if isinstance(self.args.network_config, str):
+            network_configs.append(self.args.network_config)
+        else:
+            for config in self.args.network_config:
+                network_configs.append(config)
+        
+        self.networks = {}
+        self.args.service_mapping = {}
+        for config in network_configs:
+            network_config = files("cyberwheel.data.configs.network").joinpath(
+                config
+            )
 
-        print(f"Building network: {self.args.network_config} ...")
+            print(f"Building network: {config} ...")
 
-        network = Network.create_network_from_yaml(network_config)
-        self.networks = [deepcopy(network) for i in range(self.args.num_envs)]
+            network = Network.create_network_from_yaml(network_config)
+            network_name = network.name
+            self.networks[network_name] = [deepcopy(network) for i in range(self.args.num_envs)]
 
-        print("Mapping attack validity to hosts...", end=" ")
-        self.args.service_mapping = get_service_map(network)
-        print("done")
+            print("Mapping attack validity to hosts...", end=" ")
+            self.args.service_mapping[network_name] = get_service_map(network)
+            print("done")
 
         print("Defining environment(s) and beginning training:", end="\n\n")
 
@@ -265,14 +280,13 @@ class Trainer:
         mean_rew = self.rewards.sum(axis=0).mean()
         print(f"global_step={self.global_step}, episodic_return={mean_rew}")
         self.writer.add_scalar("charts/episodic_return", mean_rew, self.global_step)
+        
         self.writer.add_scalar(
             f"evaluation/episodic_runtime",
             episode_time,
             self.global_step,
         )
         
-
-
         # bootstrap value if not done
         # Calculate advantages used to optimize the policy and returns which are compared to values to optimize the critic.
         with torch.no_grad():
@@ -411,21 +425,21 @@ class Trainer:
 
             # Log eval results
             (
-                eval_network_config,
                 eval_decoy_config,
                 eval_reward_function,
                 eval_red_agent,
                 eval_return,
                 eval_step,
             ) = eval_results
-            self.writer.add_scalar(
-                f"evaluation/{eval_network_config.split('.')[0]}_{eval_decoy_config}|{eval_reward_function}reward__{eval_red_agent}_episodic_return",
-                eval_return,
-                eval_step,
-            )
-            self.writer.add_scalar(
-                "charts/eval_time", int(time.time() - start_eval), self.global_step
-            )
+            for network_name in eval_return:
+                self.writer.add_scalar(
+                    f"evaluation/{network_name}_{eval_decoy_config}|{eval_reward_function}reward__{eval_red_agent}_episodic_return",
+                    eval_return[network_name],
+                    eval_step,
+                )
+                self.writer.add_scalar(
+                    "charts/eval_time", int(time.time() - start_eval), self.global_step
+                )
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         self.writer.add_scalar(

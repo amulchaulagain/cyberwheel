@@ -33,7 +33,7 @@ class Evaluator:
         self.env = getattr(m, args.environment)
         self.deterministic = os.getenv("CYBERWHEEL_DETERMINISTIC", "False").lower() in ('true', '1', 't')
         self.args.deterministic = self.deterministic
-        self.seed = 0
+        self.seed = args.seed
 
     def make_env(self, rank, network: Network):
         """

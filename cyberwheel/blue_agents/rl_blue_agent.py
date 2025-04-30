@@ -73,7 +73,7 @@ class RLBlueAgent(BlueAgent):
         self.config = files("cyberwheel.data.configs.blue_agent").joinpath(args.blue_agent)
         self.network = network
 
-        self.observation = BlueObservation(2 * len(self.network.hosts), host_to_index_mapping(self.network, self.args.deterministic), args.detector_config)
+        self.observation = BlueObservation(500, host_to_index_mapping(self.network, self.args.deterministic), args.detector_config)
 
         self.configs: Dict[str, Any] = {}
         self.action_space: ActionSpace = None
@@ -157,6 +157,7 @@ class RLBlueAgent(BlueAgent):
                     action_configs[name] = contents
                 else:
                     action_configs[name] = self.configs[config]
+                action_configs["max_decoys"] = self.args.max_decoys
 
             action_kwargs = {}
             for sd in action_info.shared_data:
@@ -203,7 +204,8 @@ class RLBlueAgent(BlueAgent):
         alerts = self.observation.detector.obs([red_agent_result.action_results.detector_alert])
         return self.observation.create_obs_vector(alerts)
     
-    def reset(self) -> None:
+    def reset(self, network: Network) -> None:
         for v in self.shared_data.values():
             v.clear()
-        self.observation.reset()
+        self.network = network
+        self.observation.reset(host_to_index_mapping(self.network, self.args.deterministic))

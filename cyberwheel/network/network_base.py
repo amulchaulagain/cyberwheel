@@ -222,6 +222,7 @@ class Network:
             config = yaml.safe_load(yaml_file)
 
         # Create an instance of the Network class
+        #print(config)
         network = cls(name=config["network"].get("name"))
 
         conf_dir = files("cyberwheel.data.configs.host_definitions")

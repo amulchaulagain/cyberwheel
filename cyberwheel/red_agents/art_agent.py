@@ -98,23 +98,22 @@ class ARTAgent(RedAgent):
         self.unimpacted_hosts = HybridSetList()
         self.unknowns = HybridSetList()
         self.campaign = args.campaign if hasattr(args, 'campaign') else False
-        service_mapping = args.service_mapping if hasattr(args, 'service_mapping') else {}
 
-        if service_mapping == {} and not self.campaign and map_services:
-            self.services_map = {}
+        self.service_mapping = args.service_mapping[self.network.name] if hasattr(args, 'service_mapping') else {}
+
+        if self.service_mapping == {} and not self.campaign and map_services:
             self.tracked_hosts = HybridSetList()
             for _, host in self.network.hosts.items():
                 self.tracked_hosts.add(host.name)
-                self.services_map[host.name] = {}
+                self.service_mapping[host.name] = {}
                 for kcp in self.all_kcps:
-                    self.services_map[host.name][kcp] = []
+                    self.service_mapping[host.name][kcp] = []
                     kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
                     for mid in kcp_valid_techniques:
                         technique = art_techniques.technique_mapping[mid]
                         if len(host.host_type.cve_list & technique.cve_list) > 0:
-                            self.services_map[host.name][kcp].append(mid)
+                            self.service_mapping[host.name][kcp].append(mid)
         else:
-            self.services_map = service_mapping
             self.tracked_hosts = HybridSetList(service_mapping.keys())
     
     def from_yaml(self) -> None:
@@ -164,6 +163,8 @@ class ARTAgent(RedAgent):
         """
         current_hosts = self.network.hosts.keys()
 
+        print(f"Decoys: {list(self.network.decoys.keys())}")
+
         new_hosts = current_hosts - self.tracked_hosts.data_set
 
         removed_hosts = (self.unknowns.data_set | self.unimpacted_hosts.data_set | self.unimpacted_servers.data_set) - self.network.hosts.keys()
@@ -180,7 +181,7 @@ class ARTAgent(RedAgent):
         for host_name in new_hosts:
             h: Host = self.network.hosts[host_name]
             if not self.campaign:
-                self.services_map[host_name] = self.get_valid_techniques_by_host(
+                self.service_mapping[host_name] = self.get_valid_techniques_by_host(
                     h, self.all_kcps
                 )
             scanned_subnets = [
@@ -243,7 +244,7 @@ class ARTAgent(RedAgent):
             action_results = ARTLateralMovement(
                 self.current_host,
                 target_host,
-                self.services_map[target_host.name][ARTLateralMovement],
+                self.service_mapping[target_host.name][ARTLateralMovement],
             ).sim_execute()
             success = action_results.attack_success
             if success:
@@ -258,7 +259,7 @@ class ARTAgent(RedAgent):
             action(
                 self.current_host,
                 target_host,
-                self.services_map[target_host.name][action],
+                self.service_mapping[target_host.name][action],
             ).sim_execute(),
             action,
         )
@@ -272,6 +273,7 @@ class ARTAgent(RedAgent):
             *   Run an action on the target
             *   Handle any additional metadata and update history
         """
+        print(f"Service Mapping: {list(self.service_mapping.keys())}")
         self.handle_network_change()
 
         target_host = self.select_next_target()
@@ -293,6 +295,9 @@ class ARTAgent(RedAgent):
             # elif action == ARTPrivilegeEscalation:
             #    target_host.restored = False
         self.history.update_step(action, action_results)
+        print(f"Action: {action.get_name()}")
+        import time
+        time.sleep(1)
         return RedAgentResult(
             action, 
             source_host, 
@@ -359,10 +364,13 @@ class ARTAgent(RedAgent):
         """
         return self.reward_map
 
-    def reset(self):
+    def reset(self, network: Network, service_mapping: dict):
         """
         Resets the red agent back to blank slate.
         """
+        self.network = network
+        print(network.name)
+        self.service_mapping = service_mapping
         self.current_host : Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
         self.history: AgentHistory = AgentHistory(initial_host=self.current_host)
         self.unimpacted_servers.reset()
