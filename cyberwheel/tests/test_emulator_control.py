@@ -60,10 +60,10 @@ class TestEmulatorSetup(unittest.TestCase):
             ip = emulator.get_ip_address(host_name)
             print(f"{host_name} ip address: {ip}")
 
-    def test_get_enrolled_fleet_agents(self) -> None:
+    def test_get_enrolled_host_names(self) -> None:
         """
         Test retrieving all agents enrolled to fleet.
         """
         emulator = EmulatorControl(network=network, network_config_name=NETWORK_CONFIG)
-        enrolled_hostnames = emulator._get_enrolled_fleet_agents()
+        enrolled_hostnames = emulator._get_enrolled_host_names()
         print(enrolled_hostnames)

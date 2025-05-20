@@ -55,18 +55,23 @@ class EmulatorControl:
     def init_hosts(self) -> bool:
         """Setup hosts and run scripts before an experiment begins."""
 
-        # Action #1: Enroll non-decoy hosts to fleet
+        # Action #1: Enroll non-decoy hosts' agent to fleet
 
         all_host_names = self._get_host_names()
         decoy_names = self._get_decoy_host_names()
         non_decoy_names = [name for name in all_host_names if name not in decoy_names]
+        enrolled_host_names = self._get_enrolled_host_names()
+        successfully_enrolled = True
 
         for host_name in non_decoy_names:
-            success = self._enroll_agent_to_fleet(host_name)
+            if host_name not in enrolled_host_names:
+                successfully_enrolled = self._enroll_agent_to_fleet(host_name)
+            else:
+                print(f"{host_name}'s agent is already enrolled into fleet, skipping.")
 
-            if not success:
-                print("Error with emulator initialization.")
-                return False
+        if not successfully_enrolled:
+            print("Error with enrolling agent(s) into fleet.")
+            return False
 
         # Add more setup actions here...
 
@@ -346,7 +351,7 @@ class EmulatorControl:
 
         return False
 
-    def _get_enrolled_fleet_agents(self) -> list[str]:
+    def _get_enrolled_host_names(self) -> list[str]:
         """Retun a list of agent hostnames enrolled in fleet"""
 
         siem_hostname = EmulatorControl.emu_config["firewheel"]["siem"]["hostname"]
