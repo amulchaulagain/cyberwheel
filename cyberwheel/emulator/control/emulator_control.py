@@ -55,8 +55,10 @@ class EmulatorControl:
     def init_hosts(self) -> bool:
         """Setup hosts and run scripts before an experiment begins."""
 
-        # Action #1: Enroll non-decoy hosts' agent to fleet
+        print("Running emulator host initialization steps...")
 
+        # Action #1: Enroll non-decoy hosts' agent to fleet
+        print("#1 Enrolling elastic agents into fleet server...")
         all_host_names = self._get_host_names()
         decoy_names = self._get_decoy_host_names()
         non_decoy_names = [name for name in all_host_names if name not in decoy_names]
@@ -325,7 +327,7 @@ class EmulatorControl:
             return False
         else:
             # print(result.stdout)
-            print(f"Successfully enrolled {host_name} to fleet server.")
+            print(f"Successfully enrolled {host_name}'s elastic agent to fleet.")
             return True
 
     def _reset_decoys(self, hostnames: list[str]) -> bool:

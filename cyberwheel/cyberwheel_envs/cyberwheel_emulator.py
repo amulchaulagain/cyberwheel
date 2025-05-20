@@ -60,11 +60,18 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         )
 
         # get host IP addresses from emulator
+        print("Retrieving emulator ip address...")
         for h in self.network.get_all_hosts():
-            print(f"retrieving emulator ip address for {h.name}")
             host_name = h.name.replace("_", "-")
             emu_host_ip = self.emulator.get_ip_address(host_name)
             h.set_ip_from_str(emu_host_ip)
+            print(f"Retried and saved emulator ip address for {h.name}.")
+
+        """
+        Enroll emulator host's elastic agents to fleet.
+        Will only enroll non-enrolled agents.
+        """
+        self.emulator.init_hosts()
 
         self.red_agent = EmulatorRLRedCampaign(self.network, args)
 
