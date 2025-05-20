@@ -65,4 +65,5 @@ class TestEmulatorSetup(unittest.TestCase):
         Test retrieving all agents enrolled to fleet.
         """
         emulator = EmulatorControl(network=network, network_config_name=NETWORK_CONFIG)
-        emulator._get_enrolled_fleet_agents()
+        enrolled_hostnames = emulator._get_enrolled_fleet_agents()
+        print(enrolled_hostnames)

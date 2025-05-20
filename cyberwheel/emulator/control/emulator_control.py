@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Iterable
 import pathlib
 import subprocess
 import random
+import json
 
 
 DIR_PATH = pathlib.Path(__file__).parent.resolve()
@@ -349,6 +350,7 @@ class EmulatorControl:
 
     def _get_enrolled_fleet_agents(self) -> list[str]:
         """Retun a list of agent hostnames enrolled in fleet"""
+
         siem_hostname = EmulatorControl.emu_config["firewheel"]["siem"]["hostname"]
         elastic_username = EmulatorControl.emu_config["elastic"]["username"]
         elastic_password = EmulatorControl.emu_config["elastic"]["password"]
@@ -371,10 +373,13 @@ class EmulatorControl:
             print(result.stderr)
             return []
 
-        print(result.stdout)
+        # print(result.stdout)
+        resDict = json.loads(result.stdout)
+        items = resDict["items"]
 
-        # parse JSON
+        hostnames = []
+        for item in items:
+            hostname = item["local_metadata"]["host"]["name"]
+            hostnames.append(hostname)
 
-        # get hostnames
-
-        return []
+        return hostnames
