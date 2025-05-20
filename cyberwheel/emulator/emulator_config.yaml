@@ -13,3 +13,5 @@ fleet:
 elastic:
   username: elastic
   password: elastic 
+kibana:
+  port: 5601

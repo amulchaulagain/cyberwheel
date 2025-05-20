@@ -40,6 +40,8 @@ class EmulatorControl:
     """
 
     emu_config = read_config(EMULATOR_CONFIG_PATH, EMULATOR_CONFIG)
+    host_username = emu_config["firewheel"]["host"]["username"]
+    host_password = emu_config["firewheel"]["host"]["password"]
 
     def __init__(self, network: Network, network_config_name: str):
         self.network = network
@@ -344,3 +346,35 @@ class EmulatorControl:
             return True
 
         return False
+
+    def _get_enrolled_fleet_agents(self) -> list[str]:
+        """Retun a list of agent hostnames enrolled in fleet"""
+        siem_hostname = EmulatorControl.emu_config["firewheel"]["siem"]["hostname"]
+        elastic_username = EmulatorControl.emu_config["elastic"]["username"]
+        elastic_password = EmulatorControl.emu_config["elastic"]["password"]
+        kibana_port = EmulatorControl.emu_config["kibana"]["port"]
+
+        cmd = f"""sshpass -p {self.host_password} firewheel ssh {self.host_username}@{siem_hostname} \
+        'curl -X GET http://{elastic_username}:{elastic_password}@localhost:{kibana_port}/api/fleet/agents'
+        """
+
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            text=True,
+            check=True,
+        )
+
+        if result.returncode != 0:
+            print(result.stderr)
+            return []
+
+        print(result.stdout)
+
+        # parse JSON
+
+        # get hostnames
+
+        return []

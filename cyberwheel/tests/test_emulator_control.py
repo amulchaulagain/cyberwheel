@@ -59,3 +59,10 @@ class TestEmulatorSetup(unittest.TestCase):
             host_name = name.replace("_", "-")  # firewheel host names use hyphen
             ip = emulator.get_ip_address(host_name)
             print(f"{host_name} ip address: {ip}")
+
+    def test_get_enrolled_fleet_agents(self) -> None:
+        """
+        Test retrieving all agents enrolled to fleet.
+        """
+        emulator = EmulatorControl(network=network, network_config_name=NETWORK_CONFIG)
+        emulator._get_enrolled_fleet_agents()
