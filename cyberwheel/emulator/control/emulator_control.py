@@ -273,8 +273,7 @@ class EmulatorControl:
         # Firewheel host names cannot have "_" and are replaced with "-"
         # when creating the VM.
         for name, _ in hosts.items():
-            replace_underscore = lambda name: name.replace("_", "-")
-            host_names.append(replace_underscore(name))
+            host_names.append(name.replace("_", "-"))
 
         return host_names
 
@@ -287,8 +286,7 @@ class EmulatorControl:
         # Firewheel host names cannot have "_" and are replaced with "-"
         # when creating the VM.
         for name in decoys:
-            replace_underscore = lambda name: name.replace("_", "-")
-            decoy_names.append(replace_underscore(name))
+            decoy_names.append(name.replace("_", "-"))
 
         return decoy_names
 
