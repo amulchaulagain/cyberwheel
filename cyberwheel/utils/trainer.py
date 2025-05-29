@@ -118,7 +118,7 @@ class Trainer:
         # Initialize Weights and Biases tracking
         import wandb
 
-        wandb.init(
+        self.run = wandb.init(
             project=self.args.wandb_project_name,  # Can be whatever you want
             entity=self.args.wandb_entity,
             sync_tensorboard=True,  # Data logged to the tensorboard SummaryWriter will be sent to W&B
@@ -127,6 +127,8 @@ class Trainer:
             monitor_gym=False,  # Does not attempt to render any episodes
             save_code=False,
         )
+        
+        self.run.define_metric("episodic_runtime", summary="mean")
 
     def configure_training(self):
         self.writer = SummaryWriter(
@@ -282,10 +284,11 @@ class Trainer:
         self.writer.add_scalar("charts/episodic_return", mean_rew, self.global_step)
         
         self.writer.add_scalar(
-            f"evaluation/episodic_runtime",
+            f"charts/episodic_runtime",
             episode_time,
             self.global_step,
         )
+        self.run.log({"episodic_runtime": episode_time})
         
         # bootstrap value if not done
         # Calculate advantages used to optimize the policy and returns which are compared to values to optimize the critic.

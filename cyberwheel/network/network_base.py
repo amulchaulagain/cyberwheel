@@ -551,11 +551,17 @@ class Network:
         """
         host = self.add_host_to_subnet(*args, decoy=True, **kwargs)
         self.decoys[host.name] = host
+        if host.host_type.name.lower() == "server":
+            self.server_hosts.add(host.name)
+        elif host.host_type.name.lower() == "user":
+            self.user_hosts.add(host.name)
         return host
 
     def remove_decoy_host(self, host: Host) -> None:
         self.remove_host_from_subnet(host)
         self.decoys.pop(host.name, None)
+        self.server_hosts.remove(host.name)
+        self.user_hosts.remove(host.name)
         #for _, h in self.graph.nodes(data="data"):
         #    if not isinstance(h, Host):
         #        continue
@@ -570,6 +576,8 @@ class Network:
     def reset(self):
         for decoy in list(self.decoys.values()):
             self.remove_host_from_subnet(decoy)
+            self.server_hosts.remove(decoy.name)
+            self.user_hosts.remove(decoy.name)
         self.decoys = {}
 
         for edge in self.disconnected_nodes:

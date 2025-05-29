@@ -22,7 +22,6 @@ class DeployDecoyHost(SubnetAction):
         super().__init__(network, configs)
         self.define_configs()
         self.define_services()
-        self.decoy_list : list[str] = kwargs.get("decoy_list", [])
 
     def execute(self, subnet: Subnet, **kwargs) ->  BlueActionReturn:
         """
@@ -44,10 +43,9 @@ class DeployDecoyHost(SubnetAction):
                 decoy=True,
                 cve_list=self.cves,
             )
-        if len(self.decoy_list) < self.max_decoys: 
+        if len(self.network.decoys) <= self.max_decoys: 
             self.host = self.network.create_decoy_host(name, subnet, host_type)
-            self.decoy_list.append(name)
-            print(f"Deploying Decoy: {name}")
+            #print(f"Deploying Decoy: {name}")
             return BlueActionReturn(name, True, 0, target=subnet.name)
         else:
             return BlueActionReturn(name, False, 0)

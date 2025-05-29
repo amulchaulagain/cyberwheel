@@ -27,13 +27,12 @@ class RLReward(Reward):
         blue_id: str = -1,
         blue_recurring: int = 0,
     ) -> int | float:
-        
         if self.valid_targets == "servers":
             valid_targets = self.network.server_hosts
         elif self.valid_targets == "users":
             valid_targets = self.network.user_hosts
         elif self.valid_targets == "all":
-            valid_targets = valid_targets = HybridSetList(self.network.hosts.keys())
+            valid_targets = HybridSetList(self.network.hosts.keys())
         elif type(self.valid_targets) is list:
             valid_targets = HybridSetList(self.valid_targets)
         elif type(self.valid_targets) is str:
@@ -44,12 +43,14 @@ class RLReward(Reward):
         target_host_name = target_host.name
         decoy = target_host.decoy
 
+        #print(f"{target_host_name in valid_targets} - {target_host_name} in {valid_targets.data_list}")
+
         if red_success and not decoy and target_host_name in valid_targets:  # If red action succeeded on a real Host
             r = self.red_rewards[red_action][0] * -1
             r_recurring = self.red_rewards[red_action][1] * -1
         elif red_success and decoy and target_host_name in valid_targets:
-            r = self.red_rewards[red_action][0] * 10
-            r_recurring = self.red_rewards[red_action][1] * 10
+            r = self.red_rewards[red_action][0]
+            r_recurring = self.red_rewards[red_action][1]
         else:
             r = 0
             r_recurring = 0

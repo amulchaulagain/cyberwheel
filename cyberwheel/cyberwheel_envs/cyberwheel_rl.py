@@ -109,6 +109,8 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
         done = self.current_step >= self.max_steps
 
+        #print(f"{red_agent_result.action.get_name()} - {red_agent_result.src_host.name} -> {red_agent_result.target_host.name}")
+
         self.current_step += 1
         info = {}
         if self.evaluation:
@@ -135,7 +137,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
         self.network.reset()
         network = random.choice(list(self.networks.values()))
-        print(f"Random Network: {network.name}")
+        #print(f"Random Network: {network.name}")
 
         self.network = network
 

@@ -73,7 +73,7 @@ class RLBlueAgent(BlueAgent):
         self.config = files("cyberwheel.data.configs.blue_agent").joinpath(args.blue_agent)
         self.network = network
 
-        self.observation = BlueObservation(500, host_to_index_mapping(self.network, self.args.deterministic), args.detector_config)
+        self.observation = BlueObservation(3000, host_to_index_mapping(self.network, self.args.deterministic), args.detector_config)
 
         self.configs: Dict[str, Any] = {}
         self.action_space: ActionSpace = None
@@ -186,7 +186,7 @@ class RLBlueAgent(BlueAgent):
         if self.args.deterministic:
             asc_return.kwargs["seed"] = self.args.seed
             self.args.seed += 1
-        
+
         result = asc_return.action.execute(*asc_return.args, **asc_return.kwargs)
         
         return BlueAgentResult(asc_return.name, result.id, result.success, result.recurring, target=result.target)

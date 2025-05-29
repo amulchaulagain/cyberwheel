@@ -41,13 +41,15 @@ class StepAccomplishedReward(RLReward):
     ) -> int | float:
         step = self.red_agent.history.step
         accomplished = len(self.red_agent.unknowns) == 0 and len(self.red_agent.unimpacted_servers) == 0 and not self.finished
+        k = 0.01
         if accomplished:
             self.finished = True
-            k = 0.01
-            reward = 100 * math.exp(-k * step)
-
+            reward = step #math.exp(k * step)
+            #print(step)
             return reward
-        else:
+        elif not self.finished and step == self.red_agent.args.num_steps - 1:
+            return step * 2 #math.exp(k * self.red_agent.args.num_steps) * 2
+        else:    
             return 0
 
     def reset(
