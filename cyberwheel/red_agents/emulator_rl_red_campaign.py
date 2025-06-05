@@ -175,7 +175,7 @@ class EmulatorRLRedCampaign(RLRedCampaign):
                 int(view.escalated),
                 int(view.impacted),
             ]
-        obs = obs + [-1] * (100 - len(obs))
+        obs = obs + [-1] * (500 - len(obs))
         _obs = np.array(obs, dtype=np.float64)
         return _obs
     

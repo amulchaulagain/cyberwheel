@@ -122,7 +122,8 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         blue_action_name = blue_action_info.name
 
         blue_action_src = (
-            blue_action_info.args[0] if blue_action_name != "nothing" else None
+            # blue_action_info.args[0] if blue_action_name != "nothing" else None
+            blue_action_info.args[0] if "nothing" not in blue_action_name else None
         )
 
         print(f"\n\nEmulator Blue Action: {blue_action_name} on {blue_action_src}")
