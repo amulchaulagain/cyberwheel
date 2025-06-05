@@ -141,7 +141,14 @@ class ARTAgent(RedAgent):
         self.strategy = getattr(strategies, contents["strategy"])
 
         self.leader: Host = contents.get("leader", "random")
-        self.leader_host: Host = self.network.hosts[self.leader] if self.leader.lower() != "random" else self.network.get_random_server_host()
+        if self.leader.lower() == "random_user":
+            self.leader_host = self.network.get_random_user_host()
+        elif self.leader.lower() == "random_server":
+            self.leader_host = self.network.get_random_server_host()
+        elif self.leader.lower() == "random":
+            self.leader_host = self.network.get_random_host()
+        else:
+            self.leader_host = self.network.hosts[self.leader]
 
     def get_valid_techniques_by_host(self, host, all_kcps):
         """
@@ -203,6 +210,8 @@ class ARTAgent(RedAgent):
         ):  # Add the new host to self.history if the subnet is scanned. Else do nothing.
             self.history.hosts[new_host.name] = KnownHostInfo()
             self.unknowns.add(new_host.name)
+            #if "server" in new_host.host_type.name.lower():
+            #    self.unimpacted_servers.add(new_host.name)
             #print("ADDING THIS DECOY TO THE RED AGENT HISTORY AND UNKNOWNS")
         
 
@@ -384,4 +393,11 @@ class ARTAgent(RedAgent):
         self.unimpacted_servers.reset()
         self.unimpacted_hosts.reset()
         self.unknowns.reset()
-        self.leader_host: Host = self.network.hosts[self.leader] if self.leader.lower() != "random" else self.network.get_random_server_host()
+        if self.leader.lower() == "random_user":
+            self.leader_host = self.network.get_random_user_host()
+        elif self.leader.lower() == "random_server":
+            self.leader_host = self.network.get_random_server_host()
+        elif self.leader.lower() == "random":
+            self.leader_host = self.network.get_random_host()
+        else:
+            self.leader_host = self.network.hosts[self.leader]

@@ -11,4 +11,5 @@ class Nothing(StandaloneAction):
         super().__init__(network, configs)
 
     def execute(self, **kwargs) ->  BlueActionReturn:
+        #print("does nothing")
         return BlueActionReturn(generate_id(), True)                                                                                                                                                                                                                   

@@ -15,6 +15,8 @@ from cyberwheel.utils.set_seed import set_seed
 import pandas as pd
 import random
 
+import time
+
 
 class CyberwheelRL(gym.Env, Cyberwheel):
     metadata = {"render.modes": ["human"]}
@@ -54,9 +56,15 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
         self.evaluation = evaluation
         self.total = 0
+
+        #TODO: TEMP
+        #self.action_usage = []
     
     def initialize_agents(self) -> None:
         args = self.args
+        max_net = self.args.network_size_compatibility
+        max_num_hosts = 100 if max_net == 'small' else 1000 if max_net == 'medium' else 10000 # if max_net == 'large'
+        #max_num_subnets = max_num_hosts / 10 # 10 if max_net == 'small' else 100 if max_net == 'medium' else 1000 # if max_net == 'large'
         if args.train_red:
             self.red_agent = RLARTAgent(self.network, args)
             self.blue_agent = InactiveBlueAgent()
@@ -65,7 +73,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
             self.observation_space = spaces.MultiDiscrete(np.array([3] * self.red_agent.observation.max_size))
 
-            self.max_action_space_size = 500 * self.red_agent.action_space.num_actions * 2 # TODO: num_hosts
+            self.max_action_space_size = max_num_hosts * self.red_agent.action_space.num_actions * 2 # TODO: instead of hard-coding 500, make dependent on new arg (small/med/large networks - 100/1000/10000)
             self.action_space = self.red_agent.action_space.create_action_space(self.max_action_space_size)
             self.reward_sign = -1
         else:
@@ -75,9 +83,9 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             self.static_agent = self.red_agent
 
             self.observation_space = spaces.MultiBinary(self.blue_agent.observation.shape)
-
-            self.max_action_space_size = 60 * 2 # TODO: num_subnets
+            self.max_action_space_size = self.blue_agent.action_space._action_space_size # TODO: instead of hard coding, just make it preset (small/med/large - 10/100/1000)
             self.action_space = self.blue_agent.create_action_space(self.max_action_space_size)
+            
             self.reward_sign = 1
 
     def step(self, action: int) -> tuple[Iterable, int | float, bool, bool, dict[str, Any]]:
@@ -89,12 +97,19 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         4. Get obs from Red or Blue Observation
         5. Return obs and related metadata
         """
+        #print("D-A")
         blue_agent_result = self.blue_agent.act(action)
 
         red_agent_result = self.red_agent.act(action)
+        
+        # TODO: cleanup
+        #if action not in self.action_usage:
+            #self.action_usage.append(action)
+            #print(f"{action} was just used.")
+            #print(f"So far, {len(self.action_usage)} actions have been used, {self.blue_agent.action_space._action_space_size} actions should be possible.")
 
         obs_vec = self.red_agent.get_observation_space() if self.args.train_red else self.blue_agent.get_observation_space(red_agent_result)
-
+        #print("D-B")
         reward = self.reward_sign * self.reward_calculator.calculate_reward(
             red_agent_result.action.get_name(),
             blue_agent_result.name,
@@ -104,10 +119,16 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             blue_id=blue_agent_result.id,
             blue_recurring=blue_agent_result.recurring
         )
+        #print("D-C")
 
         self.total += reward
 
-        done = self.current_step >= self.max_steps
+        #done = self.current_step >= self.max_steps
+        done = self.current_step == self.max_steps - 1
+
+        #if done and self.total == 0:
+        #    print("finished at 0 here?")
+        #    print(f"{red_agent_result.action.get_name()} on {red_agent_result.target_host}, \nunknowns: {self.red_agent.unknowns.data_list}, \nunimpacted_servers: {self.red_agent.unimpacted_servers.data_list}")
 
         #print(f"{red_agent_result.action.get_name()} - {red_agent_result.src_host.name} -> {red_agent_result.target_host.name}")
 
@@ -127,6 +148,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
                 "history": self.red_agent.history,
                 "commands": red_agent_result.action_results.metadata.get("commands", []) 
             }
+        #print("D-D")
 
         return obs_vec, reward, done, False, info
 

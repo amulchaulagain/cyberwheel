@@ -29,6 +29,6 @@ actions: # All actions in this killchain (pingsweep -> impact) are required.
     reward:
       immediate: 50.0
       recurring: 0
-strategy: BFSServerDowntime
+strategy: Exfiltration
 entry_host: dmz5 # optional; defaults to random user
-leader: random # optional; defaults to random server
+leader: server6 # optional; defaults to random server

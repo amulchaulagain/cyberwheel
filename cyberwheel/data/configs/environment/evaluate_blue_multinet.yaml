@@ -1,28 +1,29 @@
 # Evaluation Parameters
-red_agent: art_agent.yaml
+red_agent: exfiltration.yaml
 blue_agent: rl_blue_agent.yaml
 environment: CyberwheelRL
-valid_targets: all
+valid_targets: leader
 train_red: false
 train_blue: true
 max_decoys: 10
+network_size_compatibility: medium
 campaign: false
 seed: 1
 deterministic: false
 
 checkpoint: agent
 download_model: true
-run: xooceegd # required if download_model is true
+run: sprwfcie # required if download_model is true
 wandb_project_name: Cyberwheel # required if download_model is true
 wandb_entity: oeschsec # required if download_model is true
 
-experiment_name: TrainBlueAgent_MultinetEvaluation_10decoys_15hosts
+experiment_name: exfiltration_delay
 visualize: true
-graph_name: TrainBlueAgent_MultinetEvaluation_10decoys
-network_config: 15-host-network.yaml
+graph_name: exfiltration_delay
+network_config: 100-host-network.yaml
 decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml
-detector_config: detector_handler.yaml
+detector_config: perfect_detector.yaml
 reward_function: StepAccomplishedReward
-num_steps: 500
+num_steps: 300
 num_episodes: 10

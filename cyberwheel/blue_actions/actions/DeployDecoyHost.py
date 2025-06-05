@@ -45,7 +45,9 @@ class DeployDecoyHost(SubnetAction):
             )
         if len(self.network.decoys) <= self.max_decoys: 
             self.host = self.network.create_decoy_host(name, subnet, host_type)
+            #print("deployed new host")
             #print(f"Deploying Decoy: {name}")
             return BlueActionReturn(name, True, 0, target=subnet.name)
         else:
+            #print("could not deploy a new host")
             return BlueActionReturn(name, False, 0)

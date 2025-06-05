@@ -35,8 +35,19 @@ class Network:
         self.subnets : dict[str, Subnet] = {name:subnet for name, subnet in self if isinstance(subnet, Subnet)}
         self.decoys : dict[str, Host] = {hn:host for hn, host in self.hosts if host.decoy}
 
-        self.user_hosts : HybridSetList = HybridSetList({hn for hn, host in self.hosts if "workstation" in host.host_type.name.lower() or "user" in host.host_type.name.lower()})
-        self.server_hosts : HybridSetList = HybridSetList({hn for hn, host in self.hosts if "server" in host.host_type.name.lower()})
+        self.all_hosts = HybridSetList()
+        self.user_hosts = HybridSetList()
+        self.server_hosts = HybridSetList()
+
+        for hn, host in self.hosts:
+            self.all_hosts.add(hn)
+            if "workstation" in host.host_type.name.lower() or "user" in host.host_type.name.lower():
+                self.user_hosts.add(hn)
+            elif "server" in host.host_type.name.lower():
+                self.server_hosts.add(hn)
+        #self.user_hosts : HybridSetList = HybridSetList({hn for hn, host in self.hosts if "workstation" in host.host_type.name.lower() or "user" in host.host_type.name.lower()})
+        #self.server_hosts : HybridSetList = HybridSetList({hn for hn, host in self.hosts if "server" in host.host_type.name.lower()})
+        #self.all_hosts : HybridSetList = HybridSetList()
 
     def __iter__(self):
         #print(self.graph.nodes.items())
@@ -92,6 +103,7 @@ class Network:
         if host.decoy:
             return
         host_type = host.host_type.name.lower()
+        self.all_hosts.add(host.name)
         if "server" in host_type:
             self.server_hosts.add(host.name)
         else:
@@ -136,7 +148,7 @@ class Network:
         return nx.has_path(self.graph, subnet1.name, subnet2.name)
 
     def get_random_host(self): # Does not support determinism yet
-        return self.hosts[random.choice(list(self.hosts.keys()))]
+        return self.hosts[self.all_hosts.get_random()]
 
     def get_random_user_host(self):
         return self.hosts[self.user_hosts.get_random()]
@@ -551,9 +563,10 @@ class Network:
         """
         host = self.add_host_to_subnet(*args, decoy=True, **kwargs)
         self.decoys[host.name] = host
+        self.all_hosts.add(host.name)
         if host.host_type.name.lower() == "server":
             self.server_hosts.add(host.name)
-        elif host.host_type.name.lower() == "user":
+        elif host.host_type.name.lower() in ["user", "workstation"]:
             self.user_hosts.add(host.name)
         return host
 
@@ -562,6 +575,7 @@ class Network:
         self.decoys.pop(host.name, None)
         self.server_hosts.remove(host.name)
         self.user_hosts.remove(host.name)
+        self.all_hosts.remove(host.name)
         #for _, h in self.graph.nodes(data="data"):
         #    if not isinstance(h, Host):
         #        continue
@@ -578,6 +592,7 @@ class Network:
             self.remove_host_from_subnet(decoy)
             self.server_hosts.remove(decoy.name)
             self.user_hosts.remove(decoy.name)
+            self.all_hosts.remove(decoy.name)
         self.decoys = {}
 
         for edge in self.disconnected_nodes:

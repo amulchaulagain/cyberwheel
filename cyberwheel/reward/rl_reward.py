@@ -27,18 +27,7 @@ class RLReward(Reward):
         blue_id: str = -1,
         blue_recurring: int = 0,
     ) -> int | float:
-        if self.valid_targets == "servers":
-            valid_targets = self.network.server_hosts
-        elif self.valid_targets == "users":
-            valid_targets = self.network.user_hosts
-        elif self.valid_targets == "all":
-            valid_targets = HybridSetList(self.network.hosts.keys())
-        elif type(self.valid_targets) is list:
-            valid_targets = HybridSetList(self.valid_targets)
-        elif type(self.valid_targets) is str:
-            valid_targets = HybridSetList(self.valid_targets)
-        else:
-            valid_targets = HybridSetList(self.network.hosts.keys())
+        valid_targets = self.get_valid_targets()
 
         target_host_name = target_host.name
         decoy = target_host.decoy
@@ -49,8 +38,8 @@ class RLReward(Reward):
             r = self.red_rewards[red_action][0] * -1
             r_recurring = self.red_rewards[red_action][1] * -1
         elif red_success and decoy and target_host_name in valid_targets:
-            r = self.red_rewards[red_action][0]
-            r_recurring = self.red_rewards[red_action][1]
+            r = self.red_rewards[red_action][0] * 2
+            r_recurring = self.red_rewards[red_action][1] * 2
         else:
             r = 0
             r_recurring = 0
@@ -94,6 +83,23 @@ class RLReward(Reward):
 
     def add_recurring_red_action(self, id: str, red_action: str, is_decoy: bool) -> None:
         self.red_recurring_actions.append((RecurringAction(id, red_action), is_decoy))
+    
+    def get_valid_targets(self) -> HybridSetList:
+        if self.valid_targets == "servers":
+            valid_targets = self.network.server_hosts
+        elif self.valid_targets == "users":
+            valid_targets = self.network.user_hosts
+        elif self.valid_targets == "all":
+            valid_targets = HybridSetList(self.network.hosts.keys())
+        elif self.valid_targets == "leader":
+            valid_targets = HybridSetList({self.red_agent.leader_host.name})
+        elif type(self.valid_targets) is list:
+            valid_targets = HybridSetList(self.valid_targets)
+        elif type(self.valid_targets) is str:
+            valid_targets = HybridSetList([self.valid_targets])
+        else:
+            valid_targets = HybridSetList(self.network.hosts.keys())
+        return valid_targets
 
     def reset(self) -> None:
         self.blue_recurring_actions = []

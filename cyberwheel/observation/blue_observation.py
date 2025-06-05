@@ -8,6 +8,7 @@ from cyberwheel.network.host import Host
 from cyberwheel.observation.observation import Observation
 from cyberwheel.detectors.handler import DetectorHandler
 
+import time
 
 class BlueObservation(Observation):
     def __init__(self, shape: int, mapping: Dict[Host, int], detector_config: str) -> None:
@@ -29,11 +30,17 @@ class BlueObservation(Observation):
             self.obs_vec[i] = 0
         for alert in alerts:
             alerted_host = alert.src_host
+            #print(f"Host {alerted_host.name} alerted")
             if alerted_host.name not in self.mapping:
                 continue
             index = self.mapping[alerted_host.name]
             self.obs_vec[index] = 1
             self.obs_vec[index + barrier] = 1
+        #print("OBS VEC:")
+        #print(self.obs_vec)
+        #print("-----------------------------------------------")
+        #time.sleep(1)
+
         return self.obs_vec
 
     def reset(self, mapping) -> Iterable:

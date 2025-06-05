@@ -154,7 +154,7 @@ class Trainer:
 
         # Environment setup
 
-        # Load network from yaml here
+        # Load networks from yaml here
         network_configs = []
         if isinstance(self.args.network_config, str):
             network_configs.append(self.args.network_config)
@@ -223,6 +223,9 @@ class Trainer:
         self.next_done = torch.zeros(self.args.num_envs).to(self.device)
 
     def train(self, update):
+        self.resets = np.array(self.envs.reset()[0])
+        self.next_obs = torch.Tensor(self.resets).to(self.device)
+
         # Annealing the rate if instructed to do so.
         if self.args.anneal_lr:
             # Decreases the learning rate from args.lr to 0 over the course of training.
@@ -233,6 +236,8 @@ class Trainer:
         # Run an episode in each environment. This loop collects experience which is later used for optimization.
         episode_start = time.time_ns()
         for step in range(0, self.args.num_steps):
+            #print(f"starting training episode on step {step}")
+            #print("A")
 
             if self.deterministic:
                 set_seed(self.seed)
@@ -251,7 +256,7 @@ class Trainer:
             self.global_step += 1 * self.args.num_envs
             self.obs[step] = self.next_obs
             self.dones[step] = self.next_done
-
+            #print("B")
             # ALGO LOGIC: action logic
             # Select an action using the current policy and get a value estimate
             with torch.no_grad():
@@ -259,6 +264,7 @@ class Trainer:
                     self.next_obs, action_mask=self.action_masks[step]
                 )
                 self.values[step] = value.flatten()
+            #print("C")
 
             self.actions[step] = action
             self.logprobs[step] = logprob
@@ -266,12 +272,18 @@ class Trainer:
             # Execute the selected action in the environment to collect experience for training.
             temp_action = action.cpu().numpy()
             #train_step_start_time = time.time()
+            #print("D")
             self.next_obs, reward, done, _, info = self.envs.step(temp_action)
+            #done = np.logical_or(term, trunc)
+
+            #print("E")
             #print(f"Training step took: \t\t{time.time() - train_step_start_time}")
             self.rewards[step] = torch.tensor(reward).to(self.device).view(-1)
             self.next_obs, self.next_done = torch.Tensor(self.next_obs).to(self.device), torch.Tensor(
                 done
             ).to(self.device)
+
+            #print("F")
         end_time = time.time_ns()
         episode_time = (end_time - episode_start) / (10**9)
         #print(f"Training ep took: \t\t{episode_time}")
@@ -281,6 +293,9 @@ class Trainer:
         #print(self.rewards.sum(axis=0).mean())
         mean_rew = self.rewards.sum(axis=0).mean()
         print(f"global_step={self.global_step}, episodic_return={mean_rew}")
+        if mean_rew == 0:
+            print("mean reward is 0 here?")
+            #print(self.rewards.cpu().numpy())
         self.writer.add_scalar("charts/episodic_return", mean_rew, self.global_step)
         
         self.writer.add_scalar(
@@ -288,7 +303,8 @@ class Trainer:
             episode_time,
             self.global_step,
         )
-        self.run.log({"episodic_runtime": episode_time})
+        if self.args.track:
+            self.run.log({"episodic_runtime": episode_time})
         
         # bootstrap value if not done
         # Calculate advantages used to optimize the policy and returns which are compared to values to optimize the critic.

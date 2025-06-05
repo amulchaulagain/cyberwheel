@@ -8,12 +8,13 @@ import wandb
 import os
 import random
 
+from copy import deepcopy
 from importlib.resources import files
 from tqdm import tqdm
 
 from cyberwheel.network.network_base import Network
 from cyberwheel.utils import RLAgent, get_service_map
-from cyberwheel.utils.visualize import visualize
+from cyberwheel.utils.visualizer import Visualizer
 from cyberwheel.utils.set_seed import set_seed
 
 
@@ -46,7 +47,7 @@ class Evaluator:
         """
 
         def _init():
-            env = self.env(self.args, network=network)
+            env = self.env(self.args, network=random.choice(list(self.networks.values())), networks=self.networks)
             env.evaluation = True
 
             self.max_action_space_size = env.max_action_space_size
@@ -71,14 +72,32 @@ class Evaluator:
         self.device = torch.device("cpu")
         print(f"Using device {self.device}")
 
-        # Set up network and Host-Technique mapping outside of environment.
-        # This keeps the time-consuming processes from running for each environment.
-        network_config = files("cyberwheel.data.configs.network").joinpath(
-            self.args.network_config
-        )
-        network = Network.create_network_from_yaml(network_config)
+        # Load networks from yaml here
+        network_configs = []
+        if isinstance(self.args.network_config, str):
+            network_configs.append(self.args.network_config)
+        else:
+            for config in self.args.network_config:
+                network_configs.append(config)
+        
+        self.networks = {}
+        self.args.service_mapping = {}
+        for config in network_configs:
+            network_config = files("cyberwheel.data.configs.network").joinpath(
+                config
+            )
 
-        self.args.service_mapping = get_service_map(network)
+            print(f"Building network: {config} ...")
+
+            network = Network.create_network_from_yaml(network_config)
+            network_name = network.name
+            self.networks[network_name] = network
+
+            print("Mapping attack validity to hosts...", end=" ")
+            self.args.service_mapping[network_name] = get_service_map(network)
+            print("done")
+
+
         env_funcs = [self.make_env(i, network=network) for i in range(1)]
         self.envs = gym.vector.SyncVectorEnv(env_funcs)
 
@@ -142,6 +161,9 @@ class Evaluator:
     def evaluate(self):
         self.start_time = time.time()
         for episode in tqdm(range(self.args.num_episodes)):
+            if self.args.visualize:
+                self.visualizer = Visualizer(self.envs.envs[0].unwrapped.network, self.args.graph_name)
+                
             for step in range(self.args.num_steps):
                 if self.deterministic:
                     set_seed(self.seed)
@@ -204,7 +226,7 @@ class Evaluator:
                 if self.args.visualize:
                     host_info = self.envs.envs[0].unwrapped.red_agent.observation.obs if self.args.train_red else history.hosts
                     step_info = {"source_host": red_action_src, "target_host": red_action_dest, "red_action": red_action_type, "commands": commands, "network": net, "host_info": host_info, "commands": commands}
-                    visualize(episode, step, self.args.graph_name, step_info)
+                    self.visualizer.visualize(episode, step, step_info)
                     pass
 
                 self.total_reward += rew
@@ -228,7 +250,6 @@ class Evaluator:
                 "reward": self.full_rewards,
             }
         )
-
         # Save action metadata to CSV in action_logs
         self.actions_df.to_csv(self.log_file)
 
