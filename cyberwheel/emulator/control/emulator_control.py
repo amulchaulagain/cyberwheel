@@ -120,6 +120,16 @@ class EmulatorControl:
                             d.set_ip_from_str(emu_host_ip)
                             deploy_return.host = d
                             break
+
+                # Enroll Decoy's agent into Fleet to enable detector
+                enrolled_host_names = self._get_enrolled_host_names()
+                if random_decoy_hostname not in enrolled_host_names:
+                    self._enroll_agent_to_fleet(random_decoy_hostname)
+                else:
+                    print(
+                        f"{random_decoy_hostname}'s agent is already enrolled into fleet, skipping.\n"
+                    )
+
                 return deploy_return
 
             case "remove_decoy_host":
