@@ -15,7 +15,7 @@ from importlib.resources import files
 # from cyberwheel.network.subnet import Subnet
 
 ################### Build Network From Config ###################
-NETWORK_CONFIG = "example_config.yaml"
+NETWORK_CONFIG = "integration_config.yaml"
 config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)
 network = Network.create_network_from_yaml(config_path)
 user_subnet = network.get_all_subnets()[0]
@@ -112,7 +112,7 @@ class TestEmulatorIntegration(unittest.TestCase):
         action_name = "Sudo and Sudo Caching"
         src_host = Host(name="user01", subnet=user_subnet, host_type=None)
         target_host = Host(name="decoy01", subnet=user_subnet, host_type=None)
-        target_host.set_ip_from_str("192.168.0.5")
+        target_host.set_ip_from_str("192.168.0.8")
 
         red_action_return = self.emulator.run_red_action(
             action_name, src_host=src_host, dst_host=target_host
@@ -123,10 +123,10 @@ class TestEmulatorIntegration(unittest.TestCase):
         """
         Test executing a red action, data encrypted for impact, in the emulator.
         """
-        action_name = "DataEncryptedForImpact"
+        action_name = "Data Encrypted for Impact"
         src_host = Host(name="user01", subnet=user_subnet, host_type=None)
         target_host = Host(name="decoy01", subnet=user_subnet, host_type=None)
-        target_host.set_ip_from_str("192.168.0.5")
+        target_host.set_ip_from_str("192.168.0.8")
 
         red_action_return = self.emulator.run_red_action(
             action_name, src_host=src_host, dst_host=target_host

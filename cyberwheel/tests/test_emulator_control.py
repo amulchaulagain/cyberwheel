@@ -10,7 +10,7 @@ from importlib.resources import files
 # from cyberwheel.network.router import Router
 # from cyberwheel.network.subnet import Subnet
 
-NETWORK_CONFIG = "example_config.yaml"
+NETWORK_CONFIG = "integration_config.yaml"
 
 ############# Create Network Topology from Config File ##################
 config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)

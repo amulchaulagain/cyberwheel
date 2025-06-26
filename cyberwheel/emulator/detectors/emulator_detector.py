@@ -30,7 +30,7 @@ DIR_PATH = pathlib.Path(__file__).parent.resolve()
 EMULATOR_CONFIG_PATH = f"{DIR_PATH}/../"
 NETWORK_CONFIG_PATH = f"{DIR_PATH}/../../resources/configs/network"
 EMULATOR_CONFIG = "emulator_config.yaml"
-QUERY_FILE = f"query.txt"
+QUERY_FILE = "query.txt"
 
 
 class EmulatorDectector(Detector):

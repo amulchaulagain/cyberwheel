@@ -16,7 +16,7 @@ class TestEmulatorBlueActions(unittest.TestCase):
     def test_deploy_decoy_host(self) -> None:
         """Test deploying decoy host"""
         action = EmulateDeployDecoyHost(network=Network("test"), configs={})
-        decoy_hostname = "decoy02"
+        decoy_hostname = "decoy01"
         shell_cmd = action.build_emulator_cmd(decoy_hostname)
 
         action_result = action.emulator_execute(shell_cmd)
