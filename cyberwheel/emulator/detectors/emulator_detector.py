@@ -169,14 +169,23 @@ class EmulatorDectector(Detector):
             pprint(hit)
             self.alert_ids.add(hit["id"])  # save id
 
-            # get the source Host
-            src_hostname = hit["hostname"]
+            # get the source emulator Host name
+            src_emu_hostname = hit["hostname"]
             # hosts defined with underscores in config file (dashes used in emulator)
-            src_hostname_underscore = src_hostname.replace("-", "_")
-            src_host = self.network.get_node_from_name(src_hostname_underscore)
+            src_hostname = src_emu_hostname.replace("-", "_")
 
-            # find decoy in network topology
-            decoys = self.network.get_decoys()
+            decoys: list[Host] = self.network.get_decoys()
+            # print(f"decoys: {decoys}")
+            decoy_hostnames: list[str] = [decoy.name for decoy in decoys]
+
+            # Check if the src_host is a decoy itself
+            src_host = None
+            if src_hostname in decoy_hostnames:
+                src_host = [decoy for decoy in decoys if decoy.name == src_hostname][0]
+            else:
+                src_host = self.network.get_node_from_name(src_hostname)
+
+            # Get the destination (target) decoy Host object
             target_decoy_host = [
                 decoy for decoy in decoys if decoy.ip_address == dst_ip
             ]
