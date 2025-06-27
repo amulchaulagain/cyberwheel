@@ -174,8 +174,7 @@ class EmulatorDectector(Detector):
             # hosts defined with underscores in config file (dashes used in emulator)
             src_hostname = src_emu_hostname.replace("-", "_")
 
-            decoys: list[Host] = self.network.get_decoys()
-            # print(f"decoys: {decoys}")
+            decoys: list[Host] = self.network.decoys_reserve
             decoy_hostnames: list[str] = [decoy.name for decoy in decoys]
 
             # Check if the src_host is a decoy itself

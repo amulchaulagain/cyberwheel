@@ -110,7 +110,7 @@ class TestEmulatorIntegration(unittest.TestCase):
         Test executing a red action, sudo and sudo caching, in the emulator.
         """
         action_name = "Sudo and Sudo Caching"
-        src_host = Host(name="user01", subnet=user_subnet, host_type=None)
+        src_host = Host(name="decoy01", subnet=user_subnet, host_type=None)
         target_host = Host(name="decoy01", subnet=user_subnet, host_type=None)
         target_host.set_ip_from_str("192.168.0.8")
 
