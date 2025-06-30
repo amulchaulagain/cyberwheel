@@ -24,7 +24,7 @@ class RLReward(Reward):
         red_success: str,
         blue_success: bool,
         target_host: Host,
-        blue_id: str = -1,
+        blue_id: str = "",
         blue_recurring: int = 0,
     ) -> int | float:
         valid_targets = self.get_valid_targets()
@@ -34,18 +34,26 @@ class RLReward(Reward):
 
         #print(f"{target_host_name in valid_targets} - {target_host_name} in {valid_targets.data_list}")
 
-        if red_success and not decoy and target_host_name in valid_targets:  # If red action succeeded on a real Host
+        if red_success and target_host_name in valid_targets:# TODO: and not decoy:  # If red action succeeded on a real Host
             r = self.red_rewards[red_action][0] * -1
             r_recurring = self.red_rewards[red_action][1] * -1
-        elif red_success and decoy and target_host_name in valid_targets:
-            r = self.red_rewards[red_action][0] * 2
-            r_recurring = self.red_rewards[red_action][1] * 2
-        else:
-            r = 0
+        elif red_success and target_host_name not in valid_targets:
+            #r = self.red_rewards[red_action][0] * 10
+            #r_recurring = self.red_rewards[red_action][1] * 10
+            #print("HAPPENING")
+            #r = 100
+        #    r = 0
+        #    r_recurring = 0
+            r = -1
+            r_recurring = 0
+        else: # Red is not successful
+            r = 1
             r_recurring = 0
 
         if blue_success:
             b = self.blue_rewards[blue_action][0]
+        elif blue_id == "decoy_limit_exceeded":
+            b = -5000
         else:
             b = 0
         
@@ -61,15 +69,17 @@ class RLReward(Reward):
             self.remove_recurring_blue_action(blue_id)
         elif blue_recurring == 1:
             self.add_recurring_blue_action(blue_id, blue_action)
-
-        return r + b + self.sum_recurring()
+        #print(self.sum_recurring())
+        reward = r + b + self.sum_recurring()
+        #if reward != 0: print(reward)
+        return reward
     
     def sum_recurring(self) -> int | float:
         sum = 0
         for ra in self.blue_recurring_actions:
             sum += self.blue_rewards[ra.action][1]
         for ra in self.red_recurring_actions:
-            sum += self.red_rewards[ra[0].action][1]
+            sum -= self.red_rewards[ra[0].action][1]
         return sum
 
     def add_recurring_blue_action(self, id: str, action: str) -> None:

@@ -73,7 +73,7 @@ class RLBlueAgent(BlueAgent):
         self.config = files("cyberwheel.data.configs.blue_agent").joinpath(args.blue_agent)
         self.network = network
 
-        self.observation = BlueObservation(3000, host_to_index_mapping(self.network, self.args.deterministic), args.detector_config)
+        self.observation = BlueObservation(args.max_num_hosts * 2 + 1, host_to_index_mapping(self.network, self.args.deterministic), args.detector_config)
 
         self.configs: Dict[str, Any] = {}
         self.action_space: ActionSpace = None
@@ -202,7 +202,8 @@ class RLBlueAgent(BlueAgent):
     
     def get_observation_space(self, red_agent_result) -> Iterable:
         alerts = self.observation.detector.obs([red_agent_result.action_results.detector_alert])
-        return self.observation.create_obs_vector(alerts)
+        decoys_deployed = len(self.network.decoys)
+        return self.observation.create_obs_vector(alerts, decoys_deployed=decoys_deployed)
     
     def reset(self, network: Network) -> None:
         for v in self.shared_data.values():

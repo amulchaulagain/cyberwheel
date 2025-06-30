@@ -3,3 +3,4 @@
 
 from .rl_blue_agent import RLBlueAgent
 from .inactive_blue_agent import InactiveBlueAgent
+from .random_blue_agent import RandomBlueAgent

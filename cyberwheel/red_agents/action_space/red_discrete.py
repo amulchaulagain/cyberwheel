@@ -2,11 +2,11 @@ from gymnasium import Space
 from gymnasium.spaces import Discrete
 from gymnasium.core import ActType
 
-from cyberwheel.red_actions.actions import ARTKillChainPhase
+from cyberwheel.red_actions.actions import ARTKillChainPhase, Nothing
 
 class RedDiscreteActionSpace:
     def __init__(self, actions: list[ARTKillChainPhase], entry_host: str) -> None:
-        self._action_space_size: int = len(actions)
+        self._action_space_size: int = len(actions) + 1
         self.num_hosts = 1
         self.num_actions = len(actions)
         self.actions = actions
@@ -19,6 +19,11 @@ class RedDiscreteActionSpace:
             raise TypeError(
                 f"provided action is of type {type(action)} and is unsupported by the chosen ActionSpaceConverter"
             )
+        
+        if action == 0:
+            return Nothing, "nothing"
+
+        action -= 1
 
         action_index = action % self.num_actions
         host_index = action // self.num_actions
@@ -37,9 +42,10 @@ class RedDiscreteActionSpace:
         return (self._action_space_size,)
 
     def create_action_space(self, max_size: int) -> Space:
+        self.max_size = max_size
         return Discrete(max_size)
 
     def reset(self, entry_host: str) -> None:
-        self._action_space_size: int = len(self.actions)
+        self._action_space_size: int = len(self.actions) + 1
         self.num_hosts = 1
         self.hosts = [entry_host]

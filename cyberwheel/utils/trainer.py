@@ -10,6 +10,7 @@ from copy import deepcopy
 from torch.utils.tensorboard import SummaryWriter
 from torch import optim, nn
 from importlib.resources import files
+from statistics import mean, median
 
 from cyberwheel.utils import RLAgent, get_service_map
 from cyberwheel.utils.set_seed import set_seed
@@ -36,7 +37,7 @@ class Trainer:
             if evaluation:
                 config_file = self.args.network_config if isinstance(self.args.network_config, str) else random.choice(self.args.network_config)
                 config_path = files("cyberwheel.data.configs.network").joinpath(config_file) # TODO: If multiple network configs, run 1 eval for each network
-                env = self.env(self.args, network=Network.create_network_from_yaml(config_path), evaluation=True, networks={name: net[0] for name, net in self.networks.items()})
+                env = self.env(self.args, network=random.choice(list(self.networks.values()))[0], evaluation=True, networks={name: net[0] for name, net in self.networks.items()})
             else:
                 env = self.env(self.args, network=random.choice(list(self.networks.values()))[rank], evaluation=False, networks={name: net[rank] for name, net in self.networks.items()})
             self.max_action_space_size = env.max_action_space_size
@@ -58,14 +59,18 @@ class Trainer:
         # We evaluate on CPU because learning is already happening on GPUs.
         # You can evaluate small architectures on CPU, but if you increase the neural network size,
         # you may need to do fewer evaluations at a time on GPU.
+        import time
         eval_device = torch.device("cpu")
         #env = self.env(self.args, )
         episode_rewards = []
+        self.episode_decoy_attacks = []
         action_masks = torch.zeros(self.max_action_space_size, dtype=torch.bool).to(eval_device)
         total_reward = 0
+        
         # Standard evaluation loop to estimate mean episodic return
         for episode in range(self.args.eval_episodes):
             #episode_start_time = time.time()
+            num_decoy_attacks = 0
             obs, _ = env.reset()
             for step in range(self.args.num_steps):
                 obs = torch.Tensor(obs).to(eval_device)
@@ -77,9 +82,15 @@ class Trainer:
                 )
                 eval_step_start_time = time.time()
                 obs, rew, done, _, info = env.step(action)
+                #print(info["decoy_attacked"])
+                #print("-------------------------")
+                if "decoy_attacked" in info and info["decoy_attacked"][0]:
+                #    print("decoy was attacked in TRAINER")
+                    num_decoy_attacks += 1
                 #print(f"Evaluation step took: \t\t{time.time() - eval_step_start_time}")
                 total_reward += rew
             episode_rewards.append(total_reward)
+            self.episode_decoy_attacks.append(num_decoy_attacks)
             total_reward = 0
             #episode_time = time.time() - episode_start_time
             #print(f"Evaluation ep took: \t\t{episode_time}")
@@ -90,6 +101,7 @@ class Trainer:
     def run_evals(self, model, globalstep):
         """Evaluate 'model' on tasks listed in 'eval_queue' in a separate process"""
         eval_device = torch.device("cpu")
+        print(model)
         model = torch.load(model, map_location=eval_device)
         results = {}
         for network_name in self.networks:
@@ -97,7 +109,7 @@ class Trainer:
 
             # Load the agent
             sample_env = gym.vector.SyncVectorEnv(env_funcs)
-            eval_agent = RLAgent(sample_env)
+            eval_agent = RLAgent(sample_env).to(eval_device)
             
             eval_agent.load_state_dict(model)
             eval_agent.eval()
@@ -236,9 +248,6 @@ class Trainer:
         # Run an episode in each environment. This loop collects experience which is later used for optimization.
         episode_start = time.time_ns()
         for step in range(0, self.args.num_steps):
-            #print(f"starting training episode on step {step}")
-            #print("A")
-
             if self.deterministic:
                 set_seed(self.seed)
             self.seed += self.args.num_envs
@@ -440,7 +449,7 @@ class Trainer:
             # Run evaluation
             print("Evaluating Agent...")
 
-            eval_results = self.run_evals(globalstep_path, self.global_step)
+            eval_results = self.run_evals(agent_path, self.global_step) # TODO: globalstep or agent?
 
             # Log eval results
             (
@@ -458,6 +467,19 @@ class Trainer:
                 )
                 self.writer.add_scalar(
                     "charts/eval_time", int(time.time() - start_eval), self.global_step
+                )
+                #print(self.episode_decoy_attacks)
+                mean_decoys_attacked = mean(self.episode_decoy_attacks)
+                median_decoys_attacked = median(self.episode_decoy_attacks)
+                self.writer.add_scalar(
+                    f"evaluation/{network_name}_{eval_decoy_config}|{eval_reward_function}reward__{eval_red_agent}_mean_decoys_attacked",
+                    mean_decoys_attacked,
+                    eval_step,
+                )
+                self.writer.add_scalar(
+                    f"evaluation/{network_name}_{eval_decoy_config}|{eval_reward_function}reward__{eval_red_agent}_median_decoys_attacked",
+                    median_decoys_attacked,
+                    eval_step,
                 )
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes

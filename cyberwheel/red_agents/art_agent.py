@@ -292,6 +292,8 @@ class ARTAgent(RedAgent):
         self.handle_network_change()
 
         target_host = self.select_next_target()
+        #while not target_host: # Attempting to attack a host that is not on the network.
+        
         source_host = self.current_host
         action_results, action = self.run_action(target_host)
         success = action_results.attack_success

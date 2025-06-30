@@ -16,16 +16,16 @@ class BlueObservation(Observation):
         self.mapping = mapping
         self.obs_vec = np.full(shape, -1)
         self.detector = DetectorHandler(files("cyberwheel.data.configs.detector").joinpath(detector_config))
-        for i in range(len(self.mapping)):
+        self.len_alerts = len(self.mapping) * 2
+        for i in range(self.len_alerts):
             self.obs_vec[i] = 0
         #self.host_length = len(mapping)
 
 
-    def create_obs_vector(self, alerts: Iterable[Alert]) -> Iterable:
+    def create_obs_vector(self, alerts: Iterable[Alert], decoys_deployed : int = -1) -> Iterable:
         
         # Refresh the non-history portion of the obs_vec
-        obs_length = len(self.mapping)
-        barrier = obs_length // 2
+        barrier = self.len_alerts // 2
         for i in range(barrier):
             self.obs_vec[i] = 0
         for alert in alerts:
@@ -36,8 +36,9 @@ class BlueObservation(Observation):
             index = self.mapping[alerted_host.name]
             self.obs_vec[index] = 1
             self.obs_vec[index + barrier] = 1
+        self.obs_vec[self.len_alerts] = decoys_deployed
         #print("OBS VEC:")
-        #print(self.obs_vec)
+        #print(self.obs_vec[:self.len_alerts + 1])
         #print("-----------------------------------------------")
         #time.sleep(1)
 
@@ -46,7 +47,7 @@ class BlueObservation(Observation):
     def reset(self, mapping) -> Iterable:
         self.mapping = mapping
         self.obs_vec = np.full(self.shape, -1, dtype=np.int64)
-        for i in range(len(self.mapping)):
+        for i in range(self.len_alerts):
             self.obs_vec[i] = 0
         self.detector.reset()
         return self.obs_vec

@@ -6,9 +6,10 @@ from typing import Iterable, Any
 from gymnasium import spaces
 
 from cyberwheel.cyberwheel_envs.cyberwheel import Cyberwheel
-from cyberwheel.blue_agents import RLBlueAgent, InactiveBlueAgent
+from cyberwheel.blue_agents import RLBlueAgent, InactiveBlueAgent, RandomBlueAgent
 from cyberwheel.network.network_base import Network
 from cyberwheel.red_agents import RLARTAgent, ARTAgent, ARTCampaign
+from cyberwheel.red_agents.rl_red_campaign import RLRedCampaign
 from cyberwheel.utils import YAMLConfig, HybridSetList
 from cyberwheel.utils.set_seed import set_seed
 
@@ -63,18 +64,22 @@ class CyberwheelRL(gym.Env, Cyberwheel):
     def initialize_agents(self) -> None:
         args = self.args
         max_net = self.args.network_size_compatibility
-        max_num_hosts = 100 if max_net == 'small' else 1000 if max_net == 'medium' else 10000 # if max_net == 'large'
+        args.max_num_hosts = 100 if max_net == 'small' else 1000 if max_net == 'medium' else 10000 # if max_net == 'large'
         #max_num_subnets = max_num_hosts / 10 # 10 if max_net == 'small' else 100 if max_net == 'medium' else 1000 # if max_net == 'large'
         if args.train_red:
-            self.red_agent = RLARTAgent(self.network, args)
-            self.blue_agent = InactiveBlueAgent()
+            self.red_agent = RLRedCampaign(self.network, args) if args.campaign else RLARTAgent(self.network, args)
+            #self.red_agent = RLARTAgent(self.network, args)
+            self.blue_agent = RandomBlueAgent(self.network, args)
             self.rl_agent = self.red_agent
             self.static_agent = self.blue_agent
 
             self.observation_space = spaces.MultiDiscrete(np.array([3] * self.red_agent.observation.max_size))
 
-            self.max_action_space_size = max_num_hosts * self.red_agent.action_space.num_actions * 2 # TODO: instead of hard-coding 500, make dependent on new arg (small/med/large networks - 100/1000/10000)
+            self.max_action_space_size = args.max_num_hosts * self.red_agent.action_space.num_actions * 2 # TODO: instead of hard-coding 500, make dependent on new arg (small/med/large networks - 100/1000/10000)
             self.action_space = self.red_agent.action_space.create_action_space(self.max_action_space_size)
+            #print(self.action_space)
+            #print(self.action_space.shape)
+            #time.sleep(1)
             self.reward_sign = -1
         else:
             self.red_agent = ARTCampaign(self.network, args) if args.campaign else ARTAgent(self.network, args)
@@ -82,7 +87,9 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             self.rl_agent = self.blue_agent
             self.static_agent = self.red_agent
 
-            self.observation_space = spaces.MultiBinary(self.blue_agent.observation.shape)
+            obs_shape = self.blue_agent.observation.shape
+            self.observation_space = spaces.MultiDiscrete(np.array([args.max_decoys + 2] * self.blue_agent.observation.shape))
+            # self.observation_space = spaces.MultiBinary(self.blue_agent.observation.shape)
             self.max_action_space_size = self.blue_agent.action_space._action_space_size # TODO: instead of hard coding, just make it preset (small/med/large - 10/100/1000)
             self.action_space = self.blue_agent.create_action_space(self.max_action_space_size)
             
@@ -101,6 +108,9 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         blue_agent_result = self.blue_agent.act(action)
 
         red_agent_result = self.red_agent.act(action)
+
+        #print(blue_agent_result.name)
+        #print(self.network.all_hosts.data_list)
         
         # TODO: cleanup
         #if action not in self.action_usage:
@@ -131,10 +141,25 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         #    print(f"{red_agent_result.action.get_name()} on {red_agent_result.target_host}, \nunknowns: {self.red_agent.unknowns.data_list}, \nunimpacted_servers: {self.red_agent.unimpacted_servers.data_list}")
 
         #print(f"{red_agent_result.action.get_name()} - {red_agent_result.src_host.name} -> {red_agent_result.target_host.name}")
-
+        #if red_agent_result.success:
+            #print(f"{red_agent_result.action.get_name()} - {red_agent_result.src_host.name} -> {red_agent_result.target_host.name}")
+            #print(self.red_agent.observation.obs.keys())
         self.current_step += 1
         info = {}
+
+        # TODO
+        
+        #if decoy_attacked:
+        #    print("decoy was attacked in CyberwheelRL")
+        
         if self.evaluation:
+            decoy_attacked = red_agent_result.success and (red_agent_result.target_host.decoy or red_agent_result.src_host.decoy)
+            #print(f"Red success: {red_agent_result.success}\nAction: {red_agent_result.action.get_name()}\nTarget: {red_agent_result.target_host.name}\nTarget is Decoy: {red_agent_result.target_host.decoy}\nSource: {red_agent_result.src_host.name}\nSource is Decoy: {red_agent_result.src_host.decoy}\n--------------------------------------")
+            #print(f"Blue success: {blue_agent_result.success}\nBlue Action: {blue_agent_result.name}\nDecoy ID: {blue_agent_result.id}\n-------------------")
+
+            #print(f"Red agent view: {list(self.red_agent.history.hosts.keys())}\n-----------------------------------\n--------------------------------\n-----------------------------")
+            #if decoy_attacked:
+            #    print("DECOY ATTACKED IS TRUE???????????????????????????????????????????????????????????")
             info = {
                 "red_action": red_agent_result.action.get_name(),
                 "red_action_src": red_agent_result.src_host.name,
@@ -146,7 +171,8 @@ class CyberwheelRL(gym.Env, Cyberwheel):
                 "killchain": self.red_agent.killchain,
                 "network": self.network,
                 "history": self.red_agent.history,
-                "commands": red_agent_result.action_results.metadata.get("commands", []) 
+                "commands": [], #red_agent_result.action_results.metadata.get("commands", []),
+                "decoy_attacked": decoy_attacked
             }
         #print("D-D")
 

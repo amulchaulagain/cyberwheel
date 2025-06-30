@@ -16,5 +16,5 @@ class InactiveBlueAgent(BlueAgent):
     def get_reward_map(self) -> RewardMap:
         return {"nothing": (0, 0)}
 
-    def reset(self):
+    def reset(self, network=None):
         return

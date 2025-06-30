@@ -43,11 +43,11 @@ class DeployDecoyHost(SubnetAction):
                 decoy=True,
                 cve_list=self.cves,
             )
-        if len(self.network.decoys) <= self.max_decoys: 
+        if len(self.network.decoys) <= self.max_decoys: # TODO
             self.host = self.network.create_decoy_host(name, subnet, host_type)
             #print("deployed new host")
             #print(f"Deploying Decoy: {name}")
             return BlueActionReturn(name, True, 0, target=subnet.name)
         else:
             #print("could not deploy a new host")
-            return BlueActionReturn(name, False, 0)
+            return BlueActionReturn("decoy_limit_exceeded", False, 0)

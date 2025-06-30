@@ -123,6 +123,9 @@ class Network:
         try:
             self.graph.remove_node(host.name)
             self.decoys.pop(host.name, None)
+            self.all_hosts.remove(host.name)
+            self.server_hosts.remove(host.name)
+            self.user_hosts.remove(host.name)
             return self.hosts.pop(host.name, None)
         except nx.NetworkXError as e:
             raise e
@@ -332,7 +335,8 @@ class Network:
                         )
                     )
             interfaces = []
-            if h in config["interfaces"]:
+            interface_mapping = config.get("interfaces", {})
+            if interface_mapping and h in interface_mapping:
                 interfaces = config["interfaces"][h]
             # instantiate host
             host = network.add_host_to_subnet(

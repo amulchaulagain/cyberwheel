@@ -3,6 +3,7 @@ import numpy as np
 from typing import Iterable
 
 from cyberwheel.observation.observation import Observation
+from cyberwheel.network.network_base import Network
 
 class HostView:
     def __init__(
@@ -35,12 +36,14 @@ class HostView:
 
 class RedObservation(Observation):
 
-    def __init__(self, max_size: int):
+    def __init__(self, max_size: int, network: Network):
+        self.network = network
         self.obs : dict[str, HostView] = {}
         self.max_size = max_size
         self.obs_vec : list[int] = [0] * max_size
         self.obs_index: dict[str, int] = {}
         self.size : int = 0
+        self.known_subnets = []
         #print(len(self.obs_vec))
 
     def add_host(
@@ -68,6 +71,7 @@ class RedObservation(Observation):
                 int(view.impacted),
             ]
         self.size += 7
+        self.known_subnets.append(self.network.hosts[host].subnet.name)
         #print(len(self.obs_vec))
         #print(list(self.obs.keys()))
         #print(self.obs_vec)
@@ -103,6 +107,7 @@ class RedObservation(Observation):
         self.obs_index = {}
         self.obs_vec = [0] * self.max_size
         self.size = 0
+        self.known_subnets = []
         self.add_host(entry_host, on_host=True)
 
         return np.array(self.obs_vec)
