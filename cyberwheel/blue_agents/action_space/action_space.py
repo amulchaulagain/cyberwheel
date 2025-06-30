@@ -3,9 +3,8 @@ from gymnasium.core import ActType
 from gymnasium import Space
 
 from cyberwheel.blue_actions.blue_action import BlueAction
-from cyberwheel.red_actions.actions.art_killchain_phases import (
+from cyberwheel.red_actions.actions import (
     ARTKillChainPhase,
-    ARTAction,
 )
 from cyberwheel.network.network_base import Network
 
@@ -35,8 +34,8 @@ class ActionSpace(ABC):
 
     def __init__(self, network: Network) -> None:
         self.network = network
-        self.hosts = network.get_hosts()
-        self.subnets = network.get_all_subnets()
+        self.hosts = list(network.hosts.keys())
+        self.subnets = list(network.subnets.keys())
         self.num_hosts = len(self.hosts)
         self.num_subnets = len(self.subnets)
 

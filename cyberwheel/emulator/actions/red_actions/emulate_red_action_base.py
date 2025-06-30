@@ -5,14 +5,15 @@ Module defines the class to execute actions in the emulator.
 from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
+from importlib.resources import files
 from cyberwheel.red_actions.red_base import ARTAction, RedActionResults
 import subprocess
 from subprocess import CompletedProcess
 from typing import Any
 from cyberwheel.emulator.utils import read_config
 
-DIR_PATH = os.path.dirname(os.path.abspath(__file__))
-EMULATOR_CONFIG_PATH = f"{DIR_PATH}/../../"
+
+EMULATOR_CONFIG_PATH = files("cyberwheel.emulator").joinpath("configs")
 EMULATOR_CONFIG = "emulator_config.yaml"
 
 

@@ -10,16 +10,11 @@ from copy import deepcopy
 from torch.utils.tensorboard import SummaryWriter
 from torch import optim, nn
 from importlib.resources import files
+from statistics import mean, median
 
-from cyberwheel.utils import RLAgent, get_action_mask
+from cyberwheel.utils import RLAgent, get_service_map
+from cyberwheel.utils.set_seed import set_seed
 from cyberwheel.network.network_base import Network
-from cyberwheel.red_actions.actions.art_killchain_phases import (
-    ARTDiscovery,
-    ARTLateralMovement,
-    ARTPrivilegeEscalation,
-    ARTImpact,
-)
-from cyberwheel.red_actions import art_techniques
 
 
 class Trainer:
@@ -27,69 +22,79 @@ class Trainer:
         self.args = args
         m = importlib.import_module("cyberwheel.cyberwheel_envs")
         self.env = getattr(m, args.environment)
-
+        self.deterministic = os.getenv("CYBERWHEEL_DETERMINISTIC", "False").lower() in ('true', '1', 't')
+        self.args.deterministic = self.deterministic
+        self.seed = args.seed
     def make_env(self, rank, evaluation: bool = False):
         """
         Utility function for multiprocessed env.
 
         :param env_id: the environment ID
         :param num_env: the number of environments you wish to have in subprocesses
-        :param seed: the inital seed for RNG
         :param rank: index of the subprocess
         """
 
         def _init():
             if evaluation:
-                config_path = files("cyberwheel.resources.configs.network").joinpath(
-                    self.args.network_config
-                )
-                env = self.env(
-                    self.args, network=Network.create_network_from_yaml(config_path)
-                )
+                config_file = self.args.network_config if isinstance(self.args.network_config, str) else random.choice(self.args.network_config)
+                config_path = files("cyberwheel.data.configs.network").joinpath(config_file) # TODO: If multiple network configs, run 1 eval for each network
+                env = self.env(self.args, network=random.choice(list(self.networks.values()))[0], evaluation=True, networks={name: net[0] for name, net in self.networks.items()})
             else:
-                env = self.env(self.args, network=self.networks[rank])
+                env = self.env(self.args, network=random.choice(list(self.networks.values()))[rank], evaluation=False, networks={name: net[rank] for name, net in self.networks.items()})
             self.max_action_space_size = env.max_action_space_size
-            env.reset(
-                seed=self.args.seed + rank
-            )  # Reset the environment with a specific seed
+            env.reset()
             env = gym.wrappers.RecordEpisodeStatistics(
                 env
             )  # This tracks the rewards of the environment that it wraps. Used for logging
             return env
 
         return _init
-
-    def evaluate(self, agent):
+    
+    def get_action_mask(self, action_space_size, action_masks):
+        action_masks[:action_space_size] = True # Valid actions
+        action_masks[action_space_size:] = False # Invalid actions
+        return action_masks
+    
+    def evaluate(self, agent, env):
         """Evaluate 'agent'"""
         # We evaluate on CPU because learning is already happening on GPUs.
         # You can evaluate small architectures on CPU, but if you increase the neural network size,
         # you may need to do fewer evaluations at a time on GPU.
-        self.args.evaluation = True
+        import time
         eval_device = torch.device("cpu")
-        env = self.env(self.args)
+        #env = self.env(self.args, )
         episode_rewards = []
-        action_masks = torch.zeros(self.max_action_space_size, dtype=torch.bool).to(
-            eval_device
-        )
-        # print(f"Max Action Space (Should be 2): {self.max_action_space_size}")
+        self.episode_decoy_attacks = []
+        action_masks = torch.zeros(self.max_action_space_size, dtype=torch.bool).to(eval_device)
         total_reward = 0
+        
         # Standard evaluation loop to estimate mean episodic return
         for episode in range(self.args.eval_episodes):
+            #episode_start_time = time.time()
+            num_decoy_attacks = 0
             obs, _ = env.reset()
             for step in range(self.args.num_steps):
                 obs = torch.Tensor(obs).to(eval_device)
-                # print(len(env.network.get_all_hosts()))
-                action_masks = get_action_mask(
-                    env.rl_agent.action_space._action_space_size, action_masks
-                )
+
+                action_masks = self.get_action_mask(env.envs[0].unwrapped.rl_agent.action_space._action_space_size, action_masks)
 
                 action, _, _, _ = agent.get_action_and_value(
                     obs, action_mask=action_masks
                 )
+                eval_step_start_time = time.time()
                 obs, rew, done, _, info = env.step(action)
+                #print(info["decoy_attacked"])
+                #print("-------------------------")
+                if "decoy_attacked" in info and info["decoy_attacked"][0]:
+                #    print("decoy was attacked in TRAINER")
+                    num_decoy_attacks += 1
+                #print(f"Evaluation step took: \t\t{time.time() - eval_step_start_time}")
                 total_reward += rew
             episode_rewards.append(total_reward)
+            self.episode_decoy_attacks.append(num_decoy_attacks)
             total_reward = 0
+            #episode_time = time.time() - episode_start_time
+            #print(f"Evaluation ep took: \t\t{episode_time}")
 
         episodic_return = float(sum(episode_rewards)) / self.args.eval_episodes
         self.args.evaluation = False
@@ -97,102 +102,51 @@ class Trainer:
 
     def run_evals(self, model, globalstep):
         """Evaluate 'model' on tasks listed in 'eval_queue' in a separate process"""
-        # TRY NOT TO MODIFY: seeding
         eval_device = torch.device("cpu")
-
-        # This may not be necessary, but we do it in the main training process
-        random.seed(self.args.seed)
-        np.random.seed(self.args.seed)
-        torch.manual_seed(self.args.seed)
-        torch.backends.cudnn.deterministic = self.args.deterministic
-
-        env_funcs = [self.make_env(i, evaluation=True) for i in range(1)]
-
-        # Load the agent
-        sample_env = gym.vector.SyncVectorEnv(env_funcs)
-
-        obs_shape = sample_env.single_observation_space.shape
-        as_size = sample_env.envs[0].max_action_space_size
-        eval_agent = RLAgent(obs_shape, as_size)
-
+        print(model)
         model = torch.load(model, map_location=eval_device)
-        eval_agent.load_state_dict(model)
-        eval_agent.eval()
-        # Evaluate the agent
-        result = self.evaluate(eval_agent)
-        # Store evaluation parameters and results
+        results = {}
+        for network_name in self.networks:
+            env_funcs = [self.make_env(i, evaluation=True) for i in range(1)]
+
+            # Load the agent
+            sample_env = gym.vector.SyncVectorEnv(env_funcs)
+            eval_agent = RLAgent(sample_env).to(eval_device)
+            
+            eval_agent.load_state_dict(model)
+            eval_agent.eval()
+            # Evaluate the agent
+            result = self.evaluate(eval_agent, sample_env)
+            # Store evaluation parameters and results
+            results[network_name] = result
+            
         return (
-            self.args.network_config,
             self.args.decoy_config,
-            self.args.min_decoys,
-            self.args.max_decoys,
-            self.args.reward_scaling,
             self.args.reward_function,
             self.args.red_agent,
-            result,
+            results,
             globalstep,
         )
-
-    def get_service_map(self, network: Network):
-        """
-        Class function to get the service mapping based on host attributes.
-        """
-        killchain = [
-            ARTDiscovery,
-            ARTPrivilegeEscalation,
-            ARTImpact,
-            ARTLateralMovement,
-        ]
-        service_mapping = {}
-        for host in network.get_all_hosts():
-            service_mapping[host.name] = {}
-            for kcp in killchain:
-                service_mapping[host.name][kcp] = []
-                kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
-                for mid in kcp_valid_techniques:
-                    technique = art_techniques.technique_mapping[mid]
-                    if len(host.host_type.cve_list & technique.cve_list) > 0:
-                        service_mapping[host.name][kcp].append(mid)
-        return service_mapping
-
+    
     def wandb_setup(self):
         # Initialize Weights and Biases tracking
         import wandb
 
-        if self.args.resume:
-            api = wandb.Api()
-            run_id = None
-            for run in api.runs(
-                path=f"{self.args.wandb_entity}/{self.args.wandb_project_name}"
-            ):
-                if run.name == self.args.experiment_name:
-                    run_id = run.id
-                    break
-            wandb.init(
-                project=self.args.wandb_project_name,  # Can be whatever you want
-                entity=self.args.wandb_entity,
-                sync_tensorboard=True,  # Data logged to the tensorboard SummaryWriter will be sent to W&B
-                config=vars(self.args),  # Saves args as the run's configuration
-                name=self.args.experiment_name,  # Unique run name
-                monitor_gym=False,  # Does not attempt to render any episodes
-                save_code=False,
-                resume="allow",
-                id=run_id,
-            )
-        else:
-            wandb.init(
-                project=self.args.wandb_project_name,  # Can be whatever you want
-                entity=self.args.wandb_entity,
-                sync_tensorboard=True,  # Data logged to the tensorboard SummaryWriter will be sent to W&B
-                config=vars(self.args),  # Saves args as the run's configuration
-                name=self.args.experiment_name,  # Unique run name
-                monitor_gym=False,  # Does not attempt to render any episodes
-                save_code=False,
-            )
+        self.run = wandb.init(
+            project=self.args.wandb_project_name,  # Can be whatever you want
+            entity=self.args.wandb_entity,
+            sync_tensorboard=True,  # Data logged to the tensorboard SummaryWriter will be sent to W&B
+            config=vars(self.args),  # Saves args as the run's configuration
+            name=self.args.experiment_name,  # Unique run name
+            monitor_gym=False,  # Does not attempt to render any episodes
+            save_code=False,
+        )
+        
+        self.run.define_metric("episodic_runtime", summary="mean")
 
     def configure_training(self):
         self.writer = SummaryWriter(
-            files("cyberwheel.runs").joinpath(self.args.experiment_name)
+            files("cyberwheel.data.runs").joinpath(self.args.experiment_name)
         )  # Logs data to tensorboard and W&B
         self.writer.add_text(
             "hyperparameters",
@@ -204,31 +158,44 @@ class Trainer:
             ),
         )
         # Seeding
-        random.seed(self.args.seed)
-        np.random.seed(self.args.seed)
-        torch.manual_seed(self.args.seed)
-        torch.backends.cudnn.deterministic = self.args.deterministic
+        if self.deterministic:
+            set_seed(self.seed)
+            torch.backends.cudnn.deterministic = True
+        else:
+            torch.backends.cudnn.deterministic = False
+            #torch.set_num_threads(1)
 
-        # Use a GPU if available. You can choose a specific GPU (for example, the 1st GPU) by setting --device to "cuda:0"
+        # Use a GPU if available. You can choose a specific GPU with CUDA, for example by setting --device to "cuda:0"
         # Defaults to 'cpu'
         self.device = self.args.device
         print(f"Using device {self.device}")
 
         # Environment setup
 
-        # Load network from yaml here
-        network_config = files("cyberwheel.resources.configs.network").joinpath(
-            self.args.network_config
-        )
+        # Load networks from yaml here
+        network_configs = []
+        if isinstance(self.args.network_config, str):
+            network_configs.append(self.args.network_config)
+        else:
+            for config in self.args.network_config:
+                network_configs.append(config)
+        
+        self.networks = {}
+        self.args.service_mapping = {}
+        for config in network_configs:
+            network_config = files("cyberwheel.data.configs.network").joinpath(
+                config
+            )
 
-        print(f"Building network: {self.args.network_config} ...")
+            print(f"Building network: {config} ...")
 
-        network = Network.create_network_from_yaml(network_config)
-        self.networks = [deepcopy(network) for i in range(self.args.num_envs)]
+            network = Network.create_network_from_yaml(network_config)
+            network_name = network.name
+            self.networks[network_name] = [deepcopy(network) for i in range(self.args.num_envs)]
 
-        print("Mapping attack validity to hosts...", end=" ")
-        self.args.service_mapping = self.get_service_map(network)
-        print("done")
+            print("Mapping attack validity to hosts...", end=" ")
+            self.args.service_mapping[network_name] = get_service_map(network)
+            print("done")
 
         print("Defining environment(s) and beginning training:", end="\n\n")
 
@@ -288,11 +255,14 @@ class Trainer:
         ).to(self.device)
         self.global_step = 0
         self.start_time = time.time()
-        self.resets = np.array(self.envs.reset()[0])
+        self.resets = np.array(self.envs.reset(seed=[self.seed + i for i in range(self.args.num_envs)])[0])
         self.next_obs = torch.Tensor(self.resets).to(self.device)
         self.next_done = torch.zeros(self.args.num_envs).to(self.device)
 
     def train(self, update):
+        self.resets = np.array(self.envs.reset()[0])
+        self.next_obs = torch.Tensor(self.resets).to(self.device)
+
         # Annealing the rate if instructed to do so.
         if self.args.anneal_lr:
             # Decreases the learning rate from args.lr to 0 over the course of training.
@@ -303,27 +273,26 @@ class Trainer:
         # Run an episode in each environment. This loop collects experience which is later used for optimization.
         episode_start = time.time_ns()
         for step in range(0, self.args.num_steps):
+            if self.deterministic:
+                set_seed(self.seed)
+            self.seed += self.args.num_envs
+            
             if isinstance(self.envs, gym.vector.AsyncVectorEnv):
-                action_space_sizes = (
-                    self.envs.call("red_agent_action_space_size")
-                    if self.args.train_red
-                    else self.envs.call("blue_agent_action_space_size")
-                )
+                action_space_sizes = self.envs.call("rl_agent_action_space_size")
             else:
                 action_space_sizes = [
-                    env.unwrapped.rl_agent.action_space._action_space_size
-                    for env in self.envs.envs
+                    env.unwrapped.rl_agent.action_space._action_space_size for env in self.envs.envs
                 ]
 
             for i, action_space_size in enumerate(action_space_sizes):
-                self.action_masks[step][i] = get_action_mask(
+                self.action_masks[step][i] = self.get_action_mask(
                     action_space_size, self.action_masks[step][i]
                 )
 
             self.global_step += 1 * self.args.num_envs
             self.obs[step] = self.next_obs
             self.dones[step] = self.next_done
-
+            #print("B")
             # ALGO LOGIC: action logic
             # Select an action using the current policy and get a value estimate
             with torch.no_grad():
@@ -331,30 +300,48 @@ class Trainer:
                     self.next_obs, action_mask=self.action_masks[step]
                 )
                 self.values[step] = value.flatten()
+            #print("C")
 
             self.actions[step] = action
             self.logprobs[step] = logprob
             # TRY NOT TO MODIFY: execute the game and log data.
             # Execute the selected action in the environment to collect experience for training.
             temp_action = action.cpu().numpy()
+            #train_step_start_time = time.time()
+            #print("D")
             self.next_obs, reward, done, _, info = self.envs.step(temp_action)
+            #done = np.logical_or(term, trunc)
+
+            #print("E")
+            #print(f"Training step took: \t\t{time.time() - train_step_start_time}")
             self.rewards[step] = torch.tensor(reward).to(self.device).view(-1)
-            self.next_obs, self.next_done = torch.Tensor(self.next_obs).to(
-                self.device
-            ), torch.Tensor(done).to(self.device)
+            self.next_obs, self.next_done = torch.Tensor(self.next_obs).to(self.device), torch.Tensor(
+                done
+            ).to(self.device)
+
+            #print("F")
         end_time = time.time_ns()
         episode_time = (end_time - episode_start) / (10**9)
+        #print(f"Training ep took: \t\t{episode_time}")
 
         # Calculate and log the mean reward for this episode.
+        #print(self.rewards.sum(axis=0))
+        #print(self.rewards.sum(axis=0).mean())
         mean_rew = self.rewards.sum(axis=0).mean()
         print(f"global_step={self.global_step}, episodic_return={mean_rew}")
+        if mean_rew == 0:
+            print("mean reward is 0 here?")
+            #print(self.rewards.cpu().numpy())
         self.writer.add_scalar("charts/episodic_return", mean_rew, self.global_step)
+        
         self.writer.add_scalar(
-            f"evaluation/episodic_runtime",
+            f"charts/episodic_runtime",
             episode_time,
             self.global_step,
         )
-
+        if self.args.track:
+            self.run.log({"episodic_runtime": episode_time})
+        
         # bootstrap value if not done
         # Calculate advantages used to optimize the policy and returns which are compared to values to optimize the critic.
         with torch.no_grad():
@@ -481,7 +468,7 @@ class Trainer:
         if (update - 1) % self.args.save_frequency == 0:
             start_eval = time.time()
             # Save the model
-            run_path = files("cyberwheel.models").joinpath(self.args.experiment_name)
+            run_path = files("cyberwheel.data.models").joinpath(self.args.experiment_name)
             if not os.path.exists(run_path):
                 os.makedirs(run_path)
             agent_path = run_path.joinpath("agent.pt")
@@ -505,28 +492,38 @@ class Trainer:
             # Run evaluation
             print("Evaluating Agent...")
 
-            eval_results = self.run_evals(globalstep_path, self.global_step)
+            eval_results = self.run_evals(agent_path, self.global_step) # TODO: globalstep or agent?
 
             # Log eval results
             (
-                eval_network_config,
                 eval_decoy_config,
-                eval_min_decoys,
-                eval_max_decoys,
-                eval_reward_scaling,
                 eval_reward_function,
                 eval_red_agent,
                 eval_return,
                 eval_step,
             ) = eval_results
-            self.writer.add_scalar(
-                f"evaluation/{eval_network_config.split('.')[0]}_{eval_decoy_config}_{eval_reward_scaling}|{eval_min_decoys}-{eval_max_decoys}_{eval_reward_function}reward__{eval_red_agent}_episodic_return",
-                eval_return,
-                eval_step,
-            )
-            self.writer.add_scalar(
-                "charts/eval_time", int(time.time() - start_eval), self.global_step
-            )
+            for network_name in eval_return:
+                self.writer.add_scalar(
+                    f"evaluation/{network_name}_{eval_decoy_config}|{eval_reward_function}reward__{eval_red_agent}_episodic_return",
+                    eval_return[network_name],
+                    eval_step,
+                )
+                self.writer.add_scalar(
+                    "charts/eval_time", int(time.time() - start_eval), self.global_step
+                )
+                #print(self.episode_decoy_attacks)
+                mean_decoys_attacked = mean(self.episode_decoy_attacks)
+                median_decoys_attacked = median(self.episode_decoy_attacks)
+                self.writer.add_scalar(
+                    f"evaluation/{network_name}_{eval_decoy_config}|{eval_reward_function}reward__{eval_red_agent}_mean_decoys_attacked",
+                    mean_decoys_attacked,
+                    eval_step,
+                )
+                self.writer.add_scalar(
+                    f"evaluation/{network_name}_{eval_decoy_config}|{eval_reward_function}reward__{eval_red_agent}_median_decoys_attacked",
+                    median_decoys_attacked,
+                    eval_step,
+                )
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         self.writer.add_scalar(

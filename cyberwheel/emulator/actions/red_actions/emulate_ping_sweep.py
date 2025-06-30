@@ -94,9 +94,10 @@ class EmulatePingSweep(EmulateRedAction):
         """
         for discovered_ip in discovered_ips:
             # NOTE: network.get_all_hosts() does not get decoys
-            for host in self.network.get_all_hosts():
-                if str(host.ip_address) == discovered_ip:
-                    self.action_results.add_host(host)
+            self.action_results.add_host(self.network.get_node_from_ip(discovered_ip))
+            #for host in self.network.get_all_hosts():
+            #    if str(host.ip_address) == discovered_ip:
+            #        self.action_results.add_host(host)
         #print(
         #    f"added discovered hosts to action results: {[host.name for host in self.action_results.discovered_hosts]}"
         #)

@@ -11,6 +11,7 @@ from cyberwheel.network.network_base import Network
 from pprint import pprint
 from subprocess import CompletedProcess
 from typing import Any, Dict, Iterable, List, cast
+from importlib.resources import files
 import json
 import pathlib
 import re
@@ -26,9 +27,8 @@ import subprocess
 # subnet = Subnet(name="192.168.0.0", ip_range="192.168.0.0/24", router=router)
 
 # Paths and file locations
-DIR_PATH = pathlib.Path(__file__).parent.resolve()
-EMULATOR_CONFIG_PATH = f"{DIR_PATH}/../"
-NETWORK_CONFIG_PATH = f"{DIR_PATH}/../../resources/configs/network"
+NETWORK_CONFIG_PATH = files("cyberwheel.data.configs").joinpath("network")
+EMULATOR_CONFIG_PATH = files("cyberwheel.emulator").joinpath("configs")
 EMULATOR_CONFIG = "emulator_config.yaml"
 QUERY_FILE = "query.txt"
 
@@ -88,7 +88,7 @@ class EmulatorDectector(Detector):
 
         cmd_arr = [
             f"sshpass -p {siem_pwd} firewheel ssh {siem_user}@{siem_hostname}",
-            f"$(cat {DIR_PATH / QUERY_FILE})",
+            f"$(cat {EMULATOR_CONFIG_PATH / QUERY_FILE})",
         ]
         cmd = " ".join(cmd_arr)
         #print("Querying SIEM logs in the last 5 minutes...")
@@ -119,7 +119,7 @@ class EmulatorDectector(Detector):
         #print("parsing logs into hits...\n")
 
         for hit in hits:
-            pprint(hit)
+            #pprint(hit)
             id = hit["_id"]
             source = hit["_source"]
             timestamp = source["@timestamp"]
@@ -206,7 +206,7 @@ class EmulatorDectector(Detector):
                 dst_host_type.decoy = True
                 temp_dst_host = Host(
                     name="dst_host",
-                    subnet=self.network.get_all_subnets()[0],
+                    subnet=next(iter(self.network.subnets.values())),
                     host_type=dst_host_type,
                 )
                 temp_dst_host.set_ip_from_str(dst_ip)

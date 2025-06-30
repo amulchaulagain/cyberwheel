@@ -1,16 +1,13 @@
-from ipaddress import IPv4Address, IPv6Address
-import networkx as nx
-import numpy as np
-import random
 from abc import ABC, abstractmethod
-from typing import Type, List, Tuple, Any
+from ipaddress import IPv4Address, IPv6Address
+from typing import Type, List, Any, Iterable
 
-from ray import init
 from cyberwheel.red_actions.red_base import ARTAction
-from cyberwheel.network.network_base import Host, Subnet
+from cyberwheel.network.network_base import Host
 from cyberwheel.network.service import Service
 from cyberwheel.red_actions.red_base import RedActionResults
-from cyberwheel.red_actions.actions.art_killchain_phases import ARTKillChainPhase
+from cyberwheel.red_actions.actions import ARTKillChainPhase
+from cyberwheel.red_actions.technique import Technique
 from cyberwheel.reward import RewardMap
 
 
@@ -50,6 +47,26 @@ class RedAgent(ABC):
     def reset(self) -> None:
         pass
 
+class RedAgentResult:
+    def __init__(
+        self,
+        action: ARTKillChainPhase | Technique,
+        src_host: Host,
+        target_host: Host,
+        success: bool,
+        obs: Iterable[int] = None,
+        action_results: RedActionResults = None,
+    ):
+        """
+        - `name`: name of the red action executed
+        - `success`: whether this action successfully executed or not
+        """
+        self.action = action
+        self.src_host = src_host
+        self.target_host = target_host
+        self.success = success
+        self.obs = obs
+        self.action_results = action_results
 
 class KnownHostInfo:
     """
@@ -74,31 +91,28 @@ class KnownHostInfo:
         services: List[Service] = [],
         vulnerabilities: List[str] = [],
         leader=False,
+        on_host=False
     ):
         self.last_step = last_step
-        self.ports_scanned = scanned
-        self.ping_sweeped = sweeped
+        self.scanned = scanned
+        self.sweeped = sweeped
+
         self.ip_address = ip_address
         self.services = services
         self.vulnerabilities = vulnerabilities
         self.type = type
+        self.discovered = False
+        self.escalated = False
         self.routes = None
         self.impacted = False
         self.is_leader = leader
-
-        # temp data for rl agent
-        self.scanned = False
-        self.sweeped = False
-        self.discovered = False
-        self.on_target = False
-        self.escalated = False
-        self.impacted = False
+        self.on_host = False
 
     def scan(self):
-        self.ports_scanned = True
+        self.scanned = True
 
     def is_scanned(self):
-        return self.ports_scanned
+        return self.scanned
 
     def update_killchain_step(self):
         self.last_step += 1
@@ -140,12 +154,11 @@ class AgentHistory:
     *   step - the last step of the simulation
     """
 
-    def __init__(self, initial_host: Host):
+    def __init__(self, initial_host: Host = None):
         self.history: List[dict[str, Any]] = (
             []
         )  # List of StepInfo objects detailing step information by step
         self.red_action_history: List[RedActionResults] = []
-        self.mapping = {}
         self.hosts = (
             {}
         )  # Hosts discovered, and whether or not they've been scanned successfully yet
@@ -153,13 +166,11 @@ class AgentHistory:
             {}
         )  # Subnets discovered, and last killchainstep performed on them (by index)
         self.step = -1
-
-        self.hosts[initial_host.name] = KnownHostInfo(
-            ip_address=initial_host.ip_address
-        )
-        self.subnets[initial_host.subnet.name] = KnownSubnetInfo()
-        self.mapping[initial_host.name] = initial_host
-        self.mapping[initial_host.subnet.name] = initial_host.subnet
+        if initial_host:
+            self.hosts[initial_host.name] = KnownHostInfo(
+                ip_address=initial_host.ip_address, on_host=True
+            )
+            self.subnets[initial_host.subnet.name] = KnownSubnetInfo()
 
     def update_step(
         self,
@@ -193,34 +204,3 @@ class AgentHistory:
 
     def recent_history(self) -> RedActionResults:
         return self.red_action_history[-1]
-
-
-class HybridSetList:
-    """
-    Defines a Hybrid Set/List object. This allows us to take advantage of the O(1) time complexity for
-    membership checking of sets, while taking advantage of the O(1) time complexity of random.choice()
-    of lists.
-    """
-
-    def __init__(self):
-        self.data_set = set()
-        self.data_list = []
-
-    def add(self, value):
-        if value not in self.data_set:
-            self.data_set.add(value)
-            self.data_list.append(value)
-
-    def remove(self, value):
-        if value in self.data_set:
-            self.data_set.remove(value)
-            self.data_list.remove(value)
-
-    def get_random(self):
-        return random.choice(self.data_list)
-
-    def check_membership(self, value):
-        return value in self.data_set
-
-    def length(self):
-        return len(self.data_set)

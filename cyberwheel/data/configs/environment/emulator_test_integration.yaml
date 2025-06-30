@@ -1,0 +1,34 @@
+# Evaluation Parameters
+red_agent: rl_red_campaign.yaml
+blue_agent: rl_blue_agent.yaml
+environment: CyberwheelEmulator
+valid_targets: servers
+train_red: false
+train_blue: true
+red_model: EmulatorRed_IntegrationMergeTest_New
+blue_model: EmulatorBlue_IntegrationMergeTest
+campaign: true
+seed: 1
+
+checkpoint: agent
+download_model: true
+blue_run: svougabn 
+red_run: 6zeb9hq2 #bb8dzy37 # m3hsuegj (example config non shuffled) | bb8dzy37 (integration config trained against blue random agent) | p7q2ctcl (trained on multiple network sizes) | o0rvi9nu (shuffled integration config) | 35bmp88c (non-shuffled integration_config)
+wandb_project_name: Cyberwheel # required if download_model is true
+wandb_entity: oeschsec # required if download_model is true
+
+experiment: EmulatorTestIntegrationMergeTest_new
+visualize: false
+graph_name: EmulatorTestIntegrationMergeTest_new
+network_config: emulator_integration_config.yaml
+decoy_config: decoy_hosts.yaml
+host_config: host_defs_services.yaml
+detector_config: perfect_detector.yaml
+min_decoys: 2
+max_decoys: 3
+reward_scaling: 10.0
+reward_function: RLReward
+num_steps: 100
+num_episodes: 10
+deterministic: false
+network_size_compatibility: small

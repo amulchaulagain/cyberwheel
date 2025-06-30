@@ -3,6 +3,7 @@ Module defines the class and functions to perform setup actions in the emulator 
 """
 
 from __future__ import annotations
+from importlib.resources import files
 from cyberwheel.emulator.utils import read_config
 from cyberwheel.emulator.actions.blue_actions import (
     EmulateDeployDecoyHost,
@@ -23,15 +24,15 @@ from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.host import Host
 from cyberwheel.network.network_base import Network
 from typing import Any, Dict, List, Iterable
+from cyberwheel.network.subnet import Subnet
 import pathlib
 import subprocess
 import random
 import json
 
 
-DIR_PATH = pathlib.Path(__file__).parent.resolve()
-NETWORK_CONFIGS_PATH = f"{DIR_PATH}/../../resources/configs/network"
-EMULATOR_CONFIG_PATH = f"{DIR_PATH}/../"
+NETWORK_CONFIG_PATH = files("cyberwheel.data.configs").joinpath("network")
+EMULATOR_CONFIG_PATH = files("cyberwheel.emulator").joinpath("configs")
 EMULATOR_CONFIG = "emulator_config.yaml"
 
 
@@ -47,7 +48,7 @@ class EmulatorControl:
     def __init__(self, network: Network, network_config_name: str):
         self.network = network
         self.net_config_name = network_config_name
-        self.net_config = read_config(NETWORK_CONFIGS_PATH, network_config_name)
+        self.net_config = read_config(NETWORK_CONFIG_PATH, network_config_name)
         self.detector = EmulatorDectector(
             network_config=network_config_name, network=network
         )

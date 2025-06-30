@@ -14,9 +14,9 @@ from torch import optim, nn
 from importlib.resources import files
 from tqdm import tqdm
 
-from cyberwheel.utils import RLAgent
+from cyberwheel.utils import RLAgent, get_service_map
 from cyberwheel.network.network_base import Network
-from cyberwheel.red_actions.actions.art_killchain_phases import (
+from cyberwheel.red_actions.actions import (
     ARTDiscovery,
     ARTLateralMovement,
     ARTPrivilegeEscalation,
@@ -40,6 +40,9 @@ class EmulatorEvaluator:
         self.args = args
         m = importlib.import_module("cyberwheel.cyberwheel_envs")
         self.env_class = getattr(m, args.environment)
+        self.deterministic = os.getenv("CYBERWHEEL_DETERMINISTIC", "False").lower() in ('true', '1', 't')
+        self.args.deterministic = self.deterministic
+        self.seed = args.seed
 
     def make_env(self, rank):
         """
@@ -52,11 +55,12 @@ class EmulatorEvaluator:
         """
 
         def _init():
-            config_path = files("cyberwheel.resources.configs.network").joinpath(
+            config_path = files("cyberwheel.data.configs.network").joinpath(
                 self.args.network_config
             )
+            net = Network.create_network_from_yaml(config_path)
             env = self.env_class(
-                self.args, network=Network.create_network_from_yaml(config_path)
+                self.args, network=net, networks={net.name: net}
             )
 
             self.red_max_action_space_size = env.red_max_action_space_size
@@ -79,15 +83,15 @@ class EmulatorEvaluator:
             ARTLateralMovement,
         ]
         service_mapping = {}
-        for host in network.get_all_hosts():
-            service_mapping[host.name] = {}
+        for name, host in network.hosts.items():
+            service_mapping[name] = {}
             for kcp in killchain:
-                service_mapping[host.name][kcp] = []
+                service_mapping[name][kcp] = []
                 kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
                 for mid in kcp_valid_techniques:
                     technique = art_techniques.technique_mapping[mid]
                     if len(host.host_type.cve_list & technique.cve_list) > 0:
-                        service_mapping[host.name][kcp].append(mid)
+                        service_mapping[name][kcp].append(mid)
         return service_mapping
 
     def configure_evaluation(self):
@@ -96,14 +100,30 @@ class EmulatorEvaluator:
 
         # Set up network and Host-Technique mapping outside of environment.
         # This keeps the time-consuming processes from running for each environment.
-        network_config = files("cyberwheel.resources.configs.network").joinpath(
-            self.args.network_config
-        )
-        network = Network.create_network_from_yaml(network_config)
+        # Load networks from yaml here
+        network_configs = []
+        if isinstance(self.args.network_config, str):
+            network_configs.append(self.args.network_config)
+        else:
+            for config in self.args.network_config:
+                network_configs.append(config)
+        
+        self.networks = {}
+        self.args.service_mapping = {}
+        for config in network_configs:
+            network_config = files("cyberwheel.data.configs.network").joinpath(
+                config
+            )
 
-        self.args.service_mapping = self.get_service_map(network)
-        #env_funcs = [self.make_env(i) for i in range(1)]
-        #self.envs = gym.vector.SyncVectorEnv(env_funcs)
+            print(f"Building network: {config} ...")
+
+            network = Network.create_network_from_yaml(network_config)
+            network_name = network.name
+            self.networks[network_name] = network
+
+            print("Mapping attack validity to hosts...", end=" ")
+            self.args.service_mapping[network_name] = get_service_map(network)
+            print("done")
         self.env = self.make_env(0)()
 
         experiment_name = self.args.experiment
@@ -120,7 +140,7 @@ class EmulatorEvaluator:
             )
             blue_model = blue_run.file(agent_filename)
             blue_model.download(
-                files("cyberwheel.models").joinpath(self.args.blue_model), exist_ok=True
+                files("cyberwheel.data.models").joinpath(self.args.blue_model), exist_ok=True
             )
 
             red_run = api.run(
@@ -128,7 +148,7 @@ class EmulatorEvaluator:
             )
             red_model = red_run.file(agent_filename)
             red_model.download(
-                files("cyberwheel.models").joinpath(self.args.red_model), exist_ok=True
+                files("cyberwheel.data.models").joinpath(self.args.red_model), exist_ok=True
             )
 
         self.blue_max_action_space_size = self.env.blue_max_action_space_size
@@ -148,13 +168,13 @@ class EmulatorEvaluator:
         # Load model from models/ directory
         self.blue_agent.load_state_dict(
             torch.load(
-                files(f"cyberwheel.models.{self.args.blue_model}").joinpath(agent_filename),
+                files(f"cyberwheel.data.models.{self.args.blue_model}").joinpath(agent_filename),
                 map_location=self.device,
             )
         )
         self.red_agent.load_state_dict(
             torch.load(
-                files(f"cyberwheel.models.{self.args.red_model}").joinpath(agent_filename),
+                files(f"cyberwheel.data.models.{self.args.red_model}").joinpath(agent_filename),
                 map_location=self.device,
             )
         )
@@ -175,7 +195,7 @@ class EmulatorEvaluator:
             self.now_str = self.args.graph_name
         else:
             self.now_str = f"{experiment_name}_evaluate_{self.args.network_config.split('.')[0]}_{self.args.red_agent}_scaling{int(self.args.reward_scaling)}_{self.args.reward_function}reward"
-        self.log_file = files("cyberwheel.action_logs").joinpath(f"{self.now_str}.csv")
+        self.log_file = files("cyberwheel.data.action_logs").joinpath(f"{self.now_str}.csv")
 
         self.actions_df = pd.DataFrame()
         self.full_episodes = []

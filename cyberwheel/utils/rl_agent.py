@@ -1,6 +1,6 @@
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
 
 from torch.distributions.categorical import Categorical
 
@@ -10,15 +10,6 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
-
-
-def get_action_mask(action_space_size, action_masks):
-    # print(action_masks)
-    # print(f"Size: {action_space_size}")
-    action_masks[:action_space_size] = True  # Valid actions
-    action_masks[action_space_size:] = False  # Invalid actions
-    # print(action_masks)
-    return action_masks
 
 
 class RLAgent(nn.Module):

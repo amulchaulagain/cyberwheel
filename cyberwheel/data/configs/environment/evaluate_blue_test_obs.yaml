@@ -1,0 +1,29 @@
+# Evaluation Parameters
+red_agent: old_art_agent.yaml
+blue_agent: old_rl_blue_agent.yaml
+environment: CyberwheelRL
+valid_targets: all
+train_red: false
+train_blue: true
+campaign: false
+seed: 1
+deterministic: false
+
+checkpoint: agent
+download_model: true
+run: 5ae6c5wh # 5ae6c5wh | n42rekbk || i5ppeeqb | xfbzkk6a | psf9js49 | uqtxsbxv | 0ig6doq2 | hvbfm2sq | dfjhaecj
+wandb_project_name: Cyberwheel # required if download_model is true
+wandb_entity: oeschsec # required if download_model is true
+
+experiment_name: Smart_Remove
+visualize: false
+graph_name: Smart_Remove
+network_config: 15-host-network.yaml
+decoy_config: decoy_hosts.yaml
+host_config: host_defs_services.yaml
+detector_config: perfect_detector.yaml
+reward_function: RLReward
+num_steps: 100
+num_episodes: 10
+network_size_compatibility: small
+max_decoys: 10

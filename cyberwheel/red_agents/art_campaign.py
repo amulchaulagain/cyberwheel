@@ -3,17 +3,15 @@ import importlib
 
 from pathlib import PosixPath
 from typing_extensions import Self, Tuple, Type
-from importlib.resources import files
 
-from cyberwheel.red_agents import ARTAgent
-from cyberwheel.red_agents.red_agent_base import KnownHostInfo, KnownSubnetInfo
-from cyberwheel.network.network_base import Network, Host
 from cyberwheel.red_actions.red_base import RedActionResults
+from cyberwheel.red_agents import ARTAgent
+from cyberwheel.red_agents.red_agent_base import RedAgentResult
+from cyberwheel.network.network_base import Network, Host
 from cyberwheel.red_actions.technique import Technique
-from cyberwheel.red_agents.strategies import RedStrategy, BruteForce
 from cyberwheel.red_actions import art_techniques
-from cyberwheel.red_actions.atomic_test import AtomicTest
 from cyberwheel.reward import RewardMap
+from cyberwheel.red_agents.red_agent_base import KnownHostInfo, KnownSubnetInfo
 
 
 class ARTCampaign(ARTAgent):
@@ -23,28 +21,33 @@ class ARTCampaign(ARTAgent):
     These are also
     """
 
-    def __init__(self, network: Network, args):
-        self.args = args
-
-        super().__init__(network, args)
-
+    def __init__(
+        self,
+        network: Network,
+        args
+    ):
+        #self.args = args
+        super().__init__(
+            network,
+            args
+        )
+    
     def from_yaml(self) -> None:
         with open(self.config, "r") as f:
             config = yaml.safe_load(f)
-        self.entry_host = (
-            self.network.get_node_from_name(config["entry_host"])
-            if config["entry_host"]
-            else self.network.get_random_user_host()
-        )
-        #self.leader = (
-        #  self.network.get_node_from_name(config["leader"])
-        #    if config["leader"]
-        #    else self.network.get_random_server_host()
-        #)
-        #print([h.host_type.name for h in self.network.get_all_hosts()])
-        #known_types = [h for h in list(self.history.hosts.values())]
-        self.leader = []
-        #print(self.leader)
+        self.entry_host: Host = config["entry_host"]
+        self.current_host: Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
+        
+        self.leader: Host = config.get("leader", "random")
+        if self.leader.lower() == "random_user":
+            self.leader_host = self.network.get_random_user_host()
+        elif self.leader.lower() == "random_server":
+            self.leader_host = self.network.get_random_server_host()
+        elif self.leader.lower() == "random":
+            self.leader_host = self.network.get_random_host()
+        else:
+            self.leader_host = self.network.hosts[self.leader]
+
         sm = importlib.import_module("cyberwheel.red_agents.strategies")
         self.strategy = getattr(sm, config["strategy"])
 
@@ -81,15 +84,13 @@ class ARTCampaign(ARTAgent):
             self.do_lateral_movement = False
 
     def run_action(self, target_host: Host) -> Tuple[RedActionResults, Type[Technique]]:
-        #print(self.history.hosts)
-        #print(list(zip(self.history.hosts.items())))
-        self.leader = [k for k,v in self.history.hosts.items() if v.type == "Server"]
+        #self.leader = [k for k,v in self.history.hosts.items() if v.type == "Server"] # TODO
         step = self.history.hosts[target_host.name].get_next_step()
-
         if step > len(self.killchain) - 1:
             step = len(self.killchain) - 1
 
-        if self.current_host.name == target_host.name or not self.history.hosts[target_host.name].ports_scanned: # If already on the same host, or target host is not past Discovery
+        if self.current_host.name == target_host.name or not self.history.hosts[target_host.name].is_scanned():
+            #print(self.history.hosts[target_host.name].is_scanned())
             technique_class = self.killchain[step]["technique"]
             atomic_test = self.killchain[step]["atomic_test"]
         else:  # Will do lateral movement to get onto other host before continuing
@@ -102,8 +103,7 @@ class ARTCampaign(ARTAgent):
 
         action_results = RedActionResults(self.current_host, target_host)
         action_results.modify_alert(dst=target_host, src=self.current_host)
-
-        # TODO: Checking if technique will work: OS match, CVE in cve_list, Killchain check
+        #print(action_results.attack_success)
         action_results.add_successful_action()
 
         processes = []
@@ -124,7 +124,6 @@ class ARTCampaign(ARTAgent):
                 "technique": technique_name,
             },
         )
-        # TODO: Add metadata depending on killchain phase
         if (
             technique_class == art_techniques.RemoteSystemDiscovery
             and action_results.attack_success
@@ -138,11 +137,8 @@ class ARTCampaign(ARTAgent):
                     self.unknowns.add(h.name)
                 else:
                     self.history.hosts[h.name].ping_sweeped = True
-                if h.name not in self.history.mapping:
-                    self.history.mapping[h.name] = h
 
             if target_host.subnet.name not in self.history.subnets.keys():
-                self.history.mapping[target_host.subnet.name] = target_host.subnet
                 self.history.subnets[target_host.subnet.name] = KnownSubnetInfo(
                     scanned=True
                 )
@@ -153,8 +149,7 @@ class ARTCampaign(ARTAgent):
                     target_host.subnet.available_ips
                 )
                 self.history.subnets[target_host.subnet.name].scan()
-            elif target_host.subnet.name not in self.history.mapping.keys():
-                self.history.mapping[target_host.subnet.name] = target_host.subnet
+            elif target_host.subnet.name not in self.history.subnets.keys():
                 self.history.subnets[target_host.subnet.name] = target_host.subnet(
                     scanned=False
                 )
@@ -211,6 +206,7 @@ class ARTCampaign(ARTAgent):
         target_host = action_results.target_host
 
         if success:
+            #print("SUCCESS")
             target_info = self.history.hosts[target_host.name]
             if (
                 target_host.name == self.current_host.name
@@ -235,7 +231,8 @@ class ARTCampaign(ARTAgent):
         #self.history.step += 1 
         return
 
-    def act(self) -> type[Technique]:
+
+    def act(self, policy_action=None) -> RedAgentResult:
         """
         This defines the red agent's action at each step of the simulation.
         It will
@@ -273,7 +270,13 @@ class ARTCampaign(ARTAgent):
 
         # print(f"{action_obj.name} - from {source_host.name} to {target_host.name}")
         self.history.update_step(action, action_results)
-        return action
+        return RedAgentResult(
+            action, 
+            source_host, 
+            target_host, 
+            success,
+            action_results=action_results
+        )  # Returns what ARTAgent act() should, probably. Or the observation space?
 
     @classmethod
     def create_campaign_from_yaml(

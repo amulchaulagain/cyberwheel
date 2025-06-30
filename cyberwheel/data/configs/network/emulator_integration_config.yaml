@@ -1,0 +1,105 @@
+network:
+  name: integration_config
+  desc: Example config that defines a simplified network for integration testing
+
+# currently this block is not being parsed and is
+# only here to help visualize the topology
+topology:
+  - core_router:
+    - user_subnet:
+      - user01
+      - user02
+      - user03
+      - server01
+      - server02
+      - server03
+      - decoy01
+      - decoy02
+      - admin_workstation
+
+# Routers
+routers:
+  core_router:
+    default_route: internet
+    routes_by_name:
+      - user_subnet
+      - server_subnet
+      - dmz_subnet
+      - user_subnet2
+    routes:
+      - dest: 10.0.0.0/8
+        via: 10.0.0.1
+    firewall:
+
+# Subnets
+subnets:
+  user_subnet:
+    router: core_router
+    ip_range: 192.168.0.0/24
+    dns_server: 192.168.0.1
+    firewall:
+      # allow any traffic originating from server_subnet
+      - name: allow all from server_subnet
+        src: server_subnet
+
+      # only traffic allowed from dmz is from jump box on dest port 22
+      ## dest='all' and proto='tcp' is implied here
+      - name: allow ssh from dmz_jump_box
+        src: dmz_jump_box
+        port: 22
+
+      - src: internet
+
+# Hosts
+# Decoys must be added here since they need to be pre-created in the emulator
+host_type_config: resources/metadata/host_defs_services.yaml
+hosts:
+
+  # User hosts
+  user01:
+    type: workstation
+    subnet: user_subnet
+    firewall:  # if firewall is undefined or empty assume 'allow all'
+    routes:
+      - dest: 192.168.2.0/24
+        via: 192.168.0.1
+  user02:
+    type: workstation
+    subnet: user_subnet
+    firewall:
+      - name: foo
+        src: server01
+        port: 3389
+  user03:
+    type: workstation
+    subnet: user_subnet
+  server01:
+    type: web_server
+    subnet: user_subnet
+  server02:
+    type: web_server
+    subnet: user_subnet
+  server03:
+    type: web_server
+    subnet: user_subnet
+  decoy01:
+    type: decoy_server
+    subnet: user_subnet
+  decoy02:
+    type: decoy_server
+    subnet: user_subnet
+  admin_workstation:
+    type: workstation
+    subnet: user_subnet
+    firewall:
+      - name: allow SSH
+        src: all
+        port: 22
+
+interfaces:
+
+# This section is used by emulator to identity decoy hosts
+# Decoys (must match same name in topology and host section)
+decoys:
+  - decoy01
+  - decoy02

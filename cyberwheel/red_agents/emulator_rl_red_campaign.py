@@ -1,41 +1,32 @@
 import yaml
-import importlib
 
-from pathlib import PosixPath
-from typing_extensions import Self, Tuple, Type
-from importlib.resources import files
-
+from typing_extensions import Tuple, Type
 from typing import Iterable
 
-from cyberwheel.red_agents import ARTAgent, RLARTAgent, ARTCampaign, RLRedCampaign
+from cyberwheel.red_agents import RLRedCampaign
 import cyberwheel.red_agents.action_space as action_space
-from cyberwheel.red_agents.rl_red_agent import RLARTAgentResult, HostView
-from cyberwheel.red_agents.red_agent_base import KnownHostInfo, KnownSubnetInfo
+from cyberwheel.red_agents.red_agent_base import RedAgentResult
 from cyberwheel.network.network_base import Network, Host
 from cyberwheel.red_actions.red_base import RedActionResults
 from cyberwheel.red_actions.technique import Technique
-from cyberwheel.red_agents.strategies import RedStrategy, BruteForce
 from cyberwheel.red_actions.art_techniques import RemoteSystemDiscovery, NetworkServiceDiscovery, SudoandSudoCaching, DataEncryptedforImpact, LinuxLateralMovement
-from cyberwheel.red_actions.atomic_test import AtomicTest
-from cyberwheel.reward import RewardMap
+from cyberwheel.red_actions.actions import Nothing
+from cyberwheel.observation.red_observation import HostView
 
 import numpy as np
 
 class EmulatorRLRedCampaign(RLRedCampaign):
     def __init__(self, network: Network, args) -> None:
         super().__init__(network, args)
-
-        self.observation = {}
-        self.observation[str(self.current_host.ip_address)] = HostView(self.current_host.name, on_host=True)
-        self.max_obs_size = (100 + args.num_steps) * 7
-        self.mapping = {str(self.current_host.ip_address): self.current_host}
     
     def add_host(self, h: Host, sweeped = True):
-        self.mapping[str(h.ip_address)] = h
-        if str(h.ip_address) not in self.observation:
-            self.observation[str(h.ip_address)] = HostView(h.name, on_host=False, sweeped=sweeped)
-        if str(h.ip_address) not in self.action_space.hosts:
-            self.action_space.add_host(str(h.ip_address))
+        ip = str(h.ip_address)
+        self.mapping[ip] = h
+        if ip not in self.observation.obs:
+            self.observation.add_host(ip, on_host=False, sweeped=sweeped, ip_as_key=True)
+            #self.observation.obs[ip] = HostView(h.name, on_host=False, sweeped=sweeped)
+        if ip not in self.action_space.hosts:
+            self.action_space.add_host(ip)
             #print(self.observation)
 
     def from_yaml(self) -> None:
@@ -56,15 +47,17 @@ class EmulatorRLRedCampaign(RLRedCampaign):
             "Data Encrypted for Impact": DataEncryptedforImpact.get_atomic_test("08cbf59f-85da-4369-a5f4-049cffd7709f"),
             "LinuxLateralMovement": LinuxLateralMovement.get_atomic_test("uuid")
         }
-        self.entry_host: Host = self.network.get_random_user_host() # self.network.get_node_from_name("user01")
-        self.current_host : Host = self.entry_host
+        self.entry_host: Host = "random"
+        self.current_host : Host = self.network.get_random_user_host() #self.network.hosts[self.entry_host]
 
-        self.leader = []
+        self.leader = "random_server"
+        self.leader_host = self.network.get_random_server_host() #self.network.hosts["server1"]
 
         self.action_space = getattr(action_space, config["action_space"])(action_classes, str(self.current_host.ip_address))
 
         self.killchain = []
         self.reward_map = {
+            "nothing": (0.0, 0.0),
             "Remote System Discovery": (0.0, 0.0),
             "Network Service Discovery": (0.0, 0.0),
             "Sudo and Sudo Caching": (0.0, 0.0),
@@ -72,15 +65,15 @@ class EmulatorRLRedCampaign(RLRedCampaign):
             "LinuxLateralMovement": (0.0, 0.0)
         }
     
-    def select_action(self, action: int) -> RLARTAgentResult:
+    def select_action(self, action: int) -> RedAgentResult:
         art_action, target_host_ip = self.action_space.select_action(
             action
         )  # Selects ART Action, should include the action and target host (based on view?)
         #print(art_action)
-        target_host = self.mapping[target_host_ip]
+        target_host = self.mapping[target_host_ip] if target_host_ip != "nothing" else self.current_host
         success = self.validate_action(art_action, str(target_host.ip_address))
 
-        return RLARTAgentResult(
+        return RedAgentResult(
             art_action, 
             self.current_host, 
             target_host, 
@@ -93,12 +86,11 @@ class EmulatorRLRedCampaign(RLRedCampaign):
         return self.get_observation_space()
 
     def validate_action(self, action, target_host: str) -> bool:
-            if target_host not in self.observation:
-                #print(target_host)
-                #print(self.observation)
-                #print("NOT IN OBSERVATION")
+            if action == Nothing:
+                return True
+            if target_host not in self.observation.obs:
                 return False
-            host_view = self.observation[target_host]
+            host_view = self.observation.obs[target_host]
             print(f"On Host: {host_view.on_host}\nSweeped: {host_view.sweeped}\nScanned: {host_view.scanned}\nDiscovered: {host_view.discovered}\nEscalated: {host_view.escalated}\nImpacted: {host_view.impacted}\n")
             if action == RemoteSystemDiscovery:  # valid if host.sweeped == False
                 return not host_view.sweeped
@@ -146,50 +138,40 @@ class EmulatorRLRedCampaign(RLRedCampaign):
         src_host = str(result.src_host.ip_address)
         target_host = str(result.target_host.ip_address)
         if action == RemoteSystemDiscovery:  # Adds pingsweeped hosts to obs
-            self.observation[target_host].sweeped = True
+            self.observation.update_host(target_host, sweeped=True)
             hosts = {str(host.ip_address): host for host in result.discovered_hosts}
-            for h in hosts.keys() - self.observation.keys():
+            for h in hosts.keys() - self.observation.obs.keys():
                 self.add_host(hosts[h])
         elif action == NetworkServiceDiscovery:  # Scans target host # TODO: Get from results.metadata (list of services)
-            self.observation[target_host].scanned = True
-            self.observation[target_host].discovered = True
-            self.observation[target_host].type = self.mapping[target_host].host_type.name
+            self.observation.update_host(target_host, scanned=True)
+            self.observation.update_host(target_host, discovered=True)
+            self.observation.update_host(target_host, type=self.mapping[target_host].host_type.name)
         elif action == LinuxLateralMovement:  # Moves to target host # TODO: Get by running command to see if on target host
-            self.observation[target_host].on_host = True
-            self.observation[src_host].on_host = False
+            self.observation.update_host(target_host, on_host=True)
+            self.observation.update_host(src_host, on_host=False)
             self.current_host = result.target_host
         elif action == SudoandSudoCaching: # TODO : Get by running command to see if in sudo mode on host
-            self.observation[target_host].escalated = True
+            self.observation.update_host(target_host, escalated=True)
         elif action == DataEncryptedforImpact: # TODO: Get by running command to see if file encrypted on host
-            self.observation[target_host].impacted = True
+            self.observation.update_host(target_host, impacted=True)
 
     def get_observation_space(self):
         """
         Takes red agent view of network and transforms it into the obs vector.
         """
-        obs = []
-        for view in self.observation.values():
-            obs += [
-                view.get_type(),
-                int(view.sweeped),
-                int(view.scanned),
-                int(view.discovered),
-                int(view.on_host),
-                int(view.escalated),
-                int(view.impacted),
-            ]
-        obs = obs + [-1] * (self.max_obs_size - len(obs))
-        _obs = np.array(obs, dtype=np.float64)
-        return _obs
+        return np.array(self.observation.obs_vec, dtype=np.int64)
     
-    def reset(self, entry_host: Host, network: Network):
-        entry_host = network.get_random_user_host()
-        self.network = network
-        self.current_host = entry_host
-        self.observation = {}
-        self.observation[str(entry_host.ip_address)] = HostView(entry_host.name, on_host=True)
-        self.mapping = {str(self.current_host.ip_address): self.current_host}
-        self.action_space.reset(str(entry_host.ip_address))
+    def reset(self, network: Network, service_mapping: dict):
+        super().reset(network, service_mapping)
+        #entry_host = network.get_random_user_host()
+        #self.network = network
+        #self.current_host = entry_host
+        ip = str(self.current_host.ip_address)
+        self.mapping = {ip: self.current_host}
+        self.action_space.reset(ip)
+        return self.observation.reset(ip, ip_as_key=True)
+        
+        
 
     def run_action(self, target_host: Host, art_action) -> Tuple[RedActionResults, Type[Technique]]:
         self.leader = ["server01", "server02", "server03", "decoy01", "decoy02"]

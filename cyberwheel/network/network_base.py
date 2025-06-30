@@ -17,85 +17,134 @@ from cyberwheel.network.network_object import NetworkObject, FirewallRule
 from cyberwheel.network.router import Router
 from cyberwheel.network.service import Service
 from cyberwheel.network.subnet import Subnet
+from cyberwheel.utils.hybrid_set_list import HybridSetList
 
 
 class Network:
 
     def __init__(
         self,
-        name="",
+        name: str = "Network",
         graph: nx.Graph = None,
-        decoys=[],
-        disconnected_nodes=[],
-        isolated_hosts=[],
     ):
-        self.graph = nx.DiGraph(name=name) if graph == None else graph
-        self.name = name
-        self.decoys : list[Host] = decoys
-        self.disconnected_nodes = disconnected_nodes
-        self.isolated_hosts: List[Host] = isolated_hosts
+        self.graph : nx.DiGraph = graph if graph else nx.DiGraph(name=name)
+        self.name : str = name
+        
+        self.disconnected_nodes: list[Host] = []
+        self.isolated_hosts: list[Host] = []
+
+        self.hosts : dict[str, Host] = {name:host for name, host in self if isinstance(host, Host)}
+        self.subnets : dict[str, Subnet] = {name:subnet for name, subnet in self if isinstance(subnet, Subnet)}
+        self.decoys : dict[str, Host] = {hn:host for hn, host in self.hosts if host.decoy}
+
+        self.all_hosts = HybridSetList()
+        self.user_hosts = HybridSetList()
+        self.server_hosts = HybridSetList()
+
+        for hn, host in self.hosts:
+            self.all_hosts.add(hn)
+            if "workstation" in host.host_type.name.lower() or "user" in host.host_type.name.lower():
+                self.user_hosts.add(hn)
+            elif "server" in host.host_type.name.lower():
+                self.server_hosts.add(hn)
         self.decoys_reserve: List[Host] = []
 
     def __iter__(self):
-        return iter(self.graph)
+        #print(self.graph.nodes.items())
+        #return iter(self.graph.nodes("data").items())
+        return iter(self.graph.nodes.items())
 
     def __len__(self):
         return len(self.graph)
-
-    def size(self):
-        return len(self.get_all_hosts())
 
     def copy(self):
         name = self.name
         graph = self.graph.copy()
         return Network(name=name, graph=graph)
+    
+    def get_num_hosts(self) -> int:
+        """
+        Returns the number of Host objects in the Network.
+        """
+        return len(self.hosts)
 
-    def get_decoys(self):
-        return self.decoys
-
-    def num_decoys(self):
+    def get_num_decoys(self) -> int:
+        """
+        Returns the number of Decoy Hosts in the Network.
+        """
         return len(self.decoys)
 
-    def get_disconnected(self):
-        return self.disconnected_nodes
+    def copy(self) -> 'Network':
+        """
+        Returns a copy of the Network.
+        """
+        return Network(name=self.name, graph=self.graph.copy())
 
-    def get_connected(self):
-        return [
-            host
-            for _, host in self.graph.nodes(data="data")
-            if isinstance(host, Host) and not host.disconnected
-        ]
+    def get_all_hosts_on_subnet(self, subnet: Subnet) -> set[Host]:
+        """
+        Returns a list of all Hosts within the given Subnet
+        """
+        return list(subnet.get_connected_hosts())
 
-    def num_disconnected(self):
-        return len(self.disconnected_nodes)
-
-    # TODO: remove these in favor of self.add_node()
-    def add_subnet(self, subnet):
+    def add_subnet(self, subnet: Subnet):
+        """
+        Adds a Subnet to the Network.
+        """
         self.add_node(subnet)
-        # self.graph.add_node(subnet.name, data=subnet)
+        self.subnets[subnet.name] = subnet
 
-    def add_router(self, router):
+    def add_router(self, router: Router):
+        """
+        Adds a Router to the Network.
+        """
         self.add_node(router)
-        # self.graph.add_node(router.name, data=router)
 
-    def add_host(self, host):
+    def add_host(self, host: Host):
+        """
+        Adds a Host to the Network.
+        """
         self.add_node(host)
-        # self.graph.add_node(host.name, data=host)
+        self.hosts[host.name] = host
+        if host.decoy:
+            return
+        host_type = host.host_type.name.lower()
+        self.all_hosts.add(host.name)
+        if "server" in host_type:
+            self.server_hosts.add(host.name)
+        else:
+            self.user_hosts.add(host.name)
 
-    def add_node(self, node) -> None:
+
+    def add_node(self, node: Host | Subnet | Router) -> None:
+        """
+        Adds a Node to the Network.
+        """
         self.graph.add_node(node.name, data=node)
 
-    def remove_node(self, node: NetworkObject) -> None:
+    def remove_host(self, host: Host) -> Host:
+        """
+        Removes a Host from the Network
+        """
         try:
-            self.graph.remove_node(node.name)
+            self.graph.remove_node(host.name)
+            self.decoys.pop(host.name, None)
+            self.all_hosts.remove(host.name)
+            self.server_hosts.remove(host.name)
+            self.user_hosts.remove(host.name)
+            return self.hosts.pop(host.name, None)
         except nx.NetworkXError as e:
-            # TODO: raise custom exception?
             raise e
 
     def connect_nodes(self, node1, node2):
+        """
+        Connects two Nodes together in the Network.
+        """
         self.graph.add_edge(node1, node2)
 
     def isolate_host(self, host: Host, subnet: Subnet):
+        """
+        Isolates a Host from the Network, while keeping its data accessible
+        """
         host.isolated = True
         self.disconnect_nodes(host.name, subnet.name)
 
@@ -106,69 +155,34 @@ class Network:
     def is_subnet_reachable(self, subnet1, subnet2):
         return nx.has_path(self.graph, subnet1.name, subnet2.name)
 
-    def get_random_host(self):
-        all_hosts = self.get_all_hosts()
-        return random.choice(all_hosts)
+    def get_random_host(self): # Does not support determinism yet
+        return self.hosts[self.all_hosts.get_random()]
 
     def get_random_user_host(self):
-        hosts = self.get_hosts()
-        user_hosts = []
-        for h in hosts:
-            if h.host_type.name != None and "workstation" in h.host_type.name.lower():
-                user_hosts.append(h)
-        random_host = random.choice(user_hosts)
-        return random_host
+        return self.hosts[self.user_hosts.get_random()]
 
     def get_random_server_host(self):
-        hosts = self.get_hosts()
-        server_hosts = []
-        for h in hosts:
-            if h.host_type.name != None and "server" in h.host_type.name.lower():
-                server_hosts.append(h)
-        random_host = random.choice(server_hosts)
-        return random_host
-
-    def get_hosts(self) -> list[Host]:
-        return [
-            host for _, host in self.graph.nodes(data="data") if isinstance(host, Host)
-        ]  # type:ignore
-
-    def get_host_names(self) -> list[str]:
-        return [
-            host.name
-            for _, host in self.graph.nodes(data="data")
-            if isinstance(host, Host)
-        ]
-
-    def get_nondecoy_hosts(self) -> List[Host]:
-        return [
-            host
-            for _, host in self.graph.nodes(data="data")
-            if isinstance(host, Host) and not host.decoy
-        ]
+        return self.hosts[self.server_hosts.get_random()]
 
     def update_host_compromised_status(self, host: str, is_compromised: bool):
         try:
-            host_obj = self.get_node_from_name(host)
+            host_obj = self.hosts[host]
             host_obj.is_compromised = is_compromised
         except KeyError:
             return None  # return None if host not found
 
     def check_compromised_status(self, host_name: str) -> bool | None:
         try:
-            host_obj = self.get_node_from_name(host_name)
+            host_obj = self.hosts[host_name]
             return host_obj.is_compromised
         except KeyError:
             return None  # return None if host not found
 
     def get_num_hosts(self):
-        return len(self.get_all_hosts())
-
+        return len(self.hosts)
+    
     def get_num_subnets(self):
-        return len(self.get_all_subnets())
-
-    def get_num_routers(self):
-        return len(self.get_all_routers())
+        return len(self.subnets)
 
     # For debugging to view the network being generated
     def draw(self, **kwargs):
@@ -213,7 +227,7 @@ class Network:
     @classmethod
     def create_network_from_yaml(cls, network_config=None, host_config="host_defs_services.yaml"):  # type: ignore
         if network_config is None:
-            config_dir = files("cyberwheel.resources.configs.network")
+            config_dir = files("cyberwheel.data.configs.network")
             network_config: PosixPath = config_dir.joinpath(
                 "example_config.yaml"
             )  # type:ignore
@@ -228,9 +242,10 @@ class Network:
             config = yaml.safe_load(yaml_file)
 
         # Create an instance of the Network class
+        #print(config)
         network = cls(name=config["network"].get("name"))
 
-        conf_dir = files("cyberwheel.resources.configs.host_definitions")
+        conf_dir = files("cyberwheel.data.configs.host_definitions")
         conf_file = conf_dir.joinpath(host_config)
         with open(conf_file) as f:
             type_config = yaml.safe_load(f)
@@ -324,22 +339,17 @@ class Network:
                             decoy=service.get("decoy"),
                         )
                     )
-            # TODO: Maybe integrate with routers instead
             interfaces = []
             if config["interfaces"] and h in config["interfaces"]:
                 interfaces = config["interfaces"][h]
             # instantiate host
             if "decoy" in h:
-                d = Host(
-                    h,
-                    network.get_node_from_name(val["subnet"]),
-                    type,
-                )
+                d = Host(name=h, subnet=network.subnets[val["subnet"]], host_type=type)
                 network.decoys_reserve.append(d)
             else:
                 host = network.add_host_to_subnet(
                     name=h,
-                    subnet=network.get_node_from_name(val["subnet"]),
+                    subnet=network.subnets[val["subnet"]],
                     host_type=type,
                     firewall_rules=fw_rules,
                     services=services,
@@ -361,7 +371,6 @@ class Network:
         try:
             return self.graph.nodes[node]["data"]
         except KeyError as e:
-            # TODO: raise custom exception? return None?
             print(f"{node} not found in {self.name}")
             raise e
         
@@ -372,45 +381,19 @@ class Network:
         :param str node: node.name of object
         :returns NetworkObject:
         """
-        for h in self.get_all_hosts():
-            print(f"{h.name}: {str(h.ip_address)} == {ip}")
-            if str(h.ip_address) == ip:
+        for name, h in self.hosts.items():
+            temp_ip = str(h.ip_address)
+            #print(f"{name}: {temp_ip} == {ip}")
+            if temp_ip == ip:
                 return h
-        for d in self.decoys:
-            print(f"{d.name}: {str(d.ip_address)} == {ip}")
-            if str(d.ip_address) == ip:
+        for name, d in self.decoys:
+            temp_ip = str(d.ip_address)
+            #print(f"{name}: {temp_ip} == {ip}")
+            if temp_ip == ip:
                 return d
-
-
-    def get_all_hosts(self) -> list[Host]:
-        nodes_tuple = self.graph.nodes(data="data")  # type: ignore
-        hosts = [obj for _, obj in nodes_tuple if isinstance(obj, Host)]
-        #decoys = [obj for _, obj in ]
-        return hosts
     
     def get_all_decoys(self) -> list[Host]:
         return self.decoys
-
-    def get_all_hostnames(self) -> list[Host]:
-        nodes_tuple = self.graph.nodes(data="data")  # type: ignore
-        hosts = [obj.name for _, obj in nodes_tuple if isinstance(obj, Host)]
-
-        return hosts
-
-    def get_all_subnets(self) -> list:
-        nodes_tuple = self.graph.nodes(data="data")  # type: ignore
-        subnets = [obj for _, obj in nodes_tuple if isinstance(obj, Subnet)]
-
-        return subnets
-
-    def get_all_routers(self) -> list:
-        nodes_tuple = self.graph.nodes(data="data")  # type: ignore
-        routers = [obj for _, obj in nodes_tuple if isinstance(obj, Router)]
-
-        return routers
-
-    def get_all_hosts_on_subnet(self, subnet: Subnet) -> list:
-        return subnet.get_connected_hosts()
 
     def _is_valid_port_number(self, port) -> bool:
         """
@@ -494,7 +477,6 @@ class Network:
             # except NameError:
             #    return True
 
-            # TODO: catch any common exceptions (KeyError, etc.)
             # loop over each rule/element in firewall_rules
             for rule in dest.firewall_rules:
                 # break if src doesn't match
@@ -562,6 +544,8 @@ class Network:
         :param list[FirewallRule] **firewall_rules:
         :param list[Service] **services:
         """
+        #print(name)
+        #print(subnet)
         host = Host(
             name,
             subnet,
@@ -570,7 +554,7 @@ class Network:
             services=kwargs.get("services"),
         )
         # add host to graph
-        self.add_node(host)
+        self.add_host(host)
         # connect node to parent subnet
         self.connect_nodes(host.name, subnet.name)
         # assign IP, DNS, route for subnet, and default route
@@ -581,12 +565,13 @@ class Network:
         return host
 
     def initialize_interfacing(self):
-        h_names = [h.name for h in self.get_all_hosts() if len(h.interfaces) > 0]
-        for h in h_names:
-            host = self.get_node_from_name(h)
+        for h in self.hosts:
+            host = self.hosts[h]
+            if len(host.interfaces) <= 0:
+                continue
             interface_hosts = []
             for i in host.interfaces:
-                interface_hosts.append(self.get_node_from_name(i))
+                interface_hosts.append(self.hosts[i])
             host.interfaces = interface_hosts
 
     def remove_host_from_subnet(self, host: Host) -> None:
@@ -594,9 +579,8 @@ class Network:
         if host.ip_address is not None:
             ip: ipa.IPv4Address | ipa.IPv6Address = host.ip_address
             host.subnet.available_ips.append(ip)
-        if host in self.get_hosts():
-            self.remove_node(host)
-            host.subnet.remove_connected_host(host)
+        self.remove_host(host)
+        host.subnet.remove_connected_host(host)
         # TODO
         pass
 
@@ -611,20 +595,30 @@ class Network:
         :param IPv4Address | IPv6Address **dns_server:
         """
         host = self.add_host_to_subnet(*args, decoy=True, **kwargs)
-        self.decoys.append(host)
+        self.decoys[host.name] = host
+        self.all_hosts.add(host.name)
+        if host.host_type.name.lower() == "server":
+            self.server_hosts.add(host.name)
+        elif host.host_type.name.lower() in ["user", "workstation"]:
+            self.user_hosts.add(host.name)
         return host
 
     def remove_decoy_host(self, host: Host) -> None:
-        for _, h in self.graph.nodes(data="data"):
-            if not isinstance(h, Host):
-                continue
-            if h.name == host.name:
-                self.remove_host_from_subnet(host)
-                break
-        for i in range(len(self.decoys)):
-            if self.decoys[i].name == host.name:
-                break
-        self.decoys.remove(i)
+        self.remove_host_from_subnet(host)
+        self.decoys.pop(host.name, None)
+        self.server_hosts.remove(host.name)
+        self.user_hosts.remove(host.name)
+        self.all_hosts.remove(host.name)
+        #for _, h in self.graph.nodes(data="data"):
+        #    if not isinstance(h, Host):
+        #        continue
+        #    if h.name == host.name:
+        #        self.remove_host_from_subnet(host)
+        #        break
+        #for i in range(len(self.decoys)):
+        #    if self.decoys[i].name == host.name:
+        #        break
+        #self.decoys.remove(i)
 
     def enable_decoy_host(self, name: str, subnet: Subnet, host_type: HostType) -> Host:
         i = random.randint(0, len(self.decoys_reserve - 1))
@@ -649,9 +643,12 @@ class Network:
         return decoy
 
     def reset(self):
-        for decoy in self.decoys:
+        for decoy in list(self.decoys.values()):
             self.remove_host_from_subnet(decoy)
-        self.decoys = []
+            self.server_hosts.remove(decoy.name)
+            self.user_hosts.remove(decoy.name)
+            self.all_hosts.remove(decoy.name)
+        self.decoys = {}
 
         for edge in self.disconnected_nodes:
             self.connect_nodes(edge[0], edge[1])
@@ -659,7 +656,7 @@ class Network:
 
         self.isolated_hosts = []
 
-        for host in self.get_all_hosts():
+        for _, host in self.hosts.items():
             host.command_history = []
             host.is_compromised = False
             host.isolated = False  # For isolate action
@@ -729,7 +726,7 @@ class Network:
         services_list = host_type.get("services", [])
 
         windows_services = {}
-        config_dir = files("cyberwheel.resources.configs.services")
+        config_dir = files("cyberwheel.data.configs.services")
         config_file_path: PosixPath = config_dir.joinpath(
             "windows_exploitable_services.yaml"
         )  # type:ignore

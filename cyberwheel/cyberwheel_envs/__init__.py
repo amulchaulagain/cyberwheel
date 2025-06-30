@@ -1,3 +1,3 @@
 from cyberwheel.cyberwheel_envs.cyberwheel import Cyberwheel
-from cyberwheel.cyberwheel_envs.cyberwheel_rl_red import CyberwheelRedRL
+from cyberwheel.cyberwheel_envs.cyberwheel_rl import CyberwheelRL
 from cyberwheel.cyberwheel_envs.cyberwheel_emulator import CyberwheelEmulator

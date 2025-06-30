@@ -18,7 +18,7 @@ from importlib.resources import files
 NETWORK_CONFIG = "integration_config.yaml"
 config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)
 network = Network.create_network_from_yaml(config_path)
-user_subnet = network.get_all_subnets()[0]
+user_subnet = next(iter(network.subnets.values()))
 
 ####################### TEST NETWORK #########################
 # network = Network(name="test")
@@ -33,9 +33,9 @@ class TestEmulatorIntegration(unittest.TestCase):
     emulator = EmulatorControl(network=network, network_config_name=NETWORK_CONFIG)
 
     # get host IP addresses from emulator
-    for h in emulator.network.get_all_hosts():
-        print(f"retrieving ip address from emulator for {h.name}")
-        host_name = h.name.replace("_", "-")
+    for name, h in emulator.network.hosts.items():
+        print(f"retrieving ip address from emulator for {name}")
+        host_name = name.replace("_", "-")
         emu_host_ip = emulator.get_ip_address(host_name)
         h.set_ip_from_str(emu_host_ip)
 
@@ -158,5 +158,5 @@ class TestEmulatorIntegration(unittest.TestCase):
         """
         Test retrieving subnets
         """
-        print(self.emulator.network.get_all_subnets())
+        print(list(self.emulator.network.subnets.values()))
         self.assertTrue(True)

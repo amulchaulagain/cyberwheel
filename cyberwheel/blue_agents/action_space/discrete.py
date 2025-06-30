@@ -32,6 +32,7 @@ class DiscreteActionSpace(ActionSpace):
         super().__init__(network)
         self._action_space_size: int = 0
         self._action_checkers: List[_ActionRangeChecker] = []
+        self.num_actions = 0
 
     def select_action(self, action: ActType) -> ASReturn:
         try:
@@ -53,7 +54,7 @@ class DiscreteActionSpace(ActionSpace):
                 return ASReturn(name, ac.action, args=[self.hosts[index]])
             elif ac.type == "subnet":
                 index = (action - ac.lower_bound) % self.num_subnets
-                return ASReturn(name, ac.action, args=[self.subnets[index]])
+                return ASReturn(name, ac.action, args=[self.network.subnets[self.subnets[index]]])
             elif ac.type == "range":
                 index = (action - ac.lower_bound) % (ac.upper_bound - ac.lower_bound)
                 return ASReturn(name, ac.action, args=[index])
@@ -79,6 +80,7 @@ class DiscreteActionSpace(ActionSpace):
             raise ValueError(
                 f"action_type must be 'host', 'subnet', 'standalone', or 'range'"
             )
+        self.num_actions += 1
         upper_bound = self._action_space_size
         self._action_checkers.append(
             _ActionRangeChecker(name, action, action_type, lower_bound, upper_bound)

@@ -4,11 +4,9 @@ import numpy as np
 
 from typing import Iterable
 
-from cyberwheel.red_agents import ARTAgent
-from cyberwheel.red_actions.red_base import RedActionResults
-from cyberwheel.reward.reward_base import RewardMap
 from cyberwheel.network.network_base import Network, Host
-from cyberwheel.red_actions.actions.art_killchain_phases import (
+from cyberwheel.observation import RedObservation
+from cyberwheel.red_actions.actions import (
     ARTKillChainPhase,
     ARTPingSweep,
     ARTPortScan,
@@ -16,56 +14,12 @@ from cyberwheel.red_actions.actions.art_killchain_phases import (
     ARTLateralMovement,
     ARTPrivilegeEscalation,
     ARTImpact,
+    Nothing
 )
-
-class RLARTAgentResult:
-    def __init__(
-        self,
-        action: ARTKillChainPhase,
-        src_host: Host,
-        target_host: Host,
-        success: bool,
-        obs: Iterable[int],
-    ):
-        """
-        - `name`: name of the red action executed
-        - `success`: whether this action successfully executed or not
-        """
-        self.action = action
-        self.src_host = src_host
-        self.target_host = target_host
-        self.success = success
-        self.obs = obs
-
-
-class HostView:
-    def __init__(
-        self,
-        name: str,
-        type: str = "unknown",
-        sweeped: bool = False,
-        scanned: bool = False,
-        discovered: bool = False,
-        on_host: bool = False,
-        escalated: bool = False,
-        impacted: bool = False,
-    ):
-        self.name = name
-        self.type = type
-        self.sweeped = sweeped
-        self.scanned = scanned
-        self.discovered = discovered
-        self.on_host = on_host
-        self.escalated = escalated
-        self.impacted = impacted
-
-    def get_type(self) -> int:
-        if self.type.lower() == "workstation":
-            return 1
-        elif self.type.lower() == "server":
-            return 2
-        else:
-            return 0
+from cyberwheel.red_actions.red_base import RedActionResults
+from cyberwheel.red_agents import ARTAgent
+from cyberwheel.red_agents.red_agent_base import RedAgentResult
+from cyberwheel.reward.reward_base import RewardMap
 
 
 class RLARTAgent(ARTAgent):
@@ -75,17 +29,15 @@ class RLARTAgent(ARTAgent):
 
     def __init__(self, network: Network, args) -> None:
         super().__init__(network, args, service_mapping=args.service_mapping)
-
-        self.observation = {}
-        self.observation[self.entry_host.name] = HostView(self.entry_host.name, on_host=True)
-        self.tracked_hosts = self.network.get_all_hostnames()
+        self.observation = RedObservation(args.max_num_hosts + args.num_steps, network)
+        self.observation.add_host(self.current_host.name, on_host=True)
     
     def from_yaml(self) -> None:
         with open(self.config, "r") as f:
             contents = yaml.safe_load(f)
 
         # Get module import path
-        action_classes = [
+        self.killchain = [
             ARTPingSweep,
             ARTPortScan,
             ARTDiscovery,
@@ -96,44 +48,61 @@ class RLARTAgent(ARTAgent):
 
         self.reward_map = {}
 
-        self.entry_host: Host = self.network.get_node_from_name(contents["entry_host"]) if "entry_host" in contents else self.network.get_random_user_host()
-        self.current_host : Host = self.entry_host
+        self.entry_host: Host = contents["entry_host"]
+        self.current_host : Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
 
         # Initialize the action space
         as_class = contents['action_space']
         asm = importlib.import_module("cyberwheel.red_agents.action_space")
-        self.action_space = getattr(asm, as_class)(action_classes, self.current_host.name)
+        self.action_space = getattr(asm, as_class)(self.killchain, self.current_host.name)
+
+        self.reward_map["nothing"] = (0.0, 0.0)
 
         for k, v in contents['actions'].items():
             self.reward_map[k] = (v["reward"]["immediate"], v["reward"]["recurring"])
+        
+        self.leader: Host = contents.get("leader", "random")
+        if self.leader.lower() == "random_user":
+            self.leader_host = self.network.get_random_user_host()
+        elif self.leader.lower() == "random_server":
+            self.leader_host = self.network.get_random_server_host()
+        elif self.leader.lower() == "random":
+            self.leader_host = self.network.get_random_host()
+        else:
+            self.leader_host = self.network.hosts[self.leader]
 
-    def act(self, action: int) -> RLARTAgentResult:
-        # self.handle_network_change() TODO: Implement when developing static blue agent
+    def act(self, action: int) -> RedAgentResult:
         art_action, target_host_name = self.action_space.select_action(
             action
-        )  # Selects ART Action, should include the action and target host (based on view?)
+        )  # Selects ART Action, should include the action and target host
         source_host = self.current_host
-        target_host = self.network.get_node_from_name(target_host_name)
+        target_host = self.network.hosts[target_host_name] if target_host_name != "nothing" else self.current_host
         success = False
         if self.validate_action(art_action, target_host_name):
             if art_action == ARTPingSweep or art_action == ARTPortScan:
                 result = art_action(
                     self.current_host, target_host
                 ).sim_execute()  # Executes the ART Action, returns results
+            elif art_action == Nothing:
+                result = Nothing(self.current_host, self.current_host).sim_execute()
             else:
                 result = art_action(
                     self.current_host,
                     target_host,
-                    self.services_map[target_host_name][art_action],
+                    self.service_mapping[target_host_name][art_action],
                 ).sim_execute()  # Executes the ART Action, returns results
             success = result.attack_success
             self.handle_action(result)
-        return RLARTAgentResult(
+        else:
+            result = RedActionResults(source_host, target_host)
+        
+        return RedAgentResult(
             art_action, 
             source_host, 
             target_host, 
             success, 
-            self.get_observation_space()
+            self.get_observation_space(),
+            result
         )  # Returns what ARTAgent act() should, probably. Or the observation space?
 
     def handle_action(self, result: RedActionResults) -> None:
@@ -143,44 +112,44 @@ class RLARTAgent(ARTAgent):
         src_host = result.src_host.name
         target_host = result.target_host.name
         if action == ARTPingSweep:  # Adds pingsweeped hosts to obs
-            self.observation[target_host].sweeped = True
-            hosts = result.metadata["sweeped_hosts"]
-            interfaced_hosts = result.metadata["interfaced_hosts"]
-            for h in set(hosts) - self.observation.keys():
-                self.observation[h] = HostView(h, sweeped=True)
-                self.action_space.add_host(h)
-            for h in set(interfaced_hosts):
-                self.observation[h] = HostView(h)
-                self.action_space.add_host(h)
+            self.observation.update_host(target_host, sweeped=True)
+            hosts = result.metadata[result.target_host.subnet.name]["sweeped_hosts"]
+            for h in hosts:
+                h_name = h.name
+                if h_name in self.observation.obs.keys():
+                    continue
+                sweeped = h.subnet.name == result.target_host.subnet.name
+                self.observation.add_host(h_name, sweeped=sweeped)
+                self.action_space.add_host(h_name)
         elif action == ARTPortScan:  # Scans target host
-            self.observation[target_host].scanned = True
+            self.observation.update_host(target_host, scanned=True)
         elif action == ARTDiscovery:  # Discovers host type
-            self.observation[target_host].discovered = True
-            self.observation[target_host].type = self.network.get_node_from_name(
-                target_host
-            ).host_type.name
+            self.observation.update_host(target_host, discovered=True, type=result.target_host.host_type.name)
         elif action == ARTLateralMovement:  # Moves to target host
-            self.observation[target_host].on_host = True
-            self.observation[src_host].on_host = False
+            self.observation.update_host(target_host, on_host=True)
+            self.observation.update_host(src_host, on_host=False)
             self.current_host = result.target_host
         elif action == ARTPrivilegeEscalation:
-            self.observation[target_host].escalated = True
+            self.observation.update_host(target_host, escalated=True)
         elif action == ARTImpact:
-            self.observation[target_host].impacted = True
+            self.observation.update_host(target_host, impacted=True)
 
     def handle_network_change(self):
-        current_hosts = set(self.network.get_all_hosts())
+        current_hosts = self.network.hosts.keys()
         new_hosts = current_hosts - self.tracked_hosts
         for h in new_hosts:
-            self.services_map[h.name] = self.get_valid_techniques_by_host(
-                h, self.all_kcps
+            host = self.network.hosts[h]
+            self.service_mapping[h] = self.get_valid_techniques_by_host(
+                host, self.all_kcps
             )
-            self.observation[h.name] = HostView(h.name, sweeped=True)
-            self.action_space.add_host(h.name)
+            self.observation.add_host(h, sweeped=True)
+            self.action_space.add_host(h)
         self.tracked_hosts = current_hosts
 
     def validate_action(self, action: ARTKillChainPhase, target_host: str) -> bool:
-        host_view = self.observation[target_host]
+        if action == Nothing:
+            return True
+        host_view = self.observation.obs[target_host]
         if action == ARTPingSweep:  # valid if host.sweeped == False
             return not host_view.sweeped
         elif (
@@ -234,24 +203,10 @@ class RLARTAgent(ARTAgent):
         """
         Takes red agent view of network and transforms it into the obs vector.
         """
-        obs = []
-        for view in self.observation.values():
-            obs += [
-                view.get_type(),
-                int(view.sweeped),
-                int(view.scanned),
-                int(view.discovered),
-                int(view.on_host),
-                int(view.escalated),
-                int(view.impacted),
-            ]
-        obs = obs + [-1] * (200 - len(obs))
-        _obs = np.array(obs, dtype=np.float64)
-        return _obs
+        return np.array(self.observation.obs_vec, dtype=np.int64)
 
-    def reset(self, entry_host: Host, network: Network):
-        self.network = network
-        self.current_host = entry_host
-        self.observation = {}
-        self.observation[entry_host.name] = HostView(entry_host.name, on_host=True)
-        self.action_space.reset(entry_host.name)
+    def reset(self, network: Network, service_mapping: dict) -> Iterable:
+        super().reset(network, service_mapping)
+
+        self.action_space.reset(self.current_host.name)
+        return self.observation.reset(self.current_host.name)

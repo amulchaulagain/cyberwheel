@@ -2,13 +2,12 @@ from cyberwheel.red_agents.strategies.red_strategy import RedStrategy
 from cyberwheel.network.host import Host
 from cyberwheel.red_actions.art_techniques import SudoandSudoCaching
 
-"""
-The Server Downtime strategy is to find and attack all of the Servers it can find in the network.
-Once it finds a server, it will try to impact it. Once impacted, it will look for another server.
-"""
-
 
 class ServerDowntime(RedStrategy):
+    """
+    The Server Downtime strategy is to find and attack all of the Servers it can find in the network.
+    Once it finds a server, it will try to impact it. Once impacted, it will look for another server.
+    """
     @classmethod
     def select_target(cls, agent_obj) -> Host:
         current_host_type = agent_obj.history.hosts[agent_obj.current_host.name].type
@@ -19,34 +18,27 @@ class ServerDowntime(RedStrategy):
         If there are no unimpacted Servers or Unknown hosts in its view, it has succeeded. Maybe give this a very large cost to signify failure on the blue agent side.
         """
 
-        target_host = agent_obj.current_host
-        #current_kc_step = agent_obj.history.hosts[target_host.name].get_next_step()
-        #print(f"CURRENT HOST TYPE: {current_host_type}")
-        #print(f"CURRENT HOST {target_host.name} KC STEP: {current_kc_step}")
+        target_host = None
+        pool = None
         if (
             current_host_type == "Unknown"
-            or agent_obj.unimpacted_servers.check_membership(
-                agent_obj.current_host.name
-            )
+            or agent_obj.current_host.name in agent_obj.unimpacted_servers
         ):
-            target_host = agent_obj.current_host
-        elif agent_obj.unimpacted_servers.length() > 0:
-            target_host = agent_obj.history.mapping[
-                agent_obj.unimpacted_servers.get_random()
-            ]  # O(1)
-        elif agent_obj.unknowns.length() > 0 and agent_obj.history.hosts[target_host.name].ports_scanned:
-            target_host = agent_obj.history.mapping[
-                agent_obj.unknowns.get_random()
-            ]  # O(1)
+            return agent_obj.current_host
+        elif len(agent_obj.unimpacted_servers) > 0:
+            pool = agent_obj.unimpacted_servers
+        elif len(agent_obj.unknowns) > 0:
+            pool = agent_obj.unknowns
+        else:
+            return agent_obj.current_host
+        
+        while not target_host and len(pool) > 0:
+            random_host_name = pool.get_random()
+            if random_host_name in agent_obj.network.hosts:
+                target_host = agent_obj.network.hosts[random_host_name]
+            else:
+                target_host = None
+                #print(f"{random_host_name} not in network")
+                pool.remove(random_host_name)
+        target_host = target_host if target_host else agent_obj.current_host
         return target_host
-
-    @classmethod
-    def get_reward_map(cls) -> dict[str, tuple[int, int]]:
-        return {
-            "pingsweep": (-1, 0),
-            "portscan": (-1, 0),
-            "discovery": (-2, 0),
-            "lateral-movement": (-4, 0),
-            "privilege-escalation": (-6, 0),
-            "impact": (-8, -4),
-        }

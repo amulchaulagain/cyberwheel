@@ -15,7 +15,7 @@ NETWORK_CONFIG = "integration_config.yaml"
 ############# Create Network Topology from Config File ##################
 config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)
 network = Network.create_network_from_yaml(config_path)
-user_subnet = network.get_all_subnets()[0]
+user_subnet = next(iter(network.subnets.values()))
 
 ################# Manually Create Network Topology ######################
 # network = Network(name="test")

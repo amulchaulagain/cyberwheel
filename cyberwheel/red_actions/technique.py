@@ -1,7 +1,9 @@
-from typing import List
-from cyberwheel.red_actions.atomic_test import AtomicTest
 import jsonpickle
 import json
+
+from typing import List
+
+from cyberwheel.red_actions.atomic_test import AtomicTest
 
 
 class Technique:

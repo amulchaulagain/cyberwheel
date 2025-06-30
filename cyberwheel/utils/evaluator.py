@@ -1,29 +1,21 @@
-import torch
-import random
+
 import gymnasium as gym
 import time
-import os
 import importlib
-import wandb
-import numpy as np
 import pandas as pd
+import torch
+import wandb
+import os
+import random
 
 from copy import deepcopy
-from torch.utils.tensorboard import SummaryWriter
-from torch import optim, nn
 from importlib.resources import files
 from tqdm import tqdm
 
-from cyberwheel.utils import RLAgent
 from cyberwheel.network.network_base import Network
-from cyberwheel.red_actions.actions.art_killchain_phases import (
-    ARTDiscovery,
-    ARTLateralMovement,
-    ARTPrivilegeEscalation,
-    ARTImpact,
-)
-from cyberwheel.red_actions import art_techniques
-from cyberwheel.red_agents import ARTAgent
+from cyberwheel.utils import RLAgent, get_service_map
+from cyberwheel.utils.visualizer import Visualizer
+from cyberwheel.utils.set_seed import set_seed
 
 
 def get_action_mask(action_space_size, action_masks):
@@ -40,8 +32,11 @@ class Evaluator:
         self.args = args
         m = importlib.import_module("cyberwheel.cyberwheel_envs")
         self.env = getattr(m, args.environment)
+        self.deterministic = os.getenv("CYBERWHEEL_DETERMINISTIC", "False").lower() in ('true', '1', 't')
+        self.args.deterministic = self.deterministic
+        self.seed = args.seed
 
-    def make_env(self, rank):
+    def make_env(self, rank, network: Network):
         """
         Utility function for multiprocessed env.
 
@@ -52,12 +47,8 @@ class Evaluator:
         """
 
         def _init():
-            config_path = files("cyberwheel.resources.configs.network").joinpath(
-                self.args.network_config
-            )
-            env = self.env(
-                self.args, network=Network.create_network_from_yaml(config_path)
-            )
+            env = self.env(self.args, network=random.choice(list(self.networks.values())), networks=self.networks)
+            env.evaluation = True
 
             self.max_action_space_size = env.max_action_space_size
             env.reset(
@@ -70,46 +61,49 @@ class Evaluator:
 
         return _init
 
-    def get_service_map(self, network: Network):
-        """
-        Class function to get the service mapping based on host attributes.
-        """
-        killchain = [
-            ARTDiscovery,
-            ARTPrivilegeEscalation,
-            ARTImpact,
-            ARTLateralMovement,
-        ]
-        service_mapping = {}
-        for host in network.get_all_hosts():
-            service_mapping[host.name] = {}
-            for kcp in killchain:
-                service_mapping[host.name][kcp] = []
-                kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
-                for mid in kcp_valid_techniques:
-                    technique = art_techniques.technique_mapping[mid]
-                    if len(host.host_type.cve_list & technique.cve_list) > 0:
-                        service_mapping[host.name][kcp].append(mid)
-        return service_mapping
-
     def configure_evaluation(self):
+        if self.deterministic:
+            set_seed(self.seed)
+            torch.backends.cudnn.deterministic = True
+        else:
+            set_seed(random.randint(0, 999999999))
+            torch.backends.cudnn.deterministic = False
+
         self.device = torch.device("cpu")
         print(f"Using device {self.device}")
 
-        # Set up network and Host-Technique mapping outside of environment.
-        # This keeps the time-consuming processes from running for each environment.
-        network_config = files("cyberwheel.resources.configs.network").joinpath(
-            self.args.network_config
-        )
-        network = Network.create_network_from_yaml(network_config)
+        # Load networks from yaml here
+        network_configs = []
+        if isinstance(self.args.network_config, str):
+            network_configs.append(self.args.network_config)
+        else:
+            for config in self.args.network_config:
+                network_configs.append(config)
+        
+        self.networks = {}
+        self.args.service_mapping = {}
+        for config in network_configs:
+            network_config = files("cyberwheel.data.configs.network").joinpath(
+                config
+            )
 
-        self.args.service_mapping = self.get_service_map(network)
-        env_funcs = [self.make_env(i) for i in range(1)]
+            print(f"Building network: {config} ...")
+
+            network = Network.create_network_from_yaml(network_config)
+            network_name = network.name
+            self.networks[network_name] = network
+
+            print("Mapping attack validity to hosts...", end=" ")
+            self.args.service_mapping[network_name] = get_service_map(network)
+            print("done")
+
+
+        env_funcs = [self.make_env(i, network=network) for i in range(1)]
         self.envs = gym.vector.SyncVectorEnv(env_funcs)
 
         self.agent = RLAgent(self.envs).to(self.device)
 
-        experiment_name = self.args.experiment
+        experiment_name = self.args.experiment_name
 
         agent_filename = f"{self.args.checkpoint}.pt"
 
@@ -121,13 +115,13 @@ class Evaluator:
             )
             model = run.file(agent_filename)
             model.download(
-                files("cyberwheel.models").joinpath(experiment_name), exist_ok=True
+                files("cyberwheel.data.models").joinpath(experiment_name), exist_ok=True
             )
 
         # Load model from models/ directory
         self.agent.load_state_dict(
             torch.load(
-                files(f"cyberwheel.models.{experiment_name}").joinpath(agent_filename),
+                files(f"cyberwheel.data.models.{experiment_name}").joinpath(agent_filename),
                 map_location=self.device,
             )
         )
@@ -146,8 +140,8 @@ class Evaluator:
         if self.args.graph_name != None:
             self.now_str = self.args.graph_name
         else:
-            self.now_str = f"{experiment_name}_evaluate_{self.args.network_config.split('.')[0]}_{self.args.red_agent}_scaling{int(self.args.reward_scaling)}_{self.args.reward_function}reward"
-        self.log_file = files("cyberwheel.action_logs").joinpath(f"{self.now_str}.csv")
+            self.now_str = f"{experiment_name}_evaluate_{self.args.network_config.split('.')[0]}_{self.args.red_agent}_{self.args.reward_function}reward"
+        self.log_file = files("cyberwheel.data.action_logs").joinpath(f"{self.now_str}.csv")
 
         self.actions_df = pd.DataFrame()
         self.full_episodes = []
@@ -157,15 +151,23 @@ class Evaluator:
         self.full_red_action_dest = []
         self.full_red_action_success = []
         self.full_blue_actions = []
+        self.full_blue_action_ids = []
+        self.full_blue_action_targets = []
         self.full_rewards = []
 
-        self.max_action_space_size = self.envs.envs[0].unwrapped.rl_agent.action_space.max_size
+        self.max_action_space_size = self.envs.envs[0].unwrapped.max_action_space_size
         self.action_mask = [False] * self.max_action_space_size
 
     def evaluate(self):
         self.start_time = time.time()
         for episode in tqdm(range(self.args.num_episodes)):
+            if self.args.visualize:
+                self.visualizer = Visualizer(self.envs.envs[0].unwrapped.network, self.args.graph_name)
+                
             for step in range(self.args.num_steps):
+                if self.deterministic:
+                    set_seed(self.seed)
+                self.seed += 1
                 if step == 0:
                     self.obs = self.obs[0]
 
@@ -185,25 +187,28 @@ class Evaluator:
                 self.obs, rew, done, _, info = self.envs.step(action.cpu().numpy())
                 rew = rew[0]
                 done = done[0]
-
                 if "final_observation" in list(info.keys()):
                     blue_action = info["final_info"][0]["blue_action"]
+                    blue_action_id = info["final_info"][0]["blue_action_id"]
+                    blue_action_target = info["final_info"][0]["blue_action_target"]
                     red_action_type = info["final_info"][0]["red_action"]
                     red_action_src = info["final_info"][0]["red_action_src"]
                     red_action_dest = info["final_info"][0]["red_action_dst"]
                     red_action_success = info["final_info"][0]["red_action_success"]
                     net = info["final_info"][0]["network"]
-                    # history = info["final_info"][0]["history"]
-                    killchain = info["final_info"][0]["killchain"]
+                    commands = info["final_info"][0]["commands"]
+                    history = info["final_info"][0]["history"]
                 else:
                     blue_action = info["blue_action"][0]
+                    blue_action_id = info["blue_action_id"][0]
+                    blue_action_target = info["blue_action_target"][0]
                     red_action_type = info["red_action"][0]
                     red_action_src = info["red_action_src"][0]
                     red_action_dest = info["red_action_dst"][0]
                     red_action_success = info["red_action_success"][0]
                     net = info["network"][0]
-                    # history = info["history"][0]
-                    # killchain = info["killchain"][0]
+                    commands = info["commands"][0]
+                    history = info["history"][0]
 
                 self.full_episodes.append(episode)
                 self.full_steps.append(step)
@@ -212,11 +217,16 @@ class Evaluator:
                 self.full_red_action_dest.append(red_action_dest)
                 self.full_red_action_success.append(red_action_success)
                 self.full_blue_actions.append(blue_action)
+                self.full_blue_action_ids.append(blue_action_id)
+                self.full_blue_action_targets.append(blue_action_target)
                 self.full_rewards.append(rew)
 
                 # If generating graphs for dash server view
+                #print(self.args.visualize)
                 if self.args.visualize:
-                    # visualize(net, episode, step, now_str, history, killchain)
+                    host_info = self.envs.envs[0].unwrapped.red_agent.observation.obs if self.args.train_red else history.hosts
+                    step_info = {"source_host": red_action_src, "target_host": red_action_dest, "red_action": red_action_type, "commands": commands, "network": net, "host_info": host_info, "commands": commands}
+                    self.visualizer.visualize(episode, step, step_info)
                     pass
 
                 self.total_reward += rew
@@ -235,11 +245,12 @@ class Evaluator:
                 "red_action_src": self.full_red_action_src,
                 "red_action_dest": self.full_red_action_dest,
                 "blue_action": self.full_blue_actions,
+                "blue_action_id": self.full_blue_action_ids,
+                "blue_action_target": self.full_blue_action_targets,
                 "reward": self.full_rewards,
             }
         )
-
-        # Save action metadata to CSV in action_logs/
+        # Save action metadata to CSV in action_logs
         self.actions_df.to_csv(self.log_file)
 
         self.total_time = time.time() - self.start_time

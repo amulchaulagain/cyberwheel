@@ -2,6 +2,7 @@ from __future__ import annotations
 from ipaddress import IPv4Address, IPv6Address
 from typing import Any, List, Dict, Union
 from copy import deepcopy
+
 from cyberwheel.network.host import Host
 from cyberwheel.network.service import Service
 from cyberwheel.red_actions.technique import Technique
