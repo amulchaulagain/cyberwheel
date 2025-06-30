@@ -7,7 +7,6 @@ from cyberwheel.emulator.detectors import EmulatorDectector
 from cyberwheel.network.network_base import Network
 from cyberwheel.network.router import Router
 from cyberwheel.network.subnet import Subnet
-from cyberwheel.network.host import Host
 from importlib.resources import files
 from dotenv import load_dotenv
 from pprint import pprint
@@ -68,10 +67,6 @@ class TestEmulatorDetector(unittest.TestCase):
     def test_obs(self) -> None:
         """Test detector full observation method."""
         eoc = EmulatorDectector(network_config=NETWORK_CONFIG, network=network)
-
-        target_host = Host(name="decoy01", subnet=subnet, host_type=None)
-        target_host.set_ip_from_str("192.168.0.8")
-        network.decoys.append(target_host)
 
         print("\n")
         alerts = eoc.obs()
