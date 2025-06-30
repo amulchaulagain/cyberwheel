@@ -7,7 +7,6 @@ from .action_space import ActionSpace, ASReturn
 from cyberwheel.network.network_base import Network
 from cyberwheel.blue_actions.blue_action import BlueAction
 
-
 class _ActionRangeChecker:
     def __init__(
         self,
@@ -24,6 +23,7 @@ class _ActionRangeChecker:
         self.upper_bound = upper_bound
 
     def check_range(self, index: int) -> bool:
+        #print(f"index {index} needs to be between {self.lower_bound} and {self.upper_bound}")
         return index >= self.lower_bound and index < self.upper_bound
 
 
@@ -36,6 +36,7 @@ class DiscreteActionSpace(ActionSpace):
     def select_action(self, action: ActType) -> ASReturn:
         try:
             action = int(action)
+            #print(f"BLUE ACTION BEING CHOSEN: {action}")
         except:
             raise TypeError(
                 f"provided action is of type {type(action)} and is unsupported by the chosen ActionSpaceConverter"

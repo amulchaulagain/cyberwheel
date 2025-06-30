@@ -56,15 +56,15 @@ class EmulateLateralMovement(EmulateRedAction):
         """
 
         # Run shell command
-        print(f"executing shell command: {shell_cmd}")
+        #print(f"executing shell command: {shell_cmd}")
         result = self.run_cmd(shell_cmd)
 
         # Capture output after executing command
         if result.returncode != 0:
             self.action_results.attack_success = False
-            print(result.stderr)
+            #print(result.stderr)
         else:
             self.action_results.attack_success = True
-            print(f"{self.src_host.name} ssh'd to host {result.stdout}")
+            #print(f"{self.src_host.name} ssh'd to host {result.stdout}")
 
         return self.action_results

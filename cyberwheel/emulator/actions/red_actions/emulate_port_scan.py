@@ -50,17 +50,17 @@ class EmulatePortScan(EmulateRedAction):
             RedActionResults
         """
 
-        print(f"executing shell command: {shell_cmd}")
+        #print(f"executing shell command: {shell_cmd}")
         result = self.run_cmd(shell_cmd)
 
         # Capture output after executing command
         if result.returncode != 0:
             self.action_results.attack_success = False
-            print(result.stderr)
+            #print(result.stderr)
         else:
             self.action_results.attack_success = True
             discovered_ports = stdout_to_list(result.stdout)
-            print("discovered ports: ", discovered_ports)
+            #print("discovered ports: ", discovered_ports)
 
         # TODO convert to discovered hosts in RedActionResults
 

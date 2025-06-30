@@ -49,6 +49,9 @@ hosts:
     routes:
     subnet: user_subnet1
     type: workstation
+  decoy01:
+    type: decoy_workstation
+    subnet: user_subnet1
   server0:
     firewall:
     routes:
@@ -74,6 +77,9 @@ hosts:
     routes:
     subnet: server_subnet1
     type: proxy_server
+  decoy02:
+    type: decoy_workstation
+    subnet: server_subnet1
 interfaces:
   dmz1:
   - server2
@@ -117,9 +123,15 @@ topology:
     - server2
     - server3
     - server4
+    - decoy02
     user_subnet1:
     - host0
     - host1
     - host2
     - host3
     - host4
+    - decoy01
+  
+decoys:
+  - decoy01
+  - decoy02

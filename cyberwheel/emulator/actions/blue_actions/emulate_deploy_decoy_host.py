@@ -46,14 +46,15 @@ class EmulateDeployDecoyHost(
         Exeucute deploying a decoy in the emulator.
         """
         # Execute Deploy Decoy Host VM
-        print(f"executing shell command: {shell_cmd}")
+        #print(f"executing shell command: {shell_cmd}")
         result = self.run_cmd(shell_cmd)
 
         isSuccessful = False  # assume False
         if result.returncode != 0:
-            print(result.stderr)
+            #print(result.stderr)
+            pass
         else:
             isSuccessful = True
-            print(result.stdout)
+            #print(result.stdout)
 
         return BlueActionReturn(self.name, isSuccessful, 0)

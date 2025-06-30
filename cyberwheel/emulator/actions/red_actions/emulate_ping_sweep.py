@@ -74,18 +74,18 @@ class EmulatePingSweep(EmulateRedAction):
         """
 
         # Execute ping sweep in emulator VM
-        print(f"executing shell command: {shell_cmd}")
+        #print(f"executing shell command: {shell_cmd}")
         result = self.run_cmd(shell_cmd)
 
         # Capture output after executing command
         discovered_ips: list[str] = []
         if result.returncode != 0:
             self.action_results.attack_success = False
-            print(result.stderr)
+            #print(result.stderr)
         else:
             self.action_results.attack_success = True
             discovered_ips = stdout_to_list(result.stdout)
-            print("discovered ips: ", discovered_ips)
+            #print("discovered ips: ", discovered_ips)
 
         """
             Add discovered hosts to red action results.
@@ -97,8 +97,8 @@ class EmulatePingSweep(EmulateRedAction):
             for host in self.network.get_all_hosts():
                 if str(host.ip_address) == discovered_ip:
                     self.action_results.add_host(host)
-        print(
-            f"added discovered hosts to action results: {[host.name for host in self.action_results.discovered_hosts]}"
-        )
+        #print(
+        #    f"added discovered hosts to action results: {[host.name for host in self.action_results.discovered_hosts]}"
+        #)
 
         return self.action_results

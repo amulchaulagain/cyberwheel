@@ -55,10 +55,10 @@ class EmulatorControl:
     def init_hosts(self) -> bool:
         """Setup hosts and run scripts before an experiment begins."""
 
-        print("Running emulator host initialization steps...")
+        #print("Initializing Hosts...")
 
         # Action #1: Enroll non-decoy hosts' agent to fleet
-        print("#1 Enrolling elastic agents into fleet server...")
+        #print("\tEnrolling elastic agents into fleet server...")
         all_host_names = self._get_host_names()
         decoy_names = self._get_decoy_host_names()
         non_decoy_names = [name for name in all_host_names if name not in decoy_names]
@@ -69,7 +69,8 @@ class EmulatorControl:
             if host_name not in enrolled_host_names:
                 successfully_enrolled = self._enroll_agent_to_fleet(host_name)
             else:
-                print(f"{host_name}'s agent is already enrolled into fleet, skipping.")
+                #print(f"{host_name}'s agent is already enrolled into fleet, skipping.")
+                pass
 
         if not successfully_enrolled:
             print("Error with enrolling agent(s) into fleet.")
@@ -77,13 +78,13 @@ class EmulatorControl:
 
         # Add more setup actions here...
 
-        print("Emulator host initialization is complete.")
+        #print("done")
         return True
 
     def reset(self) -> bool:
         """Sequence of actions to reset the emulator for each episode"""
 
-        print("removing decoys...")
+        #print("removing decoys...")
         decoy_names = self._get_decoy_host_names()
         success = self._reset_decoys(decoy_names)
 
@@ -98,7 +99,7 @@ class EmulatorControl:
         """Lookup and execute blue actions in the emulator."""
 
         shell_cmd = ""
-        print(f"executing emulator blue action: {action_name}, id: {id}")
+        #print(f"executing emulator blue action: {action_name}, id: {id}")
 
         match action_name:
             case "deploy_decoy":
@@ -139,7 +140,7 @@ class EmulatorControl:
             case "nothing":
                 return BlueActionReturn(action_name, False, 0)
             case _:
-                print("action does not exist.")
+                print("ERROR: This action does not exist!")
                 return BlueActionReturn(action_name, False, 0)
 
     def run_red_action(
@@ -153,7 +154,7 @@ class EmulatorControl:
         """Lookup and execute red actions in the emulator."""
 
         shell_cmd = ""
-        print(f"executing emulator red action: {action_name}, id: {id}")
+        #print(f"executing emulator red action: {action_name}, id: {id}")
 
         match action_name:
             case "Remote System Discovery":
@@ -233,7 +234,7 @@ class EmulatorControl:
                 shell_cmd = action.build_emulator_cmd()
                 return action.emulator_execute(shell_cmd)
             case _:
-                print("Attack does not exist.")
+                print("ERROR: This attack does not exist.")
                 results = RedActionResults(src_host=src_host, target_host=dst_host)
                 results.attack_success = False
                 return results
@@ -246,9 +247,9 @@ class EmulatorControl:
         Any action done to a decoy generates an alert.
         """
 
-        print("\n")
+        #print("\n")
         alerts = self.detector.obs()
-        print(f"alert count: {len(list(alerts))}")
+        print(f"SIEM: {len(alerts)} New Alerts")
         return alerts
 
     def get_ip_address(self, host_name: str) -> str:
@@ -273,7 +274,7 @@ class EmulatorControl:
         )
 
         if result.returncode != 0:
-            print(result.stderr)
+            print(f"ERROR: {result.stderr}")
             return ""
         elif result.stdout == "":
             return ""
@@ -333,10 +334,9 @@ class EmulatorControl:
         )
 
         if result.returncode != 0:
-            print(result.stderr)
+            print(f"ERROR: {result.stderr}")
             return False
         else:
-            # print(result.stdout)
             print(f"Successfully enrolled {host_name}'s elastic agent to fleet.")
             return True
 
@@ -362,7 +362,7 @@ class EmulatorControl:
             return False
 
         if src_host.name in interfaces.keys():
-            print(f"{src_host.name} has interface to {interfaces[src_host.name]}")
+            #print(f"{src_host.name} has interface to {interfaces[src_host.name]}")
             return True
 
         return False
@@ -389,7 +389,7 @@ class EmulatorControl:
         )
 
         if result.returncode != 0:
-            print(result.stderr)
+            print(f"ERROR: {result.stderr}")
             return []
 
         # print(result.stdout)

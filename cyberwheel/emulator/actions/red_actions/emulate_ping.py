@@ -49,23 +49,23 @@ class EmulatePing(EmulateRedAction):
         """
 
         # Execute ping sweep in emulator VM
-        print(f"executing shell command: {shell_cmd}")
+        #print(f"executing shell command: {shell_cmd}")
         result = self.run_cmd(shell_cmd)
 
         # Capture output after executing command
         if result.returncode != 0:
             self.action_results.attack_success = False
-            print(result.stderr)
+            #print(result.stderr)
         else:
             self.action_results.attack_success = True
             discovered_ip = result.stdout.strip()
-            print("discovered a new host: ", discovered_ip)
+            #print("discovered a new host: ", discovered_ip)
             for host in self.network.get_all_hosts():
                 if str(host.ip_address) == discovered_ip:
                     self.action_results.add_host(host)
 
-        print(
-            f"added new discovered host to action results: {[host.name for host in self.action_results.discovered_hosts]}"
-        )
+        #print(
+        #    f"added new discovered host to action results: {[host.name for host in self.action_results.discovered_hosts]}"
+        #)
 
         return self.action_results

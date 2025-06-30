@@ -31,7 +31,7 @@ class Network:
     ):
         self.graph = nx.DiGraph(name=name) if graph == None else graph
         self.name = name
-        self.decoys = decoys
+        self.decoys : list[Host] = decoys
         self.disconnected_nodes = disconnected_nodes
         self.isolated_hosts: List[Host] = isolated_hosts
         self.decoys_reserve: List[Host] = []
@@ -376,12 +376,20 @@ class Network:
             print(f"{h.name}: {str(h.ip_address)} == {ip}")
             if str(h.ip_address) == ip:
                 return h
+        for d in self.decoys:
+            print(f"{d.name}: {str(d.ip_address)} == {ip}")
+            if str(d.ip_address) == ip:
+                return d
+
 
     def get_all_hosts(self) -> list[Host]:
         nodes_tuple = self.graph.nodes(data="data")  # type: ignore
         hosts = [obj for _, obj in nodes_tuple if isinstance(obj, Host)]
         #decoys = [obj for _, obj in ]
         return hosts
+    
+    def get_all_decoys(self) -> list[Host]:
+        return self.decoys
 
     def get_all_hostnames(self) -> list[Host]:
         nodes_tuple = self.graph.nodes(data="data")  # type: ignore

@@ -4,7 +4,6 @@ from gymnasium.core import ActType
 
 from cyberwheel.red_actions.actions.art_killchain_phases import ARTKillChainPhase
 
-
 class RedDiscreteActionSpace:
     def __init__(self, actions: list[ARTKillChainPhase], entry_host: str) -> None:
         self._action_space_size: int = len(actions)

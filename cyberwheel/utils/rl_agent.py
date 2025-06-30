@@ -65,7 +65,6 @@ class RLAgent(nn.Module):
         Gets the action and value for the current state by running x through the actor and critic respectively.
         Also calculates the log probabilities of the action and the policy's entropy which are used to calculate PPO's training loss.
         """
-        # print(x.shape)
         logits = self.actor(x)
         if action_mask != None:
             logits = logits.masked_fill(~action_mask, float("-inf"))

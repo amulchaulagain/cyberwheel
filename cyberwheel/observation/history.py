@@ -9,12 +9,14 @@ class HistoryObservation(Observation):
     def __init__(self, shape: int, mapping: Dict[Host, int]) -> None:
         self.shape = shape
         self.mapping = mapping
-        self.obs_vec = np.zeros(shape)
+        self.obs_vec = np.full(shape, -1)
+        self.len_alerts = len(self.mapping) * 2
+        for i in range(self.len_alerts):
+            self.obs_vec[i] = 0
 
-    def create_obs_vector(self, alerts: Iterable[Alert]) -> Iterable:
+    def create_obs_vector(self, alerts: Iterable[Alert], decoys_deployed: int = -1) -> Iterable:
         # Refresh the non-history portion of the obs_vec
-        obs_length = len(self.obs_vec)
-        barrier = obs_length // 2
+        barrier = self.len_alerts // 2
         for i in range(barrier):
             self.obs_vec[i] = 0
         for alert in alerts:
@@ -24,8 +26,11 @@ class HistoryObservation(Observation):
             index = self.mapping[alerted_host.name]
             self.obs_vec[index] = 1
             self.obs_vec[index + barrier] = 1
+        self.obs_vec[self.len_alerts] = decoys_deployed
         return self.obs_vec
 
     def reset_obs_vector(self) -> Iterable:
-        self.obs_vec = np.zeros(self.shape)
+        self.obs_vec = np.full(self.shape, -1, dtype=np.int64)
+        for i in range(self.len_alerts):
+            self.obs_vec[i] = 0
         return self.obs_vec

@@ -3,24 +3,24 @@ red_agent: rl_red_campaign.yaml
 blue_agent: dynamic_blue_agent.yaml
 environment: CyberwheelEmulator
 valid_targets: servers
-train_red: false
-train_blue: true
-red_model: EmulatorRed_Integration_Basic
-blue_model: EmulatorBlue_New
+train_red: true
+train_blue: false
+red_model: EmulatorRed_25HostConfig
+blue_model: EmulatorBlue_25HostConfig
 campaign: true
 seed: 1
 
 checkpoint: agent
 download_model: true
-blue_run: svougabn 
-red_run: bb8dzy37 # m3hsuegj (example config non shuffled) | bb8dzy37 (integration config trained against blue random agent) | p7q2ctcl (trained on multiple network sizes) | o0rvi9nu (shuffled integration config) | 35bmp88c (non-shuffled integration_config)
+blue_run: f5ydtynw
+red_run: pe54qljg #3h03gcd3
 wandb_project_name: Cyberwheel # required if download_model is true
 wandb_entity: oeschsec # required if download_model is true
 
-experiment: EmulatorTestIntegrationNew_Basic
+experiment: EmulatorTest25HostConfig
 visualize: false
-graph_name: EmulatorTestIntegrationNew_Basic
-network_config: integration_config.yaml
+graph_name: EmulatorTest25HostConfig
+network_config: 15-host-network.yaml
 decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml
 detector_config: detector_handler.yaml

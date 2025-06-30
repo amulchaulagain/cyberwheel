@@ -1,5 +1,5 @@
 # Training Parameters
-experiment_name: # The experiment name
+experiment_name: test_15_host # The experiment name
 seed: 1 # The seed to use for the experiment
 deterministic: false # Whether or not the training is deterministic
 device: cpu # Which device to train on

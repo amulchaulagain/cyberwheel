@@ -190,12 +190,17 @@ class EmulatorEvaluator:
 
 
         self.blue_action_mask = [False] * self.blue_max_action_space_size
-        self.blue_action_mask[0:2] = [True, True]
+        self.blue_action_mask[0:3] = [True, True, True]
         self.red_action_mask = [False] * self.red_max_action_space_size
+
+        with open(self.log_file, 'w') as f: # Create an empty CSV for new action logs, overwrite previous
+            pass
 
     def evaluate(self):
         self.start_time = time.time()
         for episode in tqdm(range(self.args.num_episodes)):
+            self.blue_obs = self.env.reset()
+            self.red_obs = self.env.red_agent.get_observation_space()
             for step in range(self.args.num_steps):
                 #print(self.blue_obs)
                 #print(self.red_obs)
@@ -209,7 +214,7 @@ class EmulatorEvaluator:
                 red_action_space_size = self.env.red_agent.action_space._action_space_size
 
                 #blue_action_mask = self.blue_action_mask # get_action_mask(blue_action_space_size, self.blue_action_mask)
-                red_action_mask = get_action_mask(red_action_space_size, self.red_action_mask)
+                self.red_action_mask = get_action_mask(red_action_space_size, self.red_action_mask)
 
                 blue_action_mask = torch.asarray(self.blue_action_mask)
                 red_action_mask = torch.asarray(self.red_action_mask)
@@ -251,7 +256,7 @@ class EmulatorEvaluator:
                     "blue_success": [blue_action_success],
                     "reward": [rew],
                 })
-                actions_df.to_csv(self.log_file, mode='a', header = not os.path.exists(self.log_file), index=False)
+                actions_df.to_csv(self.log_file, mode='a', header = os.path.getsize(self.log_file) == 0, index=False)
 
                 # If generating graphs for dash server view
                 if self.args.visualize:
@@ -262,8 +267,6 @@ class EmulatorEvaluator:
                 self.steps += 1
 
             self.steps = 0
-            self.blue_obs = self.env.reset()
-            self.red_obs = self.env.red_agent.get_observation_space()
             self.episode_rewards.append(self.total_reward)
             self.total_reward = 0
 

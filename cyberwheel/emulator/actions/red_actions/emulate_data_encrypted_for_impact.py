@@ -68,15 +68,15 @@ class EmulateDataEncryptedForImpact(EmulateRedAction):
             RedActionResults
         """
 
-        print(f"executing shell command: {shell_cmd}")
+        #print(f"executing shell command: {shell_cmd}")
         result = self.run_cmd(shell_cmd)
 
         if result.returncode != 0:
             self.action_results.attack_success = False
-            print(result.stderr)
+            #print(result.stderr)
         else:
             self.action_results.attack_success = True
             # print("Attack successful. Output is suppressed.")
-            print(result.stdout)
+            #print(result.stdout)
 
         return self.action_results
