@@ -93,6 +93,14 @@ class RedObservation(Observation):
 
         host_index = self.obs_index[host]
         self.obs_vec[host_index:host_index+7] = self.get_view_obs(view)
+    
+    def update_obs(self, **kwargs):
+        current_step = kwargs.get("current_step", None)
+        total_steps = kwargs.get("total_steps", None)
+        if current_step == None and total_steps == None:
+            return
+        quad = current_step / total_steps
+        self.obs_vec[self.max_size - 1] = 1 if quad < 0.25 else 2 if quad < 0.50 else 3 if quad < 0.75 else 4
 
     def get_view_obs(self, view: HostView) -> list[int]:
         view_obs = [

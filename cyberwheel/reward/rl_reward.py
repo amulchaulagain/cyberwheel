@@ -16,6 +16,7 @@ class RLReward(Reward):
         self.network = network
         self.red_agent = red_agent
         self.blue_agent = blue_agent
+        self.current_step = 0
 
     def calculate_reward(
         self,
@@ -33,6 +34,9 @@ class RLReward(Reward):
         decoy = target_host.decoy
 
         #print(f"{target_host_name in valid_targets} - {target_host_name} in {valid_targets.data_list}")
+        self.red_agent.observation.update_obs()
+        quad = self.current_step / self.red_agent.args.num_steps
+        red_multiplier = 10 if quad < 0.25 else 1
 
         if red_success and target_host_name in valid_targets:# TODO: and not decoy:  # If red action succeeded on a real Host
             r = self.red_rewards[red_action][0] * -1
@@ -70,8 +74,10 @@ class RLReward(Reward):
         elif blue_recurring == 1:
             self.add_recurring_blue_action(blue_id, blue_action)
         #print(self.sum_recurring())
+        r *= red_multiplier
         reward = r + b + self.sum_recurring()
         #if reward != 0: print(reward)
+        self.current_step += 1
         return reward
     
     def sum_recurring(self) -> int | float:
@@ -114,3 +120,4 @@ class RLReward(Reward):
     def reset(self) -> None:
         self.blue_recurring_actions = []
         self.red_recurring_actions = []
+        self.current_step = 0

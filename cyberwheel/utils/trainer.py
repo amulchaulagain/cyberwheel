@@ -16,7 +16,6 @@ from cyberwheel.utils import RLAgent, get_service_map
 from cyberwheel.utils.set_seed import set_seed
 from cyberwheel.network.network_base import Network
 
-
 class Trainer:
     def __init__(self, args):
         self.args = args
@@ -97,9 +96,8 @@ class Trainer:
             #print(f"Evaluation ep took: \t\t{episode_time}")
 
         episodic_return = float(sum(episode_rewards)) / self.args.eval_episodes
-        self.args.evaluation = False
         return episodic_return
-
+    
     def run_evals(self, model, globalstep):
         """Evaluate 'model' on tasks listed in 'eval_queue' in a separate process"""
         eval_device = torch.device("cpu")
@@ -151,11 +149,7 @@ class Trainer:
         self.writer.add_text(
             "hyperparameters",
             "|param|value|\n|-|-|\n%s"
-            % (
-                "\n".join(
-                    [f"|{key}|{value}|" for key, value in vars(self.args).items()]
-                )
-            ),
+            % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
         )
         # Seeding
         if self.deterministic:
@@ -213,45 +207,26 @@ class Trainer:
 
         # Create agent and optimizer
 
-        obs_shape = self.envs.single_observation_space.shape
-        as_size = self.envs.envs[0].max_action_space_size
-
-        print(obs_shape)
-        print(as_size)
-
-        self.agent = RLAgent(obs_shape, as_size).to(self.device)
+        self.agent = RLAgent(self.envs).to(self.device)
 
         # Load model from models/ directory
 
-        self.optimizer = optim.Adam(
-            self.agent.parameters(), lr=self.args.learning_rate, eps=1e-5
-        )
+        self.optimizer = optim.Adam(self.agent.parameters(), lr=self.args.learning_rate, eps=1e-5)
 
         # ALGO Logic: Storage setup
         self.obs = torch.zeros(
-            (self.args.num_steps, self.args.num_envs)
-            + self.envs.single_observation_space.shape
+            (self.args.num_steps, self.args.num_envs) + self.envs.single_observation_space.shape
         ).to(self.device)
         self.actions = torch.zeros(
-            (self.args.num_steps, self.args.num_envs)
-            + self.envs.single_action_space.shape
+            (self.args.num_steps, self.args.num_envs) + self.envs.single_action_space.shape
         ).to(self.device)
-        self.logprobs = torch.zeros((self.args.num_steps, self.args.num_envs)).to(
-            self.device
-        )
-        self.rewards = torch.zeros((self.args.num_steps, self.args.num_envs)).to(
-            self.device
-        )
-        self.dones = torch.zeros((self.args.num_steps, self.args.num_envs)).to(
-            self.device
-        )
-        self.values = torch.zeros((self.args.num_steps, self.args.num_envs)).to(
-            self.device
-        )
+        self.logprobs = torch.zeros((self.args.num_steps, self.args.num_envs)).to(self.device)
+        self.rewards = torch.zeros((self.args.num_steps, self.args.num_envs)).to(self.device)
+        self.dones = torch.zeros((self.args.num_steps, self.args.num_envs)).to(self.device)
+        self.values = torch.zeros((self.args.num_steps, self.args.num_envs)).to(self.device)
         self.step_rewards = torch.zeros((self.args.num_steps, self.args.num_envs))
         self.action_masks = torch.zeros(
-            (self.args.num_steps, self.args.num_envs, self.max_action_space_size),
-            dtype=torch.bool,
+            (self.args.num_steps, self.args.num_envs, self.max_action_space_size), dtype=torch.bool
         ).to(self.device)
         self.global_step = 0
         self.start_time = time.time()
@@ -285,9 +260,7 @@ class Trainer:
                 ]
 
             for i, action_space_size in enumerate(action_space_sizes):
-                self.action_masks[step][i] = self.get_action_mask(
-                    action_space_size, self.action_masks[step][i]
-                )
+                self.action_masks[step][i] = self.get_action_mask(action_space_size, self.action_masks[step][i])
 
             self.global_step += 1 * self.args.num_envs
             self.obs[step] = self.next_obs
@@ -356,16 +329,10 @@ class Trainer:
                     nextnonterminal = 1.0 - self.dones[t + 1]
                     nextvalues = self.values[t + 1]
                 delta = (
-                    self.rewards[t]
-                    + self.args.gamma * nextvalues * nextnonterminal
-                    - self.values[t]
+                    self.rewards[t] + self.args.gamma * nextvalues * nextnonterminal - self.values[t]
                 )
                 advantages[t] = lastgaelam = (
-                    delta
-                    + self.args.gamma
-                    * self.args.gae_lambda
-                    * nextnonterminal
-                    * lastgaelam
+                    delta + self.args.gamma * self.args.gae_lambda * nextnonterminal * lastgaelam
                 )
             returns = advantages + self.values
 
@@ -404,10 +371,7 @@ class Trainer:
                     old_approx_kl = (-logratio).mean()
                     approx_kl = ((ratio - 1) - logratio).mean()
                     clipfracs += [
-                        ((ratio - 1.0).abs() > self.args.clip_coef)
-                        .float()
-                        .mean()
-                        .item()
+                        ((ratio - 1.0).abs() > self.args.clip_coef).float().mean().item()
                     ]
 
                 mb_advantages = b_advantages[mb_inds]
@@ -442,18 +406,12 @@ class Trainer:
 
                 # Add an entropy bonus to the loss
                 entropy_loss = entropy.mean()
-                loss = (
-                    pg_loss
-                    - self.args.ent_coef * entropy_loss
-                    + v_loss * self.args.vf_coef
-                )
+                loss = pg_loss - self.args.ent_coef * entropy_loss + v_loss * self.args.vf_coef
 
                 # Backpropagation
                 self.optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(
-                    self.agent.parameters(), self.args.max_grad_norm
-                )
+                nn.utils.clip_grad_norm_(self.agent.parameters(), self.args.max_grad_norm)
                 self.optimizer.step()
 
             if self.args.target_kl is not None:
@@ -477,7 +435,6 @@ class Trainer:
             torch.save(self.agent.state_dict(), globalstep_path)
             if self.args.track:
                 import wandb
-
                 wandb.save(
                     agent_path,
                     base_path=run_path,
@@ -527,26 +484,18 @@ class Trainer:
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         self.writer.add_scalar(
-            "charts/learning_rate",
-            self.optimizer.param_groups[0]["lr"],
-            self.global_step,
+            "charts/learning_rate", self.optimizer.param_groups[0]["lr"], self.global_step
         )
         self.writer.add_scalar("losses/value_loss", v_loss.item(), self.global_step)
         self.writer.add_scalar("losses/policy_loss", pg_loss.item(), self.global_step)
         self.writer.add_scalar("losses/entropy", entropy_loss.item(), self.global_step)
-        self.writer.add_scalar(
-            "losses/old_approx_kl", old_approx_kl.item(), self.global_step
-        )
+        self.writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), self.global_step)
         self.writer.add_scalar("losses/approx_kl", approx_kl.item(), self.global_step)
         self.writer.add_scalar("losses/clipfrac", np.mean(clipfracs), self.global_step)
-        self.writer.add_scalar(
-            "losses/explained_variance", explained_var, self.global_step
-        )
+        self.writer.add_scalar("losses/explained_variance", explained_var, self.global_step)
         print("SPS:", int(self.global_step / (time.time() - self.start_time)))
         self.writer.add_scalar(
-            "charts/SPS",
-            int(self.global_step / (time.time() - self.start_time)),
-            self.global_step,
+            "charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step
         )
 
     def close(self) -> None:

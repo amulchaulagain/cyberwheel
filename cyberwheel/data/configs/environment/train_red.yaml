@@ -1,5 +1,5 @@
 # Training Parameters
-experiment_name: TrainRedIntegrationCampaign_RandomBlueAgent_-1FailCost
+experiment_name: TrainRedIntegrationCampaign_RandomBlueAgent_-1FailCost_EarlyPriority
 seed: 1 # The seed to use for the experiment
 deterministic: false # Whether or not the training is deterministic
 device: cuda:1 # Which device to train on
