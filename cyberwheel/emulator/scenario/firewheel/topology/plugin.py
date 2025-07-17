@@ -232,7 +232,7 @@ def read_config(name: str):
     """Read network config from YAML file"""
     cwd = os.getcwd()
 
-    with open(f"{cwd}/configs/{name}", "r", encoding="utf-8") as file:
+    with open(f"{NETWORK_CONFIG}", "r", encoding="utf-8") as file:
         data = yaml.load(file, Loader=yaml.SafeLoader)
         return data
 

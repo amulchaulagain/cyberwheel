@@ -7,6 +7,9 @@
 #
 # The available configurations can be found in the ./configs folder.
 
+# NETWORK_CONFIG_DIR="../../../data/configs/network"
+NETWORK_CONFIG=$1
+
 if [[ $# -eq 0 ]]; then
     echo "Missing config name as argrument. See './configs' folder and use './run <config_name>.yaml'"
     exit 1
@@ -17,9 +20,9 @@ if [[ $# -gt 1 ]]; then
     exit 1
 fi
 
-file=$1
+# file=$1
 
-if [ ! -f "configs/$file" ]; then
+if [ ! -f "$NETWORK_CONFIG" ]; then
     echo "Configuration file not found in 'configs' folder. Ensure file exist and that '.yaml' is included in the name."
     exit 1
 fi
