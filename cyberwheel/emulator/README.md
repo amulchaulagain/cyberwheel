@@ -2,52 +2,103 @@
 
 ## Overview
 
-For now Firewheel must be started up manually before running Agent evaluation. Follow the instructions in Setup and Starting Firewheel Experiment before starting the agent evaluation.
+Cyberwheel uses [Firewheel](https://github.com/sandialabs/firewheel) for emulation and evaluating agents. Firewheel provides a high-fidelity testing environment to perform repeatable experiments and scale to large networks.
 
-## Setup
+We reccomended after installing Firewheel, to go through their [quickstart](https://sandialabs.github.io/firewheel/quickstart.html) and [tutorials](https://sandialabs.github.io/firewheel/tutorials/index.html) to get familiar with starting an emulated network environment, what they refer to as an _experiment_.
 
-**Uploading a network config file**:
+## Hardware Pre-requisites
 
-1. ssh into `firewheel-dev01` server
-2. pull the cyberwheel repository if not done already
-3. `cp cyberwheel/cyberwheel/resources/configs/network/<file>.yaml` `/opt/firewheel/model_components/cyberwheel/topology/configs/` 
-    - this may require `sudo`
+- **16GB RAM minimum** (reccomended)
+- **Linux OS**: Ubuntu, CentOS, RHEL
 
-This only needs to be done once. `example_config.yaml` and `integration_config.yaml` are already copied over.
+Firewheel uses QEMU/KVM to host virtual machines (VM) and the default memory allocated for each VM is 2GB. 
+The memory is adjustable in the `model_component_object.py` definitions located in the `/opt/firewheel/model_components` folder.
 
-## Starting Firewheel Experiment
+For Cyberwheel, we defined 2 custom components:
 
-Below are the steps to start an experiment:
+- **Ubuntu2204DesktopHostCyberwheel** (2GB)- used for all hosts (e.g. users, servers, workstations), except the SIEM host. It uses an Ubuntu 22.04.4 image as its base image. The image is pre-installed with software to perform Red Actions such as `nmap` for port scans. 
+- **Ubuntu1604DesktopSiemcyberwheel** (4GB) - used for the SIEM host. It uses an Ubuntu 16.04.4 image as its base image. The image is pre-installed with ElasticSearch, Kibana and Fleet.
 
-1. ssh into `firewheel-dev01` server
-2. `sudo su - fw`
-    - use your ucams password
-3. `cd /opt/firewheel/model_components/cyberwheel/topology/`
-4. `./run.sh <config-name>.yaml` (ensure the network topology file is in the `configs` folder, see Setup above)
-5. use `firewheel vm mix` to check when virtural machines are finsihed configuration. The _VM Resource State_ should all say "configured".
+## Software Pre-requisites
 
-Once all machines are configured. You must run the **EmulatorController** class `init_hosts()` method to connect hosts to Elastic's Fleet Server. (This will be automatic eventually).
+- [Firewheel](https://github.com/sandialabs/firewheel): follow the [installation guide](https://sandialabs.github.io/firewheel/install/install.html) to install Firewheel and its dependencies. Currently Firewheel has been tested on Ubuntu, CentOS and RHEL. 
+- [sshpass](https://www.cyberciti.biz/faq/noninteractive-shell-script-ssh-password-provider/): passes the host password when SSH'ing into a host, which skips having to enter the password. 
+This is for the _Action Controller_ to perform actions on hosts within Firewheel.
 
-6. switch back to your own username
-7. cd in the test directory in the cyberwheel repostity `cd cyberwheel/cyberwheel/tests/`
-8. edit `test_emulator_control.py` to ensure `NETWORK_CONFIG` is the correct config file.
-9. run `poetry run python -m unittest -v test_emulator_control.TestEmulatorSetup.test_init_hosts`
 
-It should show all hosts (excluding decoy's) being connected to Fleet. Now you start the agent evaluation script.
+## Before Starting
+
+Firewheel has its own command line interface (CLI) and references model componnets defined in `/opt/firewheel/model_components` when starting experiment. 
+We must copy the **cyberwheel model component** (scenario converter) and **images** from the repository into the `model_components` folder.
+
+**Copy the model component**:
+
+```
+mkdir /opt/firewheel/model_components/cyberwheel
+cd /path-to-repo/cyberwheel
+cp -r cyberwheel/emulator/scenario/firewheel/toplogy /opt/firewheel/model_components/cyberhweel 
+```
+
+**Copy the images**:
+
+```
+cd /path-to-repo/cyberwheel
+cp -r cyberwheel/emulator/scenario/firewheel/ubuntu/cyberwheel /opt/firewheel/model_components/linux/ubuntu
+```
+
+## Starting Firewheel
+
+Before evaluating a trained agent, the emulation envinronment in Firewheel must be running:
+
+```
+sudo su - fw
+cd /opt/firewheel/model_components/cyberwheel/topology
+./run.sh path-to-repo/cyberwheel/data/configs/network/<network-config>.yaml 
+
+# example 
+./run.sh /home/cyberwheel/cyberwheel/data/configs/network/emulator_example_config.yaml)
+```
+
+Check the status of virtural machines are finsihed configuration 
+The _VM Resource State_ should all say _configured_.
+
+```
+firewheel vm mix  # check status of VMs
+ctrl+c            # exit status check
+```
+
+## Evaluating the Agent
+
+Once all machines are configured. Open a new terminal (no need to switch to `fw` user):
+
+```
+cd path-to-repo/cyberwheel
+poetry install   # if you have not already installed dependencies
+poetry shell     # enter virtual environment
+python cyberwheel/emulator/evaluate_cyberwheel_emu.py --eval-config <evaluation-config>.yaml   # run evaluation
+
+# example 
+python cyberwheel/emulator/evaluate_cyberwheel_emu.py --eval-config emulator_test_integration.yaml
+```
 
 ## Resetting Firewheel
 
-To stop experiment run `firewheel restart`. It's best to do this when you're done testing since Elastic is running in the SIEM virtual machine and will continue to log. The memory will eventually run out.
+To gracefully shutdown the VMs and reset the emulation environment run `firewheel restart`. 
+If you leave the the network working the SIEM host with Elastic will continue to collect logs from the other hosts. 
+The memory will eventually run out.
 
-## Portfording MiniMega
+## Architecture Overiew
 
-If you want to visually see the virtual machines and remote into them, you can use MiniMega through the browser. You'll need need to ssh into firewheel-dev01 with port forwarding first:
+(TODO)
 
-1. `ssh -L localhost:9011:localhost:9001 <firewheel-dev01>`
-2. open up a browser to `http://localhost:9001`
+### Scenario Converter
 
-## SSH into a virtual machine in Firewheel
+(TODO)
 
-After starting an experiment and machines are configured, you can SSH into any machine. Run the following command and use the password `ubuntu`:
+### Action Controller
 
-`firewheel ssh ubuntu@<hostname>`  
+(TODO)
+
+### Detector and Observation Controller
+
+(TODO)
