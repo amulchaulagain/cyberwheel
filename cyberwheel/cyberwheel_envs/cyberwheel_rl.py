@@ -73,7 +73,12 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             self.rl_agent = self.red_agent
             self.static_agent = self.blue_agent
 
-            self.observation_space = spaces.MultiDiscrete(np.array([3] * self.red_agent.observation.max_size))
+            #self.observation_space = spaces.MultiDiscrete(np.array([6] * self.red_agent.observation.max_size))
+            self.observation_space = spaces.Box(
+                low  = np.full(self.red_agent.observation.max_size, -1, dtype=np.int32),
+                high = np.full(self.red_agent.observation.max_size,  4, dtype=np.int32),
+                dtype=np.int32
+            )
 
             self.max_action_space_size = args.max_num_hosts * self.red_agent.action_space.num_actions * 2 # TODO: instead of hard-coding 500, make dependent on new arg (small/med/large networks - 100/1000/10000)
             self.action_space = self.red_agent.action_space.create_action_space(self.max_action_space_size)
@@ -88,7 +93,12 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             self.static_agent = self.red_agent
 
             obs_shape = self.blue_agent.observation.shape
-            self.observation_space = spaces.MultiDiscrete(np.array([args.max_decoys + 2] * self.blue_agent.observation.shape))
+            #self.observation_space = spaces.MultiDiscrete(np.array([args.max_decoys + 2] * self.blue_agent.observation.shape))
+            self.observation_space = spaces.Box(
+                low  = np.full(self.blue_agent.observation.shape, -1, dtype=np.int32),
+                high = np.full(self.blue_agent.observation.shape, args.max_decoys + 2, dtype=np.int32),
+                dtype=np.int32
+            )
             # self.observation_space = spaces.MultiBinary(self.blue_agent.observation.shape)
             self.max_action_space_size = self.blue_agent.action_space._action_space_size # TODO: instead of hard coding, just make it preset (small/med/large - 10/100/1000)
             self.action_space = self.blue_agent.create_action_space(self.max_action_space_size)
@@ -172,7 +182,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
                 "network": self.network,
                 "history": self.red_agent.history,
                 "commands": [], #red_agent_result.action_results.metadata.get("commands", []),
-                "decoy_attacked": decoy_attacked
+                "decoy_attacked": decoy_attacked,
             }
         #print("D-D")
 
@@ -204,3 +214,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
     @property
     def rl_agent_action_space_size(self):
         return self.rl_agent.action_space._action_space_size
+    
+    @property
+    def action_mask(self):
+        return self.red_agent.action_space.get_action_mask(self.red_agent.current_host.name)

@@ -127,7 +127,7 @@ class Network:
         """
         try:
             self.graph.remove_node(host.name)
-            self.decoys.pop(host.name, None)
+            self.decoys.pop(host.name)
             self.all_hosts.remove(host.name)
             self.server_hosts.remove(host.name)
             self.user_hosts.remove(host.name)

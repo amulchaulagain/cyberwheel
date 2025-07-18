@@ -1,4 +1,5 @@
 import torch
+import math
 import random
 import gymnasium as gym
 import time
@@ -53,6 +54,15 @@ class Trainer:
         action_masks[:action_space_size] = True # Valid actions
         action_masks[action_space_size:] = False # Invalid actions
         return action_masks
+
+    def mask_actions(self, new_action_mask, action_mask):
+        for i in range(len(action_mask)):
+            action_mask[i] = new_action_mask[i]
+        #print(action_mask)
+        #print(new_action_mask)
+        #action_masks[:action_space_size] = True # Valid actions
+        #action_masks[action_space_size:] = False # Invalid actions
+        return action_mask
     
     def evaluate(self, agent, env):
         """Evaluate 'agent'"""
@@ -75,7 +85,11 @@ class Trainer:
             for step in range(self.args.num_steps):
                 obs = torch.Tensor(obs).to(eval_device)
 
-                action_masks = self.get_action_mask(env.envs[0].unwrapped.rl_agent.action_space._action_space_size, action_masks)
+                tmp_mask = env.envs[0].unwrapped.action_mask
+                #action_masks = self.get_action_mask(env.envs[0].unwrapped.rl_agent.action_space._action_space_size, action_masks)
+
+
+                action_masks = self.mask_actions(tmp_mask, action_masks)
 
                 action, _, _, _ = agent.get_action_and_value(
                     obs, action_mask=action_masks
@@ -101,7 +115,7 @@ class Trainer:
     def run_evals(self, model, globalstep):
         """Evaluate 'model' on tasks listed in 'eval_queue' in a separate process"""
         eval_device = torch.device("cpu")
-        print(model)
+        #print(model)
         model = torch.load(model, map_location=eval_device)
         results = {}
         for network_name in self.networks:
@@ -211,7 +225,15 @@ class Trainer:
 
         # Load model from models/ directory
 
-        self.optimizer = optim.Adam(self.agent.parameters(), lr=self.args.learning_rate, eps=1e-5)
+        actor_params = list(self.agent.actor.parameters())
+        critic_params = list(self.agent.critic.parameters())
+
+        #self.optimizer = optim.Adam(self.agent.parameters(), lr=self.args.learning_rate, eps=1e-5)
+        self.optimizer = optim.Adam([
+            { 'params': actor_params,  'lr': float(self.args.actor_lr),  'eps': 1e-5 },
+            { 'params': critic_params, 'lr': float(self.args.critic_lr), 'eps': 1e-5 },
+        ])
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(self.optimizer, T_0=int(self.args.restart_T0), T_mult=int(self.args.restart_Tmult), eta_min=float(self.args.min_lr), last_epoch=-1) if self.args.anneal_lr == 'cosine_restarts' else None
 
         # ALGO Logic: Storage setup
         self.obs = torch.zeros(
@@ -230,6 +252,7 @@ class Trainer:
         ).to(self.device)
         self.global_step = 0
         self.start_time = time.time()
+        self.start_process_time = time.process_time()
         self.resets = np.array(self.envs.reset(seed=[self.seed + i for i in range(self.args.num_envs)])[0])
         self.next_obs = torch.Tensor(self.resets).to(self.device)
         self.next_done = torch.zeros(self.args.num_envs).to(self.device)
@@ -239,30 +262,42 @@ class Trainer:
         self.next_obs = torch.Tensor(self.resets).to(self.device)
 
         # Annealing the rate if instructed to do so.
-        if self.args.anneal_lr:
+        frac = 1.0
+        if self.args.anneal_lr == 'linear':
             # Decreases the learning rate from args.lr to 0 over the course of training.
             frac = 1.0 - (update - 1.0) / self.args.num_updates
-            lrnow = frac * self.args.learning_rate
+        elif self.args.anneal_lr == 'cosine':
+            frac = 0.5 * (1.0 + math.cos(math.pi * update / self.args.num_updates))
+        lrnow = 0 # max(frac * self.args.learning_rate, 1e-5)
+
+        if self.args.anneal_lr != 'cosine_restarts':
             self.optimizer.param_groups[0]["lr"] = lrnow
 
         # Run an episode in each environment. This loop collects experience which is later used for optimization.
         episode_start = time.time_ns()
+        episode_process_start = time.process_time_ns()
         for step in range(0, self.args.num_steps):
             if self.deterministic:
                 set_seed(self.seed)
             self.seed += self.args.num_envs
             
-            if isinstance(self.envs, gym.vector.AsyncVectorEnv):
+            if self.args.async_env: #isinstance(self.envs, gym.vector.AsyncVectorEnv):
                 action_space_sizes = self.envs.call("rl_agent_action_space_size")
+                tmp_masks = self.envs.call("action_mask")
             else:
-                action_space_sizes = [
-                    env.unwrapped.rl_agent.action_space._action_space_size for env in self.envs.envs
-                ]
+                action_space_sizes = [env.unwrapped.rl_agent.action_space._action_space_size for env in self.envs.envs]
+                tmp_masks = [env.unwrapped.action_mask for env in self.envs.envs]
+            
+            #self.action_masks[step] = self.mask_actions(tmp_masks, self.action_masks[step])
+            
+            for i in range(len(action_space_sizes)):
+                self.action_masks[step][i] = self.mask_actions(tmp_masks[i], self.action_masks[step][i])
+            #print(self.action_masks[step])
 
-            for i, action_space_size in enumerate(action_space_sizes):
-                self.action_masks[step][i] = self.get_action_mask(action_space_size, self.action_masks[step][i])
+            #for i, action_space_size in enumerate(action_space_sizes):
+            #    self.action_masks[step][i] = self.get_action_mask(action_space_size, self.action_masks[step][i])
 
-            self.global_step += 1 * self.args.num_envs
+            self.global_step += self.args.num_envs
             self.obs[step] = self.next_obs
             self.dones[step] = self.next_done
             #print("B")
@@ -294,7 +329,10 @@ class Trainer:
 
             #print("F")
         end_time = time.time_ns()
+        end_process_time = time.process_time_ns()
+
         episode_time = (end_time - episode_start) / (10**9)
+        episode_process_time = (end_process_time - episode_process_start) / (10**9)
         #print(f"Training ep took: \t\t{episode_time}")
 
         # Calculate and log the mean reward for this episode.
@@ -303,7 +341,8 @@ class Trainer:
         mean_rew = self.rewards.sum(axis=0).mean()
         print(f"global_step={self.global_step}, episodic_return={mean_rew}")
         if mean_rew == 0:
-            print("mean reward is 0 here?")
+            pass
+            #print("mean reward is 0 here?")
             #print(self.rewards.cpu().numpy())
         self.writer.add_scalar("charts/episodic_return", mean_rew, self.global_step)
         
@@ -312,8 +351,13 @@ class Trainer:
             episode_time,
             self.global_step,
         )
-        if self.args.track:
-            self.run.log({"episodic_runtime": episode_time})
+        self.writer.add_scalar(
+            f"charts/episodic_process_time",
+            episode_process_time,
+            self.global_step,
+        )
+        #if self.args.track:
+        #    self.run.log({"episodic_runtime": episode_time})
         
         # bootstrap value if not done
         # Calculate advantages used to optimize the policy and returns which are compared to values to optimize the critic.
@@ -413,6 +457,8 @@ class Trainer:
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.agent.parameters(), self.args.max_grad_norm)
                 self.optimizer.step()
+                if self.args.anneal_lr == 'cosine_restarts':
+                    self.scheduler.step(update)
 
             if self.args.target_kl is not None:
                 if approx_kl > self.args.target_kl:
@@ -425,6 +471,7 @@ class Trainer:
         # Infrequently save the model and evaluate the agent
         if (update - 1) % self.args.save_frequency == 0:
             start_eval = time.time()
+            start_process_eval = time.process_time()
             # Save the model
             run_path = files("cyberwheel.data.models").joinpath(self.args.experiment_name)
             if not os.path.exists(run_path):
@@ -468,6 +515,9 @@ class Trainer:
                 self.writer.add_scalar(
                     "charts/eval_time", int(time.time() - start_eval), self.global_step
                 )
+                self.writer.add_scalar(
+                    "charts/eval_process_time", int(time.process_time() - start_process_eval), self.global_step
+                )
                 #print(self.episode_decoy_attacks)
                 mean_decoys_attacked = mean(self.episode_decoy_attacks)
                 median_decoys_attacked = median(self.episode_decoy_attacks)
@@ -483,8 +533,14 @@ class Trainer:
                 )
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
+        #print(f"Actor: {self.optimizer.param_groups[0]['lr']}")
+        #print(f"Critic: {self.optimizer.param_groups[1]['lr']}")
+        
         self.writer.add_scalar(
-            "charts/learning_rate", self.optimizer.param_groups[0]["lr"], self.global_step
+            "charts/actor_learning_rate", self.optimizer.param_groups[0]["lr"], self.global_step
+        )
+        self.writer.add_scalar(
+            "charts/critic_learning_rate", self.optimizer.param_groups[1]["lr"], self.global_step
         )
         self.writer.add_scalar("losses/value_loss", v_loss.item(), self.global_step)
         self.writer.add_scalar("losses/policy_loss", pg_loss.item(), self.global_step)
@@ -496,6 +552,9 @@ class Trainer:
         print("SPS:", int(self.global_step / (time.time() - self.start_time)))
         self.writer.add_scalar(
             "charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step
+        )
+        self.writer.add_scalar(
+            "charts/process_SPS", int(self.global_step / (time.process_time() - self.start_process_time)), self.global_step
         )
 
     def close(self) -> None:

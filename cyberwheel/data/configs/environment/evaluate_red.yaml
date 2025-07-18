@@ -1,29 +1,29 @@
 # Evaluation Parameters
-red_agent: rl_red_agent.yaml
-blue_agent: inactive_blue_agent.yaml
-environment: CyberwheelRedRL
-valid_targets: all
+red_agent: rl_red_campaign.yaml
+blue_agent: random_blue_agent.yaml
+environment: CyberwheelRL
+valid_targets: servers
 train_red: true
 train_blue: false
-campaign: false
+campaign: true
 seed: 1
 
 checkpoint: agent
-download_model: false
-run: # required if download_model is true
-wandb_project_name: # required if download_model is true
-wandb_entity: # required if download_model is true
+download_model: true
+run: f8ztycba # required if download_model is true
+wandb_project_name: Cyberwheel # required if download_model is true
+wandb_entity: oeschsec # required if download_model is true
 
-experiment: training_red_evaluator
+experiment_name: TestEmulatorRun_TwoLRs
 visualize: false
-graph_name:
-network_config: 15-host-network.yaml
+graph_name: TestEmulatorRun_TwoLRs
+network_config: emulator_integration_config.yaml
 decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml
-detector_config: detector_handler.yaml
-min_decoys: 2
-max_decoys: 3
-reward_scaling: 10.0
-reward_function: RLRedReward
-num_steps: 50
+detector_config: perfect_detector.yaml
+max_decoys: 2
+reward_function: RLReward
+num_steps: 100
 num_episodes: 10
+network_size_compatibility: small
+deterministic: false

@@ -1,14 +1,15 @@
 # Training Parameters
-experiment_name: TrainRedIntegrationCampaign_RandomBlueAgent_-1FailCost_EarlyPriority
+experiment_name: TestActionMask #TrainRedAgent_TwoLRs_AnnealonUpdate_BothHigh_ActionMask #EmulatorIntegrationCampaign_FixedTypeObs
 seed: 1 # The seed to use for the experiment
 deterministic: false # Whether or not the training is deterministic
-device: cuda:1 # Which device to train on
+device: cpu # Which device to train on
 async_env: true # Whether to run the environments in parallel
-total_timesteps: 1000000000 # Total number of steps to run throughout training
+total_timesteps: 100000000 # Total number of steps to run throughout training
 num_saves: 100 # Number of times the model is evaluated and saved during the training run
-num_envs: 128 # Number of game environments to run at once (parallel if async_env == true)
+num_envs: 12 # Number of game environments to run at once (parallel if async_env == true)
 num_steps: 100 # Number of steps to run per episode
 eval_episodes: 10 # Number of episodes to run in an evaluation
+debug_mode: false
 
 # Environment Parameters
 environment: CyberwheelRL # Environment class to use
@@ -36,21 +37,26 @@ max_decoys: 2
 
 # RL Parameters
 env_id: cyberwheel # Environment ID
-learning_rate: 2.5e-4 # Learning rate value of the optimizer
-anneal_lr: true # Whether or not to anneal the learning rate for policy and value networks
-gamma: 0.99 # The discount factor (gamma value)
+#learning_rate: 2.5e-4 # Learning rate value of the optimizer
+actor_lr: 1e-3
+critic_lr: 1e-3
+anneal_lr: cosine_restarts # Whether or not to anneal the learning rate for policy and value networks
+min_lr: 1e-5 # floor LR for both
+restart_T0: 500 # first cosine cycle = 100k updates
+restart_Tmult: 1 # next cycle = 200k, then 400k, …
+gamma: 0.995 # The discount factor (gamma value)
 gae_lambda: 0.95 # Lambda for the general advantage estimation
 num_minibatches: 4 # Number of minibatches
 update_epochs: 4 # Number of epochs to update the policy
 norm_adv: true # Whether or not to normalize advantages
-clip_coef: 0.2 # Surrogate clipping coefficient
+clip_coef: 0.3 # Surrogate clipping coefficient
 clip_vloss: true # Whether to use clipped loss for the value function
-ent_coef: 0.01 # Coefficient of entropy
+ent_coef: 0.02 # Coefficient of entropy
 vf_coef: 0.5 # Coefficient of the value function
 max_grad_norm: 0.5 # The maximum norm for the gradient clipping
 target_kl: null # The target KL Divergence Threshold
 
 # Weights & Biases Parameters (optional)
-track: true
+track: false
 wandb_project_name: Cyberwheel # The W&B project name if tracking
 wandb_entity: oeschsec # The W&B entity if tracking

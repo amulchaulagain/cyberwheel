@@ -18,7 +18,7 @@ class RandomBlueAgent(BlueAgent):
         self.args = args
         self.network = network
         super().__init__()
-        self.deploy_steps = [random.randint(0, args.num_steps) for _ in range(args.max_decoys)]
+        self.deploy_steps = [random.randint(0, round(args.num_steps / 4)) for _ in range(args.max_decoys)]
         self.subnets = list(network.subnets.values())
         self.current_step = 0
         host_defs = files(f"cyberwheel.data.configs.host_definitions").joinpath('host_defs_services.yaml')
@@ -62,7 +62,7 @@ class RandomBlueAgent(BlueAgent):
         return {"nothing": (0, 0), "deploy_decoy": (0, 0)}
 
     def reset(self, network: Network):
-        self.deploy_steps = [random.randint(0, self.args.num_steps) for _ in range(self.args.max_decoys)]
+        self.deploy_steps = [random.randint(0, round(self.args.num_steps / 4)) for _ in range(self.args.max_decoys)]
         self.subnets = list(network.subnets.values())
         self.current_step = 0
         return

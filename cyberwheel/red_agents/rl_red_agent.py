@@ -145,6 +145,7 @@ class RLARTAgent(ARTAgent):
             self.observation.add_host(h, sweeped=True)
             self.action_space.add_host(h)
         self.tracked_hosts = current_hosts
+    
 
     def validate_action(self, action: ARTKillChainPhase, target_host: str) -> bool:
         if action == Nothing:
@@ -192,6 +193,7 @@ class RLARTAgent(ARTAgent):
             )
         else:
             return False
+
 
     def get_reward_map(self) -> RewardMap:
         return self.reward_map

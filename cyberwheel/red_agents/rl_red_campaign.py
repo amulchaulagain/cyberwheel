@@ -51,9 +51,9 @@ class RLRedCampaign(ARTCampaign):
         self.reward_map = {
             "nothing": (0.0, 0.0),
             "Remote System Discovery": (0.0, 0.0),
-            "Network Service Discovery": (0.0, 0.0),
+            "Network Service Discovery": (5.0, 0.0),
             "Sudo and Sudo Caching": (0.0, 0.0),
-            "Data Encrypted for Impact": (100.0, 10.0),
+            "Data Encrypted for Impact": (100.0, 0.0),
             "LinuxLateralMovement": (0.0, 0.0)
         }
 

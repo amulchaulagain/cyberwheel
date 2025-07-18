@@ -27,9 +27,10 @@ class HostView:
         self.impacted = impacted
 
     def get_type(self) -> int:
-        if self.type.lower() == "workstation":
+        #print(self.type.lower())
+        if "workstation" in self.type.lower() or "user" in self.type.lower():
             return 1
-        elif self.type.lower() == "server":
+        elif "server" in self.type.lower():
             return 2
         else: # Unknown
             return 0
@@ -98,9 +99,10 @@ class RedObservation(Observation):
         current_step = kwargs.get("current_step", None)
         total_steps = kwargs.get("total_steps", None)
         if current_step == None and total_steps == None:
-            return
+            return 4
         quad = current_step / total_steps
         self.obs_vec[self.max_size - 1] = 1 if quad < 0.25 else 2 if quad < 0.50 else 3 if quad < 0.75 else 4
+        return self.obs_vec[self.max_size - 1]
 
     def get_view_obs(self, view: HostView) -> list[int]:
         view_obs = [
