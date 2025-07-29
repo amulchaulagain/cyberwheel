@@ -36,14 +36,14 @@ We must copy the **cyberwheel model component** (scenario converter) and **image
 ```
 mkdir /opt/firewheel/model_components/cyberwheel
 cd /path-to-repo/cyberwheel
-cp -r cyberwheel/emulator/scenario/firewheel/toplogy /opt/firewheel/model_components/cyberhweel 
+cp -r cyberwheel/emulator/scenario/firewheel/toplogy /opt/firewheel/model_components/cyberhweel
 ```
 
 **Copy the images**:
 
 ```
 cd /path-to-repo/cyberwheel
-cp -r cyberwheel/emulator/scenario/firewheel/ubuntu/cyberwheel /opt/firewheel/model_components/linux/ubuntu
+cp -r cyberwheel/emulator/scenario/firewheel/model_components/linux/ubuntu/cyberwheel /opt/firewheel/model_components/linux/ubuntu
 ```
 
 ## Starting Firewheel
@@ -89,7 +89,13 @@ The memory will eventually run out.
 
 ## Architecture Overiew
 
-(TODO)
+### Important Folders and Files
+
+- `actions/`: contains emulator actions for both red and blue agents.
+- `configs/emulator_config.yaml`:  contains configs such as host username and password.
+- `controler/emulator_contoler.yaml`: class for the simulator to interface with the emulator.
+- `detectors/emulator_dectector.py`: class that defines the emulator detector.
+- `scenario/`: contains the network topology (i.e. scenario) converter and custom KVM images used by firewheel.
 
 ### Scenario Converter
 
