@@ -1,0 +1,69 @@
+Ubuntu 16.04.3 Server amd64
+---------------------------
+
+2018-02-07:         (Adam Vail <avail@sandia.gov>)
+
+  o   Initial install with no networking from ubuntu-16.04-beta2-server-amd64.iso
+                      - qemu-img made with 100GB max size
+                      - normal install selected, defaults used everywhere with username
+                        / password ubuntu / ubuntu
+                      - mountain time zone selected
+                      - guided, use entire disk was selected (no LVM)
+                      - no HTTP proxy was selected
+                      - no automatic updates were selected
+                      - OpenSSH server was selected to be installed
+  o   Set timeout for dhcp to 10 in /etc/dhcp/dhclient.conf
+  o   Temporarily added wwwproxy.sandia.gov:80 to /etc/apt/apt.conf and installed,
+                            python2.7
+                            python-netaddr
+        Then cleared the cached debs in /var/cache/apt/archive
+  o   Copied over the qmeu-ga-patched-static to /usr/sbin
+        and put the qemu-guest-agent.service systemd script in /etc/systemd/system/
+  o   The guest agent needs /usr/local/var/run to exist:
+        sudo mkdir -p /usr/local/var/run
+  o   Make the qemu-guest-agent service run on startup:
+        sudo systemctl enable qemu-guest-agent.service
+
+2018-07-30:         (Christopher Cordi <cncordi@sandia.gov>)
+  o   This image is no used for xenial servers (replaced by 16.04.4-server-amd64)
+
+Ubuntu 16.04.4 Desktop amd64
+----------------------------
+
+2018-07-24:         (Christopher Cordi <cncordi@sandia.gov>)
+
+  o   Same steps as above but with ubuntu-16.04.4-desktop-amd64.iso
+  o   Ran apt-get purge of networkmanager* and network-manager*
+  o   Set resolution to 1280x1024
+  o   Copied /etc/network/interfaces from a fresh Ubuntu 16.04.4 server, but changed source to source-directory.
+
+2018-07-27:         (Christopher Cordi <cncordi@sandia.gov>)
+  o   Shrunk qc2 file as follows
+        Did initial install on a 10 GB qc2.
+        Allocated all zero file with rest of vm space: dd if=/dev/zero of=/tmp/zero_file; sync; rm /tmp/zero_file; sync
+        qemu-img convert <original_vm>.qc2 -O qcow2 <shrunk_vm>.qc2 # create new qc2 only slightly larger than currently
+            allocated space in vm
+        qemu-img resize <shrunk_vm>.qc2 +90G # resize guest disk space to 100G
+
+2018-07-30:         (Christopher Cordi <cncordi@sandia.gov>)
+  o   This image has been converted to qcow2 from raw and recompressed
+2018-10-08:         (Christopher Cordi <cncordi@sandia.gov>)
+  o   Change resolution to 1280x1024
+  o   Fixed VM partition to be 100GB
+
+Ubuntu 16.04.4 Server  amd64
+----------------------------
+
+2018-07-27:         (Christopher Cordi <cncordi@sandia.gov>)
+
+  o   Same steps as 16.04.3-server-amd64 on 2018-02-07
+  o   Shrunk qc2 file as done with 16.04.4-desktop-amd64 on 2018-07-27
+
+2018-07-30:         (Christopher Cordi <cncordi@sandia.gov>)
+  o   This image replaces 16.04.3-server-amd64 as the default for xenial servers.
+  o   This image has been converted to qcow2 from raw and recompressed
+
+2018-10-08:         (Christopher Cordi <cncordi@sandia.gov>)
+  o   Fixed VM partition to be 100GB
+
+
