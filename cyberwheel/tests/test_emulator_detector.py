@@ -13,8 +13,8 @@ from pprint import pprint
 
 load_dotenv()
 
-NETWORK_CONFIG = "integration_config.yaml"
-config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)
+NETWORK_CONFIG = "emulator_integration_config.yaml"
+config_path = files("cyberwheel.data.configs.network").joinpath(NETWORK_CONFIG)
 
 # Test variables
 network = Network.create_network_from_yaml(config_path)
@@ -25,10 +25,10 @@ subnet = Subnet(
 
 
 class TestEmulatorDetector(unittest.TestCase):
-    """Unit tests for the the EmulatorDetector class"""
+    """Unit tests for the the EmulatorDetector class."""
 
     def test_submit_test_query(self) -> None:
-        """Send test query to elasticsearch to check if SIEM is running"""
+        """Send test query to elasticsearch to check if SIEM is running."""
         eoc = EmulatorDectector(network_config=NETWORK_CONFIG, network=network)
 
         print("\n")
@@ -36,7 +36,7 @@ class TestEmulatorDetector(unittest.TestCase):
         self.assertIsNotNone(response)
 
     def test_submit_obs_query(self) -> None:
-        """Submit query to elasticsearch"""
+        """Submit query to elasticsearch."""
         eoc = EmulatorDectector(network_config=NETWORK_CONFIG, network=network)
 
         print("\n")
@@ -44,7 +44,7 @@ class TestEmulatorDetector(unittest.TestCase):
         self.assertIsNotNone(response)
 
     def test_parse_query_response(self) -> None:
-        """Test the response parse function"""
+        """Test the response parse function."""
         eoc = EmulatorDectector(network_config=NETWORK_CONFIG, network=network)
 
         print("\n")
@@ -54,7 +54,7 @@ class TestEmulatorDetector(unittest.TestCase):
         self.assertIsNotNone(response)
 
     def test_create_alerts(self) -> None:
-        """Test creating alerts from log hits"""
+        """Test creating alerts from log hits."""
         eoc = EmulatorDectector(network_config=NETWORK_CONFIG, network=network)
 
         print("\n")

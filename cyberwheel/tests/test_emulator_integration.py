@@ -11,8 +11,6 @@ from cyberwheel.network.network_base import Network
 from cyberwheel.network.host import Host
 from importlib.resources import files
 
-# from cyberwheel.network.router import Router
-# from cyberwheel.network.subnet import Subnet
 
 ################### Build Network From Config ###################
 NETWORK_CONFIG = "emulator_integration_config.yaml"
@@ -21,6 +19,9 @@ network = Network.create_network_from_yaml(config_path)
 user_subnet = next(iter(network.subnets.values()))
 
 ####################### TEST NETWORK #########################
+# from cyberwheel.network.router import Router
+# from cyberwheel.network.subnet import Subnet
+
 # network = Network(name="test")
 # router = Router(name="core_router")
 # user_subnet = Subnet(name="user_subnet", ip_range="192.168.0.0/24", router=router)

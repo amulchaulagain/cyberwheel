@@ -18,8 +18,8 @@ from cyberwheel.network.router import Router
 from cyberwheel.network.subnet import Subnet
 
 # TEST variables
-config_path = files("cyberwheel.resources.configs.network").joinpath(
-    "integration_config.yaml"
+config_path = files("cyberwheel.data.configs.network").joinpath(
+    "emulator_integration_config.yaml"
 )
 network = Network.create_network_from_yaml(config_path)
 router = Router(name="192.168.1.0")
@@ -27,10 +27,10 @@ subnet = Subnet(name="192.168.1.0", ip_range="192.168.1.0", router=router)
 
 
 class TestEmulatorRedActions(unittest.TestCase):
-    """Unit tests for the the emulator red actions"""
+    """Unit tests for the the emulator red actions."""
 
     def test_ping(self) -> None:
-        """Test single ping"""
+        """Test single ping."""
         src_host = Host(name="user01", subnet=subnet, host_type=None)
         target_host = Host(name="user02", subnet=subnet, host_type=None)
         target_host.set_ip_from_str("192.168.0.3")
@@ -44,7 +44,7 @@ class TestEmulatorRedActions(unittest.TestCase):
         self.assertTrue(results.attack_success)
 
     def test_ping_sweep(self) -> None:
-        """Test ping sweep in emulator"""
+        """Test ping sweep in emulator."""
         src_host = Host(name="user01", subnet=subnet, host_type=None)
         red_action = EmulatePingSweep(src_host, target_host=src_host, network=network)
         print(red_action.__class__.get_name())
@@ -57,7 +57,7 @@ class TestEmulatorRedActions(unittest.TestCase):
         self.assertTrue(results.attack_success)
 
     def test_port_scan(self) -> None:
-        """Test port scan in emulator"""
+        """Test port scan in emulator."""
         src_host = Host(name="user01", subnet=subnet, host_type=None)
         target_host = Host(name="decoy01", subnet=subnet, host_type=None)
         target_host.set_ip_from_str("192.168.0.5")
@@ -70,7 +70,7 @@ class TestEmulatorRedActions(unittest.TestCase):
         self.assertTrue(results.attack_success)
 
     def test_sudo_and_sudo_caching(self) -> None:
-        """Test sudo and sudo cashing in emulator"""
+        """Test sudo and sudo cashing in emulator."""
         src_host = Host(name="user01", subnet=subnet, host_type=None)
         target_host = Host(name="decoy01", subnet=subnet, host_type=None)
         target_host.set_ip_from_str("192.168.0.5")
@@ -83,7 +83,7 @@ class TestEmulatorRedActions(unittest.TestCase):
         self.assertTrue(results.attack_success)
 
     def test_data_encrypted_for_impact(self) -> None:
-        """Test data encrypted for impact in emulator"""
+        """Test data encrypted for impact in emulator."""
         src_host = Host(name="user01", subnet=subnet, host_type=None)
         target_host = Host(name="user02", subnet=subnet, host_type=None)
         target_host.set_ip_from_str("192.168.0.3")
@@ -96,7 +96,7 @@ class TestEmulatorRedActions(unittest.TestCase):
         self.assertTrue(results.attack_success)
 
     def test_lateral_movement(self) -> None:
-        """Test data lateral movement in emulator"""
+        """Test data lateral movement in emulator."""
         attacker = Host(name="user01", subnet=subnet, host_type=None)
         user_host = Host(name="decoy01", subnet=subnet, host_type=None)
         user_host.set_ip_from_str("192.168.0.8")

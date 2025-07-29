@@ -7,24 +7,24 @@ from cyberwheel.emulator.control import EmulatorControl
 from cyberwheel.network.network_base import Network
 from importlib.resources import files
 
-# from cyberwheel.network.router import Router
-# from cyberwheel.network.subnet import Subnet
-
 NETWORK_CONFIG = "emulator_integration_config.yaml"
 
 ############# Create Network Topology from Config File ##################
-config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)
+config_path = files("cyberwheel.data.configs.network").joinpath(NETWORK_CONFIG)
 network = Network.create_network_from_yaml(config_path)
 user_subnet = next(iter(network.subnets.values()))
 
 ################# Manually Create Network Topology ######################
+# from cyberwheel.network.router import Router
+# from cyberwheel.network.subnet import Subnet
+
 # network = Network(name="test")
 # router = Router(name="core_router")
 # subnet = Subnet(name="user_subnet", ip_range="192.168.0.0/24", router=router)
 
 
 class TestEmulatorSetup(unittest.TestCase):
-    """Unit tests for the the emulator red actions"""
+    """Unit tests for the the emulator controller."""
 
     def test_init_hosts(self) -> None:
         """
@@ -37,7 +37,7 @@ class TestEmulatorSetup(unittest.TestCase):
 
     def test_reset(self) -> None:
         """
-        Test reset sequence
+        Test reset sequence.
         """
         emulator = EmulatorControl(network=network, network_config_name=NETWORK_CONFIG)
         success_flag = emulator.reset()
