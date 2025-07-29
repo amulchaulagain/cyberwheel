@@ -7,16 +7,16 @@ red actions.
 
 import unittest
 from cyberwheel.emulator.control import EmulatorControl
-from cyberwheel.network.host import Host
 from cyberwheel.network.network_base import Network
+from cyberwheel.network.host import Host
 from importlib.resources import files
 
 # from cyberwheel.network.router import Router
 # from cyberwheel.network.subnet import Subnet
 
 ################### Build Network From Config ###################
-NETWORK_CONFIG = "integration_config.yaml"
-config_path = files("cyberwheel.resources.configs.network").joinpath(NETWORK_CONFIG)
+NETWORK_CONFIG = "emulator_integration_config.yaml"
+config_path = files("cyberwheel.data.configs.network").joinpath(NETWORK_CONFIG)
 network = Network.create_network_from_yaml(config_path)
 user_subnet = next(iter(network.subnets.values()))
 
