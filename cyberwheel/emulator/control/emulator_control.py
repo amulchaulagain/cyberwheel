@@ -24,8 +24,6 @@ from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.host import Host
 from cyberwheel.network.network_base import Network
 from typing import Any, Dict, List, Iterable
-from cyberwheel.network.subnet import Subnet
-import pathlib
 import subprocess
 import random
 import json
@@ -41,14 +39,14 @@ class EmulatorControl:
     Class setup emulator before an experiment begins.
     """
 
-    emu_config = read_config(EMULATOR_CONFIG_PATH, EMULATOR_CONFIG)
+    emu_config = read_config(str(EMULATOR_CONFIG_PATH), EMULATOR_CONFIG)
     host_username = emu_config["firewheel"]["host"]["username"]
     host_password = emu_config["firewheel"]["host"]["password"]
 
     def __init__(self, network: Network, network_config_name: str):
         self.network = network
         self.net_config_name = network_config_name
-        self.net_config = read_config(NETWORK_CONFIG_PATH, network_config_name)
+        self.net_config = read_config(str(NETWORK_CONFIG_PATH), network_config_name)
         self.detector = EmulatorDectector(
             network_config=network_config_name, network=network
         )
@@ -56,10 +54,10 @@ class EmulatorControl:
     def init_hosts(self) -> bool:
         """Setup hosts and run scripts before an experiment begins."""
 
-        #print("Initializing Hosts...")
+        # print("Initializing Hosts...")
 
         # Action #1: Enroll non-decoy hosts' agent to fleet
-        #print("\tEnrolling elastic agents into fleet server...")
+        # print("\tEnrolling elastic agents into fleet server...")
         all_host_names = self._get_host_names()
         decoy_names = self._get_decoy_host_names()
         non_decoy_names = [name for name in all_host_names if name not in decoy_names]
@@ -70,7 +68,7 @@ class EmulatorControl:
             if host_name not in enrolled_host_names:
                 successfully_enrolled = self._enroll_agent_to_fleet(host_name)
             else:
-                #print(f"{host_name}'s agent is already enrolled into fleet, skipping.")
+                # print(f"{host_name}'s agent is already enrolled into fleet, skipping.")
                 pass
 
         if not successfully_enrolled:
@@ -79,13 +77,13 @@ class EmulatorControl:
 
         # Add more setup actions here...
 
-        #print("done")
+        # print("done")
         return True
 
     def reset(self) -> bool:
         """Sequence of actions to reset the emulator for each episode"""
 
-        #print("removing decoys...")
+        # print("removing decoys...")
         decoy_names = self._get_decoy_host_names()
         success = self._reset_decoys(decoy_names)
 
@@ -100,7 +98,7 @@ class EmulatorControl:
         """Lookup and execute blue actions in the emulator."""
 
         shell_cmd = ""
-        #print(f"executing emulator blue action: {action_name}, id: {id}")
+        # print(f"executing emulator blue action: {action_name}, id: {id}")
 
         match action_name:
             case "deploy_decoy":
@@ -155,7 +153,7 @@ class EmulatorControl:
         """Lookup and execute red actions in the emulator."""
 
         shell_cmd = ""
-        #print(f"executing emulator red action: {action_name}, id: {id}")
+        # print(f"executing emulator red action: {action_name}, id: {id}")
 
         match action_name:
             case "Remote System Discovery":
@@ -248,7 +246,7 @@ class EmulatorControl:
         Any action done to a decoy generates an alert.
         """
 
-        #print("\n")
+        # print("\n")
         alerts = self.detector.obs()
         print(f"SIEM: {len(alerts)} New Alerts")
         return alerts
@@ -363,7 +361,7 @@ class EmulatorControl:
             return False
 
         if src_host.name in interfaces.keys():
-            #print(f"{src_host.name} has interface to {interfaces[src_host.name]}")
+            # print(f"{src_host.name} has interface to {interfaces[src_host.name]}")
             return True
 
         return False
