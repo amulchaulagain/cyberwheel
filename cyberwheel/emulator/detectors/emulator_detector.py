@@ -13,7 +13,6 @@ from subprocess import CompletedProcess
 from typing import Any, Dict, Iterable, List, cast
 from importlib.resources import files
 import json
-import pathlib
 import re
 import subprocess
 
@@ -88,11 +87,11 @@ class EmulatorDectector(Detector):
 
         cmd_arr = [
             f"sshpass -p {siem_pwd} firewheel ssh {siem_user}@{siem_hostname}",
-            f"$(cat {EMULATOR_CONFIG_PATH / QUERY_FILE})",
+            f"$(cat {QUERY_FILE})",
         ]
         cmd = " ".join(cmd_arr)
-        #print("Querying SIEM logs in the last 5 minutes...")
-        #print(f"{cmd}\n")
+        # print("Querying SIEM logs in the last 5 minutes...")
+        # print(f"{cmd}\n")
 
         result = subprocess.run(
             cmd,
@@ -116,10 +115,10 @@ class EmulatorDectector(Detector):
     def parse_query_response(self, response: Dict[Any, Any]) -> List[Dict[Any, Any]]:
         hits = response["hits"]["hits"]
         parsed_hits = []
-        #print("parsing logs into hits...\n")
+        # print("parsing logs into hits...\n")
 
         for hit in hits:
-            #pprint(hit)
+            # pprint(hit)
             id = hit["_id"]
             source = hit["_source"]
             timestamp = source["@timestamp"]
@@ -158,10 +157,10 @@ class EmulatorDectector(Detector):
             dst_ip = hit["target_ip"]
 
             # skip hits with same target ip (we're assuming its from in the same action)
-            #if prev_dst_ip == dst_ip:
+            # if prev_dst_ip == dst_ip:
             #    continue
 
-            #if 'ccencrypt' in hit["command"]:
+            # if 'ccencrypt' in hit["command"]:
             #    print("Impact Detected:")
             #    pprint(hit)
 
@@ -199,9 +198,9 @@ class EmulatorDectector(Detector):
             if len(target_decoy_host) > 0 and isinstance(target_decoy_host[0], Host):
                 target_decoy_host = target_decoy_host[0]  # assume first option
             else:
-                #print(
+                # print(
                 #    f"Cannot find decoy Host with {dst_ip} in network topology, creating Host for alert."
-                #)
+                # )
                 dst_host_type = HostType()
                 dst_host_type.decoy = True
                 temp_dst_host = Host(
