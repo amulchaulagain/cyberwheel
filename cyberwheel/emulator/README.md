@@ -99,7 +99,25 @@ The memory will eventually run out.
 
 ### Scenario Converter
 
-(TODO)
+The `scenario/firewheel/toplogy/plugin.py` file converts a network config file into a firewheel experiment that consists of subnets and hosts.
+There are two model components (MCs) used to create the hosts: 1) _Ubuntu2204DesktopHostCyberwheel_ and 2) _Ubuntu1604DesktopSiemCyberwheel_.
+The MCs use custom Kernal-based Virtual Machine (KVM) images that have software installed:
+
+- Ubuntu2204DesktopHostCyberwheel
+    - [nmap](https://nmap.org/) - for _port scan_ action
+    - [ccencrypt](https://manpages.debian.org/jessie/ccrypt/ccencrypt.1.en.html) - for _Data Encrypted for Impact_ action
+    - [sysmon](https://github.com/microsoft/SysmonForLinux) - system logger
+    - [Elastic Agent](https://www.elastic.co/docs/reference/fleet) - sends sysmon logs to fleet server
+
+- Ubuntu1604DesktopSiemCyberwheel
+    - [Elasticsearch](https://www.elastic.co/elasticsearch) - ingest logs and acts as a SIEM.
+    - [Kibana](https://www.elastic.co/kibana) - visual analytics tools for elasticsearch and also used to setup Fleet.
+    - [Fleet Server](https://www.elastic.co/docs/reference/fleet/) - server for Elastic Agents to connect to and collect sysmon logs.
+
+
+To learn more about creating Firewheel experiments and model components, we recommend following the official Firewheel [tutorials](https://firewheel-docs.ornl.gov/tutorials/index.html). 
+
+To learn more about creating custom images, follow Firewheel guides [here](https://firewheel-docs.ornl.gov/tutorials/image.html).
 
 ### Action Controller
 
