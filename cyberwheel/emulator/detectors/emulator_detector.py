@@ -29,7 +29,7 @@ import subprocess
 NETWORK_CONFIG_PATH = files("cyberwheel.data.configs").joinpath("network")
 EMULATOR_CONFIG_PATH = files("cyberwheel.emulator").joinpath("configs")
 EMULATOR_CONFIG = "emulator_config.yaml"
-QUERY_FILE = "query.txt"
+QUERY_FILE = files("cyberwheel.emulator.detectors").joinpath("query.txt")
 
 
 class EmulatorDectector(Detector):
@@ -38,10 +38,10 @@ class EmulatorDectector(Detector):
     The detector, Sysmon, fowards information to the SIEM.
     """
 
-    emu_config = read_config(EMULATOR_CONFIG_PATH, EMULATOR_CONFIG)
+    emu_config = read_config(str(EMULATOR_CONFIG_PATH), EMULATOR_CONFIG)
 
     def __init__(self, network_config: str, network: Network):
-        self.network_config = read_config(NETWORK_CONFIG_PATH, network_config)
+        self.network_config = read_config(str(NETWORK_CONFIG_PATH), network_config)
         self.network = network
         self.alert_ids = set()  # Keep history of alerts
 
