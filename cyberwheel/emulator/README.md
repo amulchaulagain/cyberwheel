@@ -93,7 +93,7 @@ The memory will eventually run out.
 
 - `actions/`: contains emulator actions for both red and blue agents.
 - `configs/emulator_config.yaml`:  contains configs such as host username and password.
-- `controler/emulator_contoler.yaml`: class for the simulator to interface with the emulator.
+- `controler/emulator_contoler.py`: class for the simulator to interface with the emulator.
 - `detectors/emulator_dectector.py`: class that defines the emulator detector.
 - `scenario/`: contains the network topology (i.e. scenario) converter and custom KVM images used by firewheel.
 
@@ -121,7 +121,27 @@ To learn more about creating custom images, follow Firewheel guides [here](https
 
 ### Action Controller
 
-(TODO)
+Blue and Red agent actions are stored in `actions/` and executed through the class in  `control/emulator_contoler.py`.
+All attacks are written to be executed on linux machines, since all host are using an Ubuntu image. 
+The included actions are listed below. We encourge users to create and add more actions.
+
+- Blue Agent Actions
+    - `emulate_deploy_decoy_host.py` - deploys a decoy by turning on the network interface* 
+    - `emulate_remove_decoy_host.py` - removes a decoy by turning off the network interface
+
+- Red Agent Actions
+    - `emulate_ping_sweep.py` - ping sweep for a specified subnet.
+    - `emulate_port_scan.py` - port scan using nmap on a specified host.
+    - `emulate_sudo_and_sudo_caching.py` - privilege escalation described in [T1548.003](https://www.atomicredteam.io/atomic-red-team/atomics/T1548.003)
+    - `emulate_data_encrypted_for_impact.py` - encryption attack described in [T1486](https://www.atomicredteam.io/atomic-red-team/atomics/T1486)
+
+*_all host (VMs) are created before an experiment starts, including decoys. Firewheel does not allow a VM to be created dynamically after starting an experiment.
+To emulate deploying and removing a decoy, the Blue Agent enables and disables the ens2 interface._
+
+Actions are executed through ssh. Firewheel provides a CLI command `firewheel ssh` to ssh into a host within a running experiment.
+Before an action is executed, _firewheel ssh_ is first used to ssh into the target host. This step is defined in `actions/{red, blue}_action_base.py`.
+To avoid having to manually enter the password "_ubuntu_" during ssh, `sshpass` passes the password as part of the action command. 
+That said, remember to **install sshpass** on the same machine as Firewheel
 
 ### Detector and Observation Controller
 
