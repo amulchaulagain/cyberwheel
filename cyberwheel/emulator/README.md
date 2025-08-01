@@ -6,7 +6,7 @@
 <img 
   alt="Cyberwheel Emulation Environment Diagram"
   src="images/emulation-environment.png" 
-  width="400"
+  width="500"
 >
 </figure>
 
