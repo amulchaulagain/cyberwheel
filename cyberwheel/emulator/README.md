@@ -2,6 +2,16 @@
 
 ## Overview
 
+<figure>
+<img 
+  alt="Cyberwheel Emulation Environment Diagram"
+  src="https://code-int.ornl.gov/rl-for-cyber/cyberwheel/-/blob/8e25d0e5b4b4ba44a980989c8b00d1fe8e720e0f/images/emulation-environment.png" 
+  width="300"
+  style="display: block; margin: 0 auto"
+>
+   <figcaption>Emulation Environment Diagram</figcaption>
+</figure>
+
 Cyberwheel uses [Firewheel](https://github.com/sandialabs/firewheel) for emulation and evaluating agents. Firewheel provides a high-fidelity testing environment to perform repeatable experiments and scale to large networks.
 
 We reccomended after installing Firewheel, to go through their [quickstart](https://sandialabs.github.io/firewheel/quickstart.html) and [tutorials](https://sandialabs.github.io/firewheel/tutorials/index.html) to get familiar with starting an emulated network environment, what they refer to as an _experiment_.
