@@ -29,9 +29,12 @@ For Cyberwheel, we defined 2 custom components:
 
 ## Software Pre-requisites
 
+The following softare must be installed to run emulation:
+
 - [Firewheel](https://github.com/sandialabs/firewheel): follow the [installation guide](https://sandialabs.github.io/firewheel/install/install.html) to install Firewheel and its dependencies. Currently Firewheel has been tested on Ubuntu, CentOS and RHEL. 
 - [sshpass](https://www.cyberciti.biz/faq/noninteractive-shell-script-ssh-password-provider/): passes the host password when SSH'ing into a host, which skips having to enter the password. 
 This is for the _Action Controller_ to perform actions on hosts within Firewheel.
+- [xz](https://linux.die.net/man/1/xz): general-purpose data compression tool. Required only to decompress qcow2 images.
 
 
 ## Before Starting
@@ -47,11 +50,30 @@ cd /path-to-repo/cyberwheel
 cp -r cyberwheel/emulator/scenario/firewheel/toplogy /opt/firewheel/model_components/cyberhweel
 ```
 
-**Copy the images**:
+**Copy the image related files**:
 
 ```
 cd /path-to-repo/cyberwheel
 cp -r cyberwheel/emulator/scenario/firewheel/model_components/linux/ubuntu/cyberwheel /opt/firewheel/model_components/linux/ubuntu
+```
+
+**Download compressed images**:
+
+Below are links to the compressed Ubuntu qcow2 images used used within the model components. The files are large: siem (4.78GB) and host (5.75GB).
+Ensure you have enough disk space before downloading.
+
+- [ubuntu-16.04.4-desktop-siem-cyberwheel.qcow2.xz](https://drive.google.com/file/d/1Qep4Llbsujz480F5bHdwY24eAk47yidM/view?usp=sharing)
+- [ubuntu-22.04.4-desktop-host-cyberwheel.qcow2.xz](https://drive.google.com/file/d/1-7g1Wx-2-oDRMGZIeYz9r1ObDQ6VwxUP/view?usp=sharing)
+
+**Move and extract images**:
+
+```
+mv ubuntu-16.04.4-desktop-siem-cyberwheel.qcow2.xz /opt/firewheel/model_components/linux/ubuntu/cyberwheel/images
+mv ubuntu-22.04.4-desktop-host-cyberwheel.qcow2.xz /opt/firewheel/model_components/linux/ubuntu/cyberwheel/images
+
+cd /opt/firewheel/model_components/linux/ubuntu/cyberwheel/images
+xz --decompress ubuntu-16.04.4-desktop-siem-cyberwheel.qcow2.xz
+xz --decompress ubuntu-22.04.4-desktop-host-cyberwheel.qcow2.xz
 ```
 
 ## Starting Firewheel
