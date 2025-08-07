@@ -2,7 +2,7 @@
 import os
 import time
 
-from cyberwheel.utils import parse_override_args, YAMLConfig, Trainer
+from cyberwheel.utils import parse_override_args, YAMLConfig, Trainer, MultiAgentTrainer
 
 """
 This script will train cyberwheel. Using the args from the config file passed, it will run an Actor-Critic RL algorithm and run training
@@ -31,7 +31,7 @@ def train_cyberwheel(args: YAMLConfig):
     args.evaluation = False
 
     # Initialize the Trainer object
-    trainer = Trainer(args)
+    trainer = MultiAgentTrainer(args)
 
     # Setup W&B if tracking
     if args.track:

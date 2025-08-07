@@ -47,6 +47,8 @@ class RedDiscreteActionSpace:
                 action_mask[i:(i+self.num_actions)] = [True] * self.num_actions
             else:
                 action_mask[i:(i+self.num_actions-2)] = [True] * (self.num_actions - 2)
+            #print(f"Host {h} - {action_mask[i:(i+self.num_actions)]}")
+            #print(self.num_actions)
 
         #for i in range(len(self.hosts)):
         #    if self.hosts[i] == 'available':

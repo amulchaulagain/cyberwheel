@@ -1,5 +1,6 @@
 host_types:
   example:
+    type: USER
     services:
       - WindowsDiscoveryExploitableService
       - WindowsLateralMovementExploitableService
@@ -8,6 +9,7 @@ host_types:
     decoy: False
     os: windows
   workstation:
+    type: USER
     services:
       - WindowsDiscoveryExploitableService
       - WindowsLateralMovementExploitableService
@@ -16,6 +18,7 @@ host_types:
     decoy: false
     os: windows
   web_server:
+    type: SERVER
     services:
       - WindowsDiscoveryExploitableService
       - WindowsLateralMovementExploitableService
@@ -24,6 +27,7 @@ host_types:
     decoy: false
     os: windows
   mail_server:
+    type: SERVER
     services:
       - WindowsDiscoveryExploitableService
       - WindowsLateralMovementExploitableService
@@ -32,6 +36,7 @@ host_types:
     decoy: false
     os: windows
   file_server:
+    type: SERVER
     services:
       - WindowsDiscoveryExploitableService
       - WindowsLateralMovementExploitableService
@@ -40,6 +45,7 @@ host_types:
     decoy: false
     os: windows
   ssh_jump_server:
+    type: SERVER
     services:
       - WindowsDiscoveryExploitableService
       - WindowsLateralMovementExploitableService
@@ -48,6 +54,7 @@ host_types:
     decoy: false
     os: windows
   proxy_server:
+    type: SERVER
     services:
       - WindowsDiscoveryExploitableService
       - WindowsLateralMovementExploitableService

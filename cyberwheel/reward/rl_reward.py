@@ -1,105 +1,61 @@
-from cyberwheel.network.network_base import Host, Network
-from cyberwheel.reward.reward_base import Reward, RewardMap, RecurringAction
+from cyberwheel.network.network_base import Network
+from cyberwheel.reward.reward_base import Reward
 from cyberwheel.utils.hybrid_set_list import HybridSetList
+
+from cyberwheel.red_agents.red_agent_base import RedAgentResult
+from cyberwheel.blue_agents.blue_agent import BlueAgentResult
+
+from cyberwheel.reward import red_reward_functions
+from cyberwheel.reward import blue_reward_functions
 
 
 class RLReward(Reward):
     def __init__(
         self,
+        args,
         red_agent,
         blue_agent,
         valid_targets: list[str] | str,
         network: Network,
     ) -> None:
         super().__init__(red_agent.get_reward_map(), blue_agent.get_reward_map())
+        self.args = args
+        self.blue_recurring_reward = []
+        self.red_recurring_reward = []
+
         self.valid_targets = valid_targets
         self.network = network
-        self.red_agent = red_agent
         self.blue_agent = blue_agent
+        self.red_agent = red_agent
+        self.blue_reward_function = getattr(blue_reward_functions, self.args.blue_reward_function)
+        self.red_reward_function = getattr(red_reward_functions, self.args.red_reward_function)
+
         self.current_step = 0
 
-    def calculate_reward(
-        self,
-        red_action: str,
-        blue_action: str,
-        red_success: str,
-        blue_success: bool,
-        target_host: Host,
-        blue_id: str = "",
-        blue_recurring: int = 0,
-    ) -> int | float:
+    def calculate_reward(self, blue_agent_result: BlueAgentResult, red_agent_result: RedAgentResult) -> int | float:
+        """
+        TODO: Add function header
+        """
+        # Define which hosts in the network the red agent will get rewarded/penalized for attacking
         valid_targets = self.get_valid_targets()
-        #print(valid_targets)
 
-        target_host_name = target_host.name
-        decoy = target_host.decoy
-
-        #print(f"{target_host_name in valid_targets} - {target_host_name} in {valid_targets.data_list}")
-        quad = self.red_agent.observation.update_obs(current_step=self.current_step, total_steps=self.red_agent.args.num_steps)
-        #quad = self.current_step / self.red_agent.args.num_steps
-        red_multiplier = 10 if quad == 1 else 1
-
-        if red_success and target_host_name in valid_targets:# TODO: and not decoy:  # If red action succeeded on a real Host
-            r = self.red_rewards[red_action][0] * -1
-            r_recurring = self.red_rewards[red_action][1] * -1
-        elif red_success and target_host_name not in valid_targets:
-            #r = self.red_rewards[red_action][0] * 10
-            #r_recurring = self.red_rewards[red_action][1] * 10
-            #print("HAPPENING")
-            #r = 100
-        #    r = 0
-        #    r_recurring = 0
-            r = 0 #-1
-            r_recurring = 0
-        else: # Red is not successful
-            r = 1
-            r_recurring = 0
-
-        if blue_success:
-            b = self.blue_rewards[blue_action][0]
-        elif blue_id == "decoy_limit_exceeded":
-            b = -5000
-        else:
-            b = 0
+        # Calculate red and blue rewards
+        r, r_recurring = self.red_reward_function(self, blue_agent_result=blue_agent_result, red_agent_result=red_agent_result, valid_targets=valid_targets)
         
-        #print(f"{red_action}")
-        #print(f"Red:\t{r}")
-        #print(f"{red_success}")
-        #print(f"Blu:\t{b}")
-        
-        if r_recurring != 0:
-            self.add_recurring_red_action('0', red_action, decoy)
+        b, b_recurring = self.blue_reward_function(self, blue_agent_result=blue_agent_result, red_agent_result=red_agent_result, valid_target=valid_targets)
 
-        if blue_recurring == -1:
-            self.remove_recurring_blue_action(blue_id)
-        elif blue_recurring == 1:
-            self.add_recurring_blue_action(blue_id, blue_action)
-        #print(self.sum_recurring())
-        r *= red_multiplier
-        reward = r + b + self.sum_recurring()
-        #if reward != 0: print(reward)
+        # Handle recurring rewards
+        self.blue_recurring_reward += [b_recurring] if b_recurring != 0 else []
+        self.red_recurring_reward += [r_recurring] if r_recurring != 0 else []
+
+        if blue_agent_result.recurring == -1 and len(self.blue_recurring_reward) > 0:
+            self.blue_recurring_reward.pop(0)
+
+        # Step forward
         self.current_step += 1
-        return reward
-    
-    def sum_recurring(self) -> int | float:
-        sum = 0
-        for ra in self.blue_recurring_actions:
-            sum += self.blue_rewards[ra.action][1]
-        for ra in self.red_recurring_actions:
-            sum -= self.red_rewards[ra[0].action][1]
-        return sum
 
-    def add_recurring_blue_action(self, id: str, action: str) -> None:
-        self.blue_recurring_actions.append(RecurringAction(id, action))
+        return b + sum(self.blue_recurring_reward), r + sum(self.red_recurring_reward)
 
-    def remove_recurring_blue_action(self, id: str) -> None:
-        for i in range(len(self.blue_recurring_actions)):
-            if self.blue_recurring_actions[i].id == id:
-                self.blue_recurring_actions.pop(i)
-                break
-
-    def add_recurring_red_action(self, id: str, red_action: str, is_decoy: bool) -> None:
-        self.red_recurring_actions.append((RecurringAction(id, red_action), is_decoy))
     
     def get_valid_targets(self) -> HybridSetList:
         if self.valid_targets == "servers":
@@ -119,6 +75,6 @@ class RLReward(Reward):
         return valid_targets | set(self.network.decoys)
 
     def reset(self) -> None:
-        self.blue_recurring_actions = []
-        self.red_recurring_actions = []
+        self.blue_recurring_reward = []
+        self.red_recurring_reward = []
         self.current_step = 0

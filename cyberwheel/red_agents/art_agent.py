@@ -389,7 +389,6 @@ class ARTAgent(RedAgent):
         Resets the red agent back to blank slate.
         """
         self.network = network
-        #print(network.name)
         self.service_mapping = service_mapping
         self.current_host : Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
         self.history: AgentHistory = AgentHistory(initial_host=self.current_host)

@@ -12,7 +12,7 @@ from typing import Union, List
 from tqdm import tqdm
 from copy import deepcopy
 
-from cyberwheel.network.host import Host, HostType
+from cyberwheel.network.host import Host, HostType, HostTypes, host_types_map
 from cyberwheel.network.network_object import NetworkObject, FirewallRule
 from cyberwheel.network.router import Router
 from cyberwheel.network.service import Service
@@ -663,45 +663,6 @@ class Network:
             host.restored = False
 
     @staticmethod
-    def create_host_type_from_json(name: str, config_file: PathLike) -> HostType:
-        """
-        Return a matching HostType object from json file
-
-        :param str name: host type name to match against
-        :param str config_file: JSON config file path
-        :raises HostTypeNotFoundError:
-        :returns HostType:
-        """
-        with open(config_file) as f:
-            config = json.load(f)
-        types: list = config["host_types"]
-
-        host_type = [t for t in types if t["type"].lower() == name.lower()]
-        if not host_type:
-            msg = f"Host type ({name}) not found in config file ({config_file})"
-            raise HostTypeNotFoundError(value=name, message=msg)
-
-        services_list = host_type[0]["services"]
-        service_objects = []
-        for service in services_list:
-            service_objects.append(
-                Service(
-                    name=name,
-                    port=service.get("port"),
-                    protocol=service.get("protocol"),
-                    version=service.get("version"),
-                    vulns=service.get("vulns"),
-                    description=service.get("description"),
-                    decoy=service.get("decoy"),
-                )
-            )
-
-        decoy = host_type[0].get("decoy", False)
-        os = host_type[0].get("os")
-
-        return HostType(name=name, services=service_objects, decoy=decoy, os=os)
-
-    @staticmethod
     def create_host_type_from_yaml(name: str, config_file: PathLike, types) -> HostType:
         """
         Return a matching HostType object from yaml file
@@ -712,16 +673,17 @@ class Network:
         :returns HostType:
         """
         # match name to defined host_type name
+        
         host_type = {}
-        host_type_name = ""
-        for k, v in types.items():
-            if k == name.lower():
-                host_type_name = k
-                host_type = v
+        host_type_name = name.lower()
 
-        if "host_type" not in locals():
+        try:
+            host_type = types[host_type_name]
+        except KeyError:
             msg = f"Host type ({name}) not found in config file ({config_file})"
             raise HostTypeNotFoundError(value=name, message=msg)
+
+        host_type_enum = host_types_map[host_type["type"]]
 
         services_list = host_type.get("services", [])
 
@@ -744,6 +706,7 @@ class Network:
 
         host_type = HostType(
             name=host_type_name,
+            type=host_type_enum,
             services=running_services,
             decoy=decoy,
             os=os,

@@ -14,7 +14,7 @@ from torch import optim, nn
 from importlib.resources import files
 from tqdm import tqdm
 
-from cyberwheel.utils import RLAgent, get_service_map
+from cyberwheel.utils import RLPolicy, get_service_map
 from cyberwheel.network.network_base import Network
 from cyberwheel.red_actions.actions import (
     ARTDiscovery,
@@ -159,8 +159,8 @@ class EmulatorEvaluator:
 
         #print(f"B: {self.blue_obs.shape} | {self.blue_max_action_space_size}")
         #print(f"R: {self.red_obs.shape} | {self.red_max_action_space_size}")
-        self.blue_agent = RLAgent(blue_obs.shape, self.blue_max_action_space_size).to(self.device)
-        self.red_agent = RLAgent(red_obs.shape, self.red_max_action_space_size).to(self.device)
+        self.blue_agent = RLPolicy(blue_obs.shape, self.blue_max_action_space_size).to(self.device)
+        self.red_agent = RLPolicy(red_obs.shape, self.red_max_action_space_size).to(self.device)
 
         self.red_obs = self.env.red_agent.get_observation_space()
         self.blue_obs = self.env.reset()

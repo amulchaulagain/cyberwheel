@@ -12,9 +12,12 @@ from cyberwheel.network.subnet import Subnet
 from cyberwheel.network.process import Process
 from cyberwheel.network.command import Command
 
+from cyberwheel.utils.host_types import HostTypes, host_types_map
+
 
 class HostType(BaseModel):
     name: str | None = None
+    type: HostTypes = HostTypes.UNKNOWN
     services: set[Service] = set()
     processes: list[Process] = []
     cve_list: set[str] = set()

@@ -27,8 +27,8 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         args: YAMLConfig,
         network: Network = None,
         evaluation: bool = False,
-        networks : dict = {},
-        rank: int = 0
+        networks: dict = {},
+        multiagent: bool = False
     ):
         """
         The CyberwheelRL class is used to define the Cyberwheel environment. It allows you to use a YAML
@@ -45,7 +45,9 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             - Default: None
         """
         super().__init__(args, network=network)
+        self.evaluation = evaluation
         self.networks = networks
+
         reward_function = args.reward_function
         rfm = importlib.import_module("cyberwheel.reward")
 
@@ -55,7 +57,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             self.args.valid_targets,
             self.network)
 
-        self.evaluation = evaluation
+        
         self.total = 0
 
         #TODO: TEMP
@@ -114,22 +116,13 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         4. Get obs from Red or Blue Observation
         5. Return obs and related metadata
         """
-        #print("D-A")
+
         blue_agent_result = self.blue_agent.act(action)
 
         red_agent_result = self.red_agent.act(action)
-
-        #print(blue_agent_result.name)
-        #print(self.network.all_hosts.data_list)
         
-        # TODO: cleanup
-        #if action not in self.action_usage:
-            #self.action_usage.append(action)
-            #print(f"{action} was just used.")
-            #print(f"So far, {len(self.action_usage)} actions have been used, {self.blue_agent.action_space._action_space_size} actions should be possible.")
-
         obs_vec = self.red_agent.get_observation_space() if self.args.train_red else self.blue_agent.get_observation_space(red_agent_result)
-        #print("D-B")
+
         reward = self.reward_sign * self.reward_calculator.calculate_reward(
             red_agent_result.action.get_name(),
             blue_agent_result.name,
@@ -139,37 +132,16 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             blue_id=blue_agent_result.id,
             blue_recurring=blue_agent_result.recurring
         )
-        #print("D-C")
 
         self.total += reward
 
-        #done = self.current_step >= self.max_steps
         done = self.current_step == self.max_steps - 1
 
-        #if done and self.total == 0:
-        #    print("finished at 0 here?")
-        #    print(f"{red_agent_result.action.get_name()} on {red_agent_result.target_host}, \nunknowns: {self.red_agent.unknowns.data_list}, \nunimpacted_servers: {self.red_agent.unimpacted_servers.data_list}")
-
-        #print(f"{red_agent_result.action.get_name()} - {red_agent_result.src_host.name} -> {red_agent_result.target_host.name}")
-        #if red_agent_result.success:
-            #print(f"{red_agent_result.action.get_name()} - {red_agent_result.src_host.name} -> {red_agent_result.target_host.name}")
-            #print(self.red_agent.observation.obs.keys())
         self.current_step += 1
         info = {}
-
-        # TODO
-        
-        #if decoy_attacked:
-        #    print("decoy was attacked in CyberwheelRL")
         
         if self.evaluation:
             decoy_attacked = red_agent_result.success and (red_agent_result.target_host.decoy or red_agent_result.src_host.decoy)
-            #print(f"Red success: {red_agent_result.success}\nAction: {red_agent_result.action.get_name()}\nTarget: {red_agent_result.target_host.name}\nTarget is Decoy: {red_agent_result.target_host.decoy}\nSource: {red_agent_result.src_host.name}\nSource is Decoy: {red_agent_result.src_host.decoy}\n--------------------------------------")
-            #print(f"Blue success: {blue_agent_result.success}\nBlue Action: {blue_agent_result.name}\nDecoy ID: {blue_agent_result.id}\n-------------------")
-
-            #print(f"Red agent view: {list(self.red_agent.history.hosts.keys())}\n-----------------------------------\n--------------------------------\n-----------------------------")
-            #if decoy_attacked:
-            #    print("DECOY ATTACKED IS TRUE???????????????????????????????????????????????????????????")
             info = {
                 "red_action": red_agent_result.action.get_name(),
                 "red_action_src": red_agent_result.src_host.name,
@@ -184,7 +156,6 @@ class CyberwheelRL(gym.Env, Cyberwheel):
                 "commands": [], #red_agent_result.action_results.metadata.get("commands", []),
                 "decoy_attacked": decoy_attacked,
             }
-        #print("D-D")
 
         return obs_vec, reward, done, False, info
 
@@ -194,7 +165,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         self.current_step = 0
 
         self.network.reset()
-        network = random.choice(list(self.networks.values()))
+        network = self.network if self.evaluation else random.choice(list(self.networks.values()))
         #print(f"Random Network: {network.name}")
 
         self.network = network
@@ -217,4 +188,5 @@ class CyberwheelRL(gym.Env, Cyberwheel):
     
     @property
     def action_mask(self):
+        #print(self.red_agent.current_host.name)
         return self.red_agent.action_space.get_action_mask(self.red_agent.current_host.name)

@@ -89,6 +89,12 @@ class DiscreteActionSpace(ActionSpace):
     def get_shape(self) -> tuple[int, ...]:
         return (self._action_space_size,)
 
+    def get_action_mask(self):
+        mask = [False] * self.max_size
+        for i in range(self._action_space_size):
+            mask[i] = True
+        return mask
+
     def create_action_space(self, max_size: int) -> Space:
         self.max_size = max_size
         return Discrete(max_size)

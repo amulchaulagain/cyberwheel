@@ -18,15 +18,15 @@ def color_map(host_view) -> str:
         escalated                   -->     Orange
         impacted                    -->     Red
         """
-        if host_view.impacted:
+        if host_view["impacted"]:
             return "red"
-        elif host_view.escalated:
+        elif host_view["escalated"]:
             return "orange"
-        elif host_view.discovered:
+        elif host_view["discovered"]:
             return "yellow"
-        elif host_view.scanned:
+        elif host_view["scanned"]:
             return "green"
-        elif host_view.sweeped:
+        elif host_view["sweeped"]:
             return "green"
         else:
             return "gray"

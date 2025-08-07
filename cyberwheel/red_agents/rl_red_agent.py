@@ -29,7 +29,7 @@ class RLARTAgent(ARTAgent):
 
     def __init__(self, network: Network, args) -> None:
         super().__init__(network, args, service_mapping=args.service_mapping)
-        self.observation = RedObservation(args.max_num_hosts + args.num_steps, network)
+        self.observation = RedObservation(args, network)
         self.observation.add_host(self.current_host.name, on_host=True)
     
     def from_yaml(self) -> None:
@@ -124,7 +124,7 @@ class RLARTAgent(ARTAgent):
         elif action == ARTPortScan:  # Scans target host
             self.observation.update_host(target_host, scanned=True)
         elif action == ARTDiscovery:  # Discovers host type
-            self.observation.update_host(target_host, discovered=True, type=result.target_host.host_type.name)
+            self.observation.update_host(target_host, discovered=True, type=result.target_host.host_type.type)
         elif action == ARTLateralMovement:  # Moves to target host
             self.observation.update_host(target_host, on_host=True)
             self.observation.update_host(src_host, on_host=False)
@@ -151,45 +151,45 @@ class RLARTAgent(ARTAgent):
         if action == Nothing:
             return True
         host_view = self.observation.obs[target_host]
-        if action == ARTPingSweep:  # valid if host.sweeped == False
-            return not host_view.sweeped
+        if action == ARTPingSweep:  # valid if host["sweeped"] == False
+            return not host_view["sweeped"]
         elif (
             action == ARTPortScan
-        ):  # valid if host.scanned == False and host.sweeped == True
-            return host_view.sweeped and not host_view.scanned
+        ):  # valid if host["scanned"] == False and host["sweeped"] == True
+            return host_view["sweeped"] and not host_view["scanned"]
         elif (
             action == ARTDiscovery
-        ):  # valid if host.scanned && host.sweeped && !host.discovered
-            return host_view.sweeped and host_view.scanned and not host_view.discovered
+        ):  # valid if host["scanned"] && host["sweeped"] && !host["discovered"]
+            return host_view["sweeped"] and host_view["scanned"] and not host_view["discovered"]
         elif (
             action == ARTLateralMovement
-        ):  # valid if host.scanned && host.sweeped && host.discovered && !host.on_target
+        ):  # valid if host["scanned"] && host["sweeped"] && host["discovered"] && !host.on_target
             return (
-                host_view.sweeped
-                and host_view.scanned
-                and host_view.discovered
-                and not host_view.on_host
+                host_view["sweeped"]
+                and host_view["scanned"]
+                and host_view["discovered"]
+                and not host_view["on_host"]
             )
         elif (
             action == ARTPrivilegeEscalation
-        ):  # valid if host.scanned && host.sweeped && host.discovered && host.on_target && !host.escalated
+        ):  # valid if host["scanned"] && host["sweeped"] && host["discovered"] && host.on_target && !host["escalated"]
             return (
-                host_view.sweeped
-                and host_view.scanned
-                and host_view.discovered
-                and host_view.on_host
-                and not host_view.escalated
+                host_view["sweeped"]
+                and host_view["scanned"]
+                and host_view["discovered"]
+                and host_view["on_host"]
+                and not host_view["escalated"]
             )
         elif (
             action == ARTImpact
-        ):  # valid if host.scanned && host.sweeped && host.discovered && host.on_target && host.escalated
+        ):  # valid if host["scanned"] && host["sweeped"] && host["discovered"] && host.on_target && host["escalated"]
             return (
-                host_view.sweeped
-                and host_view.scanned
-                and host_view.discovered
-                and host_view.on_host
-                and host_view.escalated
-                and not host_view.impacted
+                host_view["sweeped"]
+                and host_view["scanned"]
+                and host_view["discovered"]
+                and host_view["on_host"]
+                and host_view["escalated"]
+                and not host_view["impacted"]
             )
         else:
             return False

@@ -1,7 +1,6 @@
 from cyberwheel.blue_agents.blue_agent import BlueAgent, BlueAgentResult
-from cyberwheel.reward import RewardMap
 from cyberwheel.network.network_base import Network
-from cyberwheel.network.host import HostType
+from cyberwheel.network.host import HostType, HostTypes
 from cyberwheel.blue_actions.blue_action import generate_id, BlueActionReturn
 from importlib.resources import files
 from cyberwheel.network.service import Service
@@ -49,7 +48,7 @@ class RandomBlueAgent(BlueAgent):
             name = generate_id()
             target_subnet = random.choice(self.subnets)
             host_type = HostType(
-                name="Server", services=self.services, decoy=True, cve_list=self.cves
+                name="Server", type=HostTypes.DECOY_SERVER, services=self.services, decoy=True, cve_list=self.cves
             )
             self.network.create_decoy_host(name, target_subnet, host_type)
             agent_result = BlueAgentResult('deploy_decoy', name, True, 0, target=target_subnet.name)
@@ -58,7 +57,7 @@ class RandomBlueAgent(BlueAgent):
         self.current_step += 1
         return agent_result
 
-    def get_reward_map(self) -> RewardMap:
+    def get_reward_map(self):
         return {"nothing": (0, 0), "deploy_decoy": (0, 0)}
 
     def reset(self, network: Network):

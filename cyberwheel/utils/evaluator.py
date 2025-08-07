@@ -13,7 +13,7 @@ from importlib.resources import files
 from tqdm import tqdm
 
 from cyberwheel.network.network_base import Network
-from cyberwheel.utils import RLAgent, get_service_map
+from cyberwheel.utils import RLPolicy, get_service_map
 from cyberwheel.utils.visualizer import Visualizer
 from cyberwheel.utils.set_seed import set_seed
 
@@ -101,7 +101,7 @@ class Evaluator:
         env_funcs = [self.make_env(i, network=network) for i in range(1)]
         self.envs = gym.vector.SyncVectorEnv(env_funcs)
 
-        self.agent = RLAgent(self.envs).to(self.device)
+        self.agent = RLPolicy(self.envs).to(self.device)
 
         experiment_name = self.args.experiment_name
 

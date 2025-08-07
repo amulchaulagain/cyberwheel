@@ -11,6 +11,9 @@ from cyberwheel.red_actions.red_base import RedActionResults
 from cyberwheel.red_actions.technique import Technique
 from cyberwheel.red_actions.art_techniques import RemoteSystemDiscovery, NetworkServiceDiscovery, SudoandSudoCaching, DataEncryptedforImpact, LinuxLateralMovement
 from cyberwheel.red_actions.actions import Nothing
+from cyberwheel.utils import HybridSetList
+
+from copy import copy
 
 import numpy as np
 import random
@@ -18,7 +21,7 @@ import random
 class RLRedCampaign(ARTCampaign):
     def __init__(self, network: Network, args) -> None:
         super().__init__(network, args)
-        self.observation = RedObservation((args.max_num_hosts + args.num_steps) * 7, network)
+        self.observation = RedObservation(args, network)
         self.observation.add_host(self.current_host.name, on_host=True)
         
     def from_yaml(self) -> None:
@@ -28,16 +31,16 @@ class RLRedCampaign(ARTCampaign):
         action_classes = [
             RemoteSystemDiscovery,
             NetworkServiceDiscovery,
+            LinuxLateralMovement,
             SudoandSudoCaching,
             DataEncryptedforImpact,
-            LinuxLateralMovement
         ]
         self.atomic_test = {
             "Remote System Discovery": RemoteSystemDiscovery.get_atomic_test("96db2632-8417-4dbb-b8bb-a8b92ba391de"),
             "Network Service Discovery": NetworkServiceDiscovery.get_atomic_test("515942b0-a09f-4163-a7bb-22fefb6f185f"),
+            "LinuxLateralMovement": LinuxLateralMovement.get_atomic_test("uuid"),
             "Sudo and Sudo Caching": SudoandSudoCaching.get_atomic_test("150c3a08-ee6e-48a6-aeaf-3659d24ceb4e"),
             "Data Encrypted for Impact": DataEncryptedforImpact.get_atomic_test("08cbf59f-85da-4369-a5f4-049cffd7709f"),
-            "LinuxLateralMovement": LinuxLateralMovement.get_atomic_test("uuid")
         }
         self.entry_host: Host = "random"
         self.current_host : Host = self.network.get_random_user_host() #self.network.hosts[self.entry_host]
@@ -63,72 +66,86 @@ class RLRedCampaign(ARTCampaign):
             action
         )  # Selects ART Action, should include the action and target host (based on view?)
         source_host = self.current_host
-        target_host = self.network.get_node_from_name(target_host_name) if target_host_name != "nothing" else self.current_host
+        target_host = self.network.hosts[target_host_name] if target_host_name != "nothing" and target_host_name in self.network.hosts else "invalid"
         success = False
         if self.validate_action(art_action, target_host_name):
             action_results, action = self.run_action(target_host, art_action)
             success = action_results.attack_success
             self.handle_action(action_results)
+        else:
+            action_results = RedActionResults(source_host, target_host)
+            
         return RedAgentResult(
             art_action, 
             source_host, 
             target_host, 
             success, 
-            self.get_observation_space()
+            self.get_observation_space(),
+            action_results=action_results
         )  # Returns what ARTAgent act() should, probably. Or the observation space? 
     
     def handle_network_change(self):
-        current_hosts = self.network.hosts.keys()
-        new_hosts = current_hosts - self.tracked_hosts
+        current_hosts = self.network.all_hosts
+        new_hosts = current_hosts.data_set - self.tracked_hosts.data_set
+        removed_hosts = self.tracked_hosts.data_set - current_hosts.data_set
+        #print(f"What I see: {self.tracked_hosts.data_set}")
+        #print(f"All New Hosts: {current_hosts.data_set}")
         for h in new_hosts:
             host = self.network.hosts[h]
             if host.subnet.name in self.observation.known_subnets:
                 #self.service_mapping[h] = self.get_valid_techniques_by_host(
                 #    host, self.all_kcps
                 #)
+                #print(f"adding {h} to red obs and action space")
                 self.observation.add_host(h, sweeped=True)
                 self.action_space.add_host(h)
-        self.tracked_hosts = current_hosts
+                self.tracked_hosts.add(h)
+        for h in removed_hosts:
+            #print(f"removing {h} from action space")
+            self.action_space.remove_host(h)
+            self.tracked_hosts.remove(h)
 
     def validate_action(self, action, target_host: str) -> bool:
             if action == Nothing:
                 return True
+            if target_host == "invalid" or target_host not in self.network.hosts:
+                return False
             host_view = self.observation.obs[target_host]
-            if action == RemoteSystemDiscovery:  # valid if host.sweeped == False
-                return not host_view.sweeped
+            if action == RemoteSystemDiscovery:  # valid if host["sweeped"] == False
+                return not host_view["sweeped"]
             elif (
                 action == NetworkServiceDiscovery
-            ):  # valid if host.scanned == False and host.sweeped == True
-                return host_view.sweeped and not host_view.scanned
+            ):  # valid if host["scanned"] == False and host["sweeped"] == True
+                return host_view["sweeped"] and not host_view["scanned"]
             elif (
                 action == LinuxLateralMovement
-            ):  # valid if host.scanned && host.sweeped && host.discovered && !host.on_target
+            ):  # valid if host["scanned"] && host["sweeped"] && host["discovered"] && !host.on_target
                 return (
-                    host_view.sweeped
-                    and host_view.scanned
-                    and host_view.discovered
-                    and not host_view.on_host
+                    host_view["sweeped"]
+                    and host_view["scanned"]
+                    and host_view["discovered"]
+                    and not host_view["on_host"]
                 )
             elif (
                 action == SudoandSudoCaching
-            ):  # valid if host.scanned && host.sweeped && host.discovered && host.on_target && !host.escalated
+            ):  # valid if host["scanned"] && host["sweeped"] && host["discovered"] && host.on_target && !host["escalated"]
                 return (
-                    host_view.sweeped
-                    and host_view.scanned
-                    and host_view.discovered
-                    and host_view.on_host
-                    and not host_view.escalated
+                    host_view["sweeped"]
+                    and host_view["scanned"]
+                    and host_view["discovered"]
+                    and host_view["on_host"]
+                    and not host_view["escalated"]
                 )
             elif (
                 action == DataEncryptedforImpact
-            ):  # valid if host.scanned && host.sweeped && host.discovered && host.on_target && host.escalated
+            ):  # valid if host["scanned"] && host["sweeped"] && host["discovered"] && host.on_target && host["escalated"]
                 return (
-                    host_view.sweeped
-                    and host_view.scanned
-                    and host_view.discovered
-                    and host_view.on_host
-                    and host_view.escalated
-                    and not host_view.impacted
+                    host_view["sweeped"]
+                    and host_view["scanned"]
+                    and host_view["discovered"]
+                    and host_view["on_host"]
+                    and host_view["escalated"]
+                    and not host_view["impacted"]
                 )
             else:
                 return False
@@ -160,7 +177,7 @@ class RLRedCampaign(ARTCampaign):
             self.observation.update_host(target_host, discovered = True)
             self.observation.update_host(target_host, type = self.network.get_node_from_name(
                 target_host
-            ).host_type.name)
+            ).host_type.type)
         elif action == LinuxLateralMovement:  # Moves to target host
             self.observation.update_host(target_host, on_host = True)
             self.observation.update_host(src_host, on_host = False)
@@ -179,7 +196,8 @@ class RLRedCampaign(ARTCampaign):
     def reset(self, network: Network, service_mapping: dict):
         super().reset(network, service_mapping)
         self.action_space.reset(self.current_host.name)
-        return self.observation.reset(self.current_host.name)
+        self.tracked_hosts = HybridSetList()
+        return self.observation.reset(network, self.current_host.name)
         
 
     def run_action(self, target_host: Host, art_action) -> Tuple[RedActionResults, Type[Technique]]:

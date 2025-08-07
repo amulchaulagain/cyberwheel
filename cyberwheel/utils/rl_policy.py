@@ -11,25 +11,25 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
             return layer
 
 
-class RLAgent(nn.Module):
+class RLPolicy(nn.Module):
     """
     The agent class that contains the code for defining the actor and critic networks used by PPO.
     Also includes functions for getting values from the critic and actions from the actor.
     """
 
-    def __init__(self, envs):
+    def __init__(self, action_space_shape=0, obs_space_shape=0):
         super().__init__()
         # Actor network has an input layer, 2 hidden layers with 64 nodes, and an output layer.
         # Input layer is the size of the observation space and output layer is the size of the action space.
         # Predicts the best action to take at the current state.
         self.actor = nn.Sequential(
             layer_init(
-                nn.Linear(int(np.array(envs.single_observation_space.shape).prod()), 64)
+                nn.Linear(int(np.array(obs_space_shape).prod()), 64)
             ),
             nn.ReLU(),
             layer_init(nn.Linear(64, 64)),
             nn.ReLU(),
-            layer_init(nn.Linear(64, envs.single_action_space.n), std=0.01),
+            layer_init(nn.Linear(64, action_space_shape), std=0.01),
         )
 
         # Critic network has an input layer, 2 hidden layers with 64 nodes, and an output layer.
@@ -37,7 +37,7 @@ class RLAgent(nn.Module):
         # Predicts the "value" - the expected cumulative reward from using the actor policy from the current state onward.
         self.critic = nn.Sequential(
             layer_init(
-                nn.Linear(int(np.array(envs.single_observation_space.shape).prod()), 64)
+                nn.Linear(int(np.array(obs_space_shape).prod()), 64)
             ),
             nn.ReLU(),
             layer_init(nn.Linear(64, 64)),

@@ -7,33 +7,12 @@ from typing import Dict, List, Any, Iterable
 from gymnasium import Space
 
 from cyberwheel.blue_agents.blue_agent import BlueAgent, BlueAgentResult
-from cyberwheel.reward.reward_base import RewardMap
 from cyberwheel.network.network_base import Network, Host
 from cyberwheel.blue_agents.action_space.action_space import ActionSpace, ASReturn
 from cyberwheel.observation import BlueObservation
 
+from cyberwheel.detectors.handler import DetectorHandler
 
-def host_to_index_mapping(network: Network, deterministic: bool = False) -> Dict[Host, int]:
-    """
-    This will help with constructing the obs_vec.
-    It will need to be called and save during __init__()
-    because deploying decoy hosts may affect the order of
-    the list network.get_non_decoy_hosts() returns.
-    This might not be the case, but this will ensure the
-    original indices are preserved.
-    """
-    mapping: Dict[Host, int] = {}
-    i = 0
-
-    if deterministic:
-        hosts = sorted(list(network.hosts.keys() - network.decoys.keys()))
-    else:
-        hosts = network.hosts.keys() - network.decoys.keys()
-
-    for host in hosts:
-        mapping[host] = i
-        i += 1
-    return mapping
 
 class _ActionConfigInfo():
     def __init__(self, 
@@ -73,8 +52,9 @@ class RLBlueAgent(BlueAgent):
         self.args = args
         self.config = files("cyberwheel.data.configs.blue_agent").joinpath(args.blue_agent)
         self.network = network
+        detector = DetectorHandler(files("cyberwheel.data.configs.detector").joinpath(args.detector_config))
 
-        self.observation = BlueObservation(args.max_num_hosts * 2 + 1, host_to_index_mapping(self.network, self.args.deterministic), args.detector_config)
+        self.observation = BlueObservation(args, network, detector)
 
         self.configs: Dict[str, Any] = {}
         self.action_space: ActionSpace = None
@@ -175,7 +155,7 @@ class RLBlueAgent(BlueAgent):
         self.action_space.finalize()
 
     def _init_reward_map(self) -> None:
-        self.reward_map: RewardMap = {}
+        self.reward_map = {}
         for _, action_config_info in self.actions:
             if action_config_info.name in self.reward_map:
                 raise KeyError(
@@ -208,7 +188,7 @@ class RLBlueAgent(BlueAgent):
         return BlueAgentResult(asc_return.name, id, success, recurring)
 
     
-    def get_reward_map(self) -> RewardMap:
+    def get_reward_map(self):
         return self.reward_map
 
     def get_action_space_shape(self) -> tuple[int, ...]:
@@ -219,12 +199,12 @@ class RLBlueAgent(BlueAgent):
     
     def get_observation_space(self, red_agent_result) -> Iterable:
         alerts = self.observation.detector.obs([red_agent_result.action_results.detector_alert])
-        decoys_deployed = len(self.network.decoys)
-        return self.observation.create_obs_vector(alerts, decoys_deployed=decoys_deployed)
+        num_decoys_deployed = len(self.network.decoys)
+        return self.observation.create_obs_vector(alerts, num_decoys_deployed=num_decoys_deployed)
     
     def reset(self, network: Network) -> None:
         for v in self.shared_data.values():
             v.clear()
         self.decoys_deployed = 0
         self.network = network
-        self.observation.reset(host_to_index_mapping(self.network, self.args.deterministic))
+        self.observation.reset(network)

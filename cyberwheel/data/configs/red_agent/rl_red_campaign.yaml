@@ -22,5 +22,5 @@ campaign:
     lateral_movement_atomic_test: uuid # Define a test to run for Lateral movement technique
     lateral_movement_reward: 0.0
 action_space: RedDiscreteActionSpace
-entry_host: user01 # optional; defaults to random user
-leader: server02 # optional; defaults to random server
+entry_host: random # optional; defaults to random user
+leader: random # optional; defaults to random server

@@ -8,7 +8,7 @@ from cyberwheel.blue_actions.blue_action import (
     BlueActionReturn,
 )
 from cyberwheel.network.network_base import Network
-from cyberwheel.network.host import HostType
+from cyberwheel.network.host import HostType, HostTypes
 from cyberwheel.network.subnet import Subnet
 
 
@@ -39,11 +39,12 @@ class DeployDecoyHost(SubnetAction):
         name = generate_id(seed=seed)
         if "server" in self.type.lower():
             host_type = HostType(
-                name="Server", services=self.services, decoy=True, cve_list=self.cves
+                name="Server", type=HostTypes.DECOY_SERVER, services=self.services, decoy=True, cve_list=self.cves
             )
         else:
             host_type = HostType(
                 name="Workstation",
+                type=HostTypes.DECOY_USER,
                 services=self.services,
                 decoy=True,
                 cve_list=self.cves,
@@ -64,20 +65,20 @@ class DeployDecoyHost(SubnetAction):
             return BlueActionReturn(name, True, 0, target=subnet.name)
         
 
-class IsolateDecoyHost(SubnetAction):
-    def __init__(self, network: Network, configs: Dict[str, any], **kwargs) -> None:
-        super().__init__(network, configs)
-        self.define_configs()
-        self.define_services()
-        self.isolate_data = kwargs.get("isolate_data", [])
-
-    def execute(self, subnet: Subnet, **kwargs) -> BlueActionReturn:
-        name = generate_id()
-        host_type = HostType(
-            name=name, services=self.services, decoy=True, cve_list=self.cves
-        )
-        self.host = self.network.create_decoy_host(name, subnet, host_type)
-        return BlueActionReturn(
-            name, self.isolate_data.append_decoy(self.host, subnet), 1
-        )
+#class IsolateDecoyHost(SubnetAction):
+#    def __init__(self, network: Network, configs: Dict[str, any], **kwargs) -> None:
+#        super().__init__(network, configs)
+#        self.define_configs()
+#        self.define_services()
+#        self.isolate_data = kwargs.get("isolate_data", [])
+#
+#    def execute(self, subnet: Subnet, **kwargs) -> BlueActionReturn:
+#        name = generate_id()
+#        host_type = HostType(
+#            name=name, type=HostTypes.DECOYservices=self.services, decoy=True, cve_list=self.cves
+#        )
+#        self.host = self.network.create_decoy_host(name, subnet, host_type)
+#        return BlueActionReturn(
+#            name, self.isolate_data.append_decoy(self.host, subnet), 1
+#        )
 

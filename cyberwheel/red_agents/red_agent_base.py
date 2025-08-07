@@ -1,14 +1,16 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Type, List, Any, Iterable
 from ipaddress import IPv4Address, IPv6Address
-from typing import Type, List, Any, Iterable
-
-from cyberwheel.red_actions.red_base import ARTAction
-from cyberwheel.network.network_base import Host
-from cyberwheel.network.service import Service
 from cyberwheel.red_actions.red_base import RedActionResults
-from cyberwheel.red_actions.actions import ARTKillChainPhase
 from cyberwheel.red_actions.technique import Technique
-from cyberwheel.reward import RewardMap
+from cyberwheel.red_actions.actions import ARTKillChainPhase
+from cyberwheel.red_actions.red_base import ARTAction
+from cyberwheel.network.service import Service
+from cyberwheel.network.network_base import Host
+
+if TYPE_CHECKING:
+    from cyberwheel.reward import RewardMap
 
 
 class RedAgent(ABC):

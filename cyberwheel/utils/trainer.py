@@ -13,7 +13,7 @@ from torch import optim, nn
 from importlib.resources import files
 from statistics import mean, median
 
-from cyberwheel.utils import RLAgent, get_service_map
+from cyberwheel.utils import RLPolicy, get_service_map
 from cyberwheel.utils.set_seed import set_seed
 from cyberwheel.network.network_base import Network
 
@@ -56,13 +56,19 @@ class Trainer:
         return action_masks
 
     def mask_actions(self, new_action_mask, action_mask):
-        for i in range(len(action_mask)):
-            action_mask[i] = new_action_mask[i]
+        #action_mask = new_action_mask
+        #for i in range(len(action_mask)):
+        #    action_mask[i] = new_action_mask[i]
         #print(action_mask)
         #print(new_action_mask)
         #action_masks[:action_space_size] = True # Valid actions
         #action_masks[action_space_size:] = False # Invalid actions
-        return action_mask
+        new_mask = torch.tensor(
+            new_action_mask,
+            dtype=torch.bool,
+            device=action_mask.device,
+        )
+        return new_mask
     
     def evaluate(self, agent, env):
         """Evaluate 'agent'"""
@@ -123,7 +129,7 @@ class Trainer:
 
             # Load the agent
             sample_env = gym.vector.SyncVectorEnv(env_funcs)
-            eval_agent = RLAgent(sample_env).to(eval_device)
+            eval_agent = RLPolicy(sample_env).to(eval_device)
             
             eval_agent.load_state_dict(model)
             eval_agent.eval()
@@ -221,7 +227,7 @@ class Trainer:
 
         # Create agent and optimizer
 
-        self.agent = RLAgent(self.envs).to(self.device)
+        self.agent = RLPolicy(self.envs).to(self.device)
 
         # Load model from models/ directory
 
@@ -258,6 +264,8 @@ class Trainer:
         self.next_done = torch.zeros(self.args.num_envs).to(self.device)
 
     def train(self, update):
+        train_start_time = time.time()
+        train_start_process_time = time.process_time()
         self.resets = np.array(self.envs.reset()[0])
         self.next_obs = torch.Tensor(self.resets).to(self.device)
 
@@ -288,14 +296,21 @@ class Trainer:
                 action_space_sizes = [env.unwrapped.rl_agent.action_space._action_space_size for env in self.envs.envs]
                 tmp_masks = [env.unwrapped.action_mask for env in self.envs.envs]
             
-            #self.action_masks[step] = self.mask_actions(tmp_masks, self.action_masks[step])
-            
             for i in range(len(action_space_sizes)):
                 self.action_masks[step][i] = self.mask_actions(tmp_masks[i], self.action_masks[step][i])
-            #print(self.action_masks[step])
-
-            #for i, action_space_size in enumerate(action_space_sizes):
-            #    self.action_masks[step][i] = self.get_action_mask(action_space_size, self.action_masks[step][i])
+            
+            #tmp_print = False
+            #for i in range(len(tmp_masks[0])):
+            #    if not tmp_masks[0][4]:
+            #        if i % 5 == 0:
+            #            print("| ", end="")
+            #        if i > action_space_sizes[0]:
+            #            break
+            #        print(f"{tmp_masks[0][i]} ", end="")
+            #        tmp_print = True
+            #if tmp_print:
+            #    print("\n")
+            #time.sleep(1)
 
             self.global_step += self.args.num_envs
             self.obs[step] = self.next_obs
@@ -535,6 +550,8 @@ class Trainer:
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         #print(f"Actor: {self.optimizer.param_groups[0]['lr']}")
         #print(f"Critic: {self.optimizer.param_groups[1]['lr']}")
+        sps = int((self.args.num_steps * self.args.num_envs) / (time.time() - train_start_time))
+        process_sps = int((self.args.num_steps * self.args.num_envs) / (time.process_time() - train_start_process_time))
         
         self.writer.add_scalar(
             "charts/actor_learning_rate", self.optimizer.param_groups[0]["lr"], self.global_step
@@ -549,12 +566,12 @@ class Trainer:
         self.writer.add_scalar("losses/approx_kl", approx_kl.item(), self.global_step)
         self.writer.add_scalar("losses/clipfrac", np.mean(clipfracs), self.global_step)
         self.writer.add_scalar("losses/explained_variance", explained_var, self.global_step)
-        print("SPS:", int(self.global_step / (time.time() - self.start_time)))
+        print("SPS:", sps)
         self.writer.add_scalar(
-            "charts/SPS", int(self.global_step / (time.time() - self.start_time)), self.global_step
+            "charts/SPS", sps, self.global_step
         )
         self.writer.add_scalar(
-            "charts/process_SPS", int(self.global_step / (time.process_time() - self.start_process_time)), self.global_step
+            "charts/process_SPS", process_sps, self.global_step
         )
 
     def close(self) -> None:

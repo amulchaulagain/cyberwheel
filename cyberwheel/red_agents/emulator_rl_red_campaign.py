@@ -11,7 +11,6 @@ from cyberwheel.red_actions.red_base import RedActionResults
 from cyberwheel.red_actions.technique import Technique
 from cyberwheel.red_actions.art_techniques import RemoteSystemDiscovery, NetworkServiceDiscovery, SudoandSudoCaching, DataEncryptedforImpact, LinuxLateralMovement
 from cyberwheel.red_actions.actions import Nothing
-from cyberwheel.observation.red_observation import HostView
 
 import numpy as np
 
@@ -23,8 +22,7 @@ class EmulatorRLRedCampaign(RLRedCampaign):
         ip = str(h.ip_address)
         self.mapping[ip] = h
         if ip not in self.observation.obs:
-            self.observation.add_host(ip, on_host=False, sweeped=sweeped, ip_as_key=True)
-            #self.observation.obs[ip] = HostView(h.name, on_host=False, sweeped=sweeped)
+            self.observation.add_host(ip, ip_as_key=True, on_host=False, sweeped=sweeped)
         if ip not in self.action_space.hosts:
             self.action_space.add_host(ip)
             #print(self.observation)
@@ -86,50 +84,50 @@ class EmulatorRLRedCampaign(RLRedCampaign):
         return self.get_observation_space()
 
     def validate_action(self, action, target_host: str) -> bool:
-            if action == Nothing:
-                return True
-            if target_host not in self.observation.obs:
-                return False
-            host_view = self.observation.obs[target_host]
-            print(f"On Host: {host_view.on_host}\nSweeped: {host_view.sweeped}\nScanned: {host_view.scanned}\nDiscovered: {host_view.discovered}\nEscalated: {host_view.escalated}\nImpacted: {host_view.impacted}\n")
-            if action == RemoteSystemDiscovery:  # valid if host.sweeped == False
-                return not host_view.sweeped
-            elif (
-                action == NetworkServiceDiscovery
-            ):  # valid if host.scanned == False and host.sweeped == True
-                return host_view.sweeped and not host_view.scanned
-            elif (
-                action == LinuxLateralMovement
-            ):  # valid if host.scanned && host.sweeped && host.discovered && !host.on_target
-                return (
-                    host_view.sweeped
-                    and host_view.scanned
-                    and host_view.discovered
-                    and not host_view.on_host
-                )
-            elif (
-                action == SudoandSudoCaching
-            ):  # valid if host.scanned && host.sweeped && host.discovered && host.on_target && !host.escalated
-                return (
-                    host_view.sweeped
-                    and host_view.scanned
-                    and host_view.discovered
-                    and host_view.on_host
-                    and not host_view.escalated
-                )
-            elif (
-                action == DataEncryptedforImpact
-            ):  # valid if host.scanned && host.sweeped && host.discovered && host.on_target && host.escalated
-                return (
-                    host_view.sweeped
-                    and host_view.scanned
-                    and host_view.discovered
-                    and host_view.on_host
-                    and host_view.escalated
-                    and not host_view.impacted
-                )
-            else:
-                return False
+        if action == Nothing:
+            return True
+        if target_host not in self.observation.obs:
+            return False
+        host_view = self.observation.obs[target_host]
+        print(f"On Host: {host_view['on_host']}\nSweeped: {host_view['sweeped']}\nScanned: {host_view['scanned']}\nDiscovered: {host_view['discovered']}\nEscalated: {host_view['escalated']}\nImpacted: {host_view['impacted']}\n")
+        if action == RemoteSystemDiscovery:  # valid if host["sweeped"] == False
+            return not host_view["sweeped"]
+        elif (
+            action == NetworkServiceDiscovery
+        ):  # valid if host["scanned"] == False and host["sweeped"] == True
+            return host_view["sweeped"] and not host_view["scanned"]
+        elif (
+            action == LinuxLateralMovement
+        ):  # valid if host["scanned"] && host["sweeped"] && host["discovered"] && !host.on_target
+            return (
+                host_view["sweeped"]
+                and host_view["scanned"]
+                and host_view["discovered"]
+                and not host_view["on_host"]
+            )
+        elif (
+            action == SudoandSudoCaching
+        ):  # valid if host["scanned"] && host["sweeped"] && host["discovered"] && host.on_target && !host["escalated"]
+            return (
+                host_view["sweeped"]
+                and host_view["scanned"]
+                and host_view["discovered"]
+                and host_view["on_host"]
+                and not host_view["escalated"]
+            )
+        elif (
+            action == DataEncryptedforImpact
+        ):  # valid if host["scanned"] && host["sweeped"] && host["discovered"] && host.on_target && host["escalated"]
+            return (
+                host_view["sweeped"]
+                and host_view["scanned"]
+                and host_view["discovered"]
+                and host_view["on_host"]
+                and host_view["escalated"]
+                and not host_view["impacted"]
+            )
+        else:
+            return False
     
     def handle_action(self, result: RedActionResults) -> None:
         if not result.attack_success:
@@ -145,7 +143,7 @@ class EmulatorRLRedCampaign(RLRedCampaign):
         elif action == NetworkServiceDiscovery:  # Scans target host # TODO: Get from results.metadata (list of services)
             self.observation.update_host(target_host, scanned=True)
             self.observation.update_host(target_host, discovered=True)
-            self.observation.update_host(target_host, type=self.mapping[target_host].host_type.name)
+            self.observation.update_host(target_host, type=self.mapping[target_host].host_type.type)
         elif action == LinuxLateralMovement:  # Moves to target host # TODO: Get by running command to see if on target host
             self.observation.update_host(target_host, on_host=True)
             self.observation.update_host(src_host, on_host=False)
