@@ -123,7 +123,7 @@ The memory will eventually run out.
 
 - `actions/`: contains emulator actions for both red and blue agents.
 - `configs/emulator_config.yaml`:  contains configs such as host username and password.
-- `controler/emulator_contoler.py`: class for the simulator to interface with the emulator.
+- `controler/emulator_control.py`: class for the simulator to interface with the emulator.
 - `detectors/emulator_dectector.py`: class that defines the emulator detector.
 - `scenario/`: contains the network topology (i.e. scenario) converter and custom KVM images used by firewheel.
 
@@ -173,6 +173,21 @@ Before an action is executed, _firewheel ssh_ is first used to ssh into the targ
 To avoid having to manually enter the password "_ubuntu_" during ssh, `sshpass` passes the password as part of the action command. 
 That said, remember to **install sshpass** on the same machine as Firewheel
 
-### Detector and Observation Controller
+### Detector, Alerts and Observation Controller
 
-(TODO)
+We use a combination of [sysmon](https://github.com/microsoft/SysmonForLinux), [Elasticsearch](https://www.elastic.co/elasticsearch) and [Fleet/Elastic Agents](https://www.elastic.co/docs/reference/fleet)
+[/Fleet Server](https://www.elastic.co/docs/reference/fleet/fleet-server) to create a simplified Security Information and Event Management (SIEM) and generate alerts.
+Below is an overview how alerts are generated:
+
+1) _Sysmon_ is pre-installed on the _ubuntu-22.04.4-desktop-host-cyberwheel.qcow2_ and automatically starts when starting an experiment. 
+2) When starting an evaluation, Elastic Agents on each host are enrolled into Fleet (method defined in `emulator_control.init_hosts()`). The Fleet server is running on the SIEM host.
+3) Logs are generated after each action and sent to Elasticsearch.
+4) After actions are executed, an Elastic query is made to Elasticsearch to find specified commands found in logs. The query is defined in `emulator/detectors/query.txt`. 
+5) The log is parsed and is considered a **hit** only if the destination (target) host is a decoy. 
+5) An **Alert** object is genereted from a hit.
+6) The alert is converted to an oberservcation space; the method is defined in `emulator_detector.create_alerts()`
+
+**IMPORTANT NOTES**
+- As mentioned in step 5, an alert is genereted only when a **decoy** is attacked.
+- The query pulls logs from the last 5 minutes.
+Any duplicate logs are filtered out before/if an alert is generated, to prevent deplicate alerts from previous steps.
