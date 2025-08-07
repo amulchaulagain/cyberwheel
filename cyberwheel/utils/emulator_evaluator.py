@@ -44,6 +44,11 @@ class EmulatorEvaluator:
         self.args.deterministic = self.deterministic
         self.seed = args.seed
 
+        self.red_max_action_space_size = None
+        self.blue_max_action_space_size = None
+        self.red_max_obs_space_size = None
+        self.blue_max_obs_space_size = None
+
     def make_env(self, rank):
         """
         Utility function for multiprocessed env.
@@ -62,9 +67,11 @@ class EmulatorEvaluator:
             env = self.env_class(
                 self.args, network=net, networks={net.name: net}
             )
-
-            self.red_max_action_space_size = env.red_max_action_space_size
-            self.blue_max_action_space_size = env.blue_max_action_space_size
+            if self.red_max_action_space_size == None:
+                self.red_max_action_space_size = env.red_agent.action_space.max_size
+                self.blue_max_action_space_size = env.blue_agent.action_space.max_size
+                self.red_max_obs_space_size = env.red_agent.observation.max_size
+                self.blue_max_obs_space_size = env.blue_agent.observation.max_size
             env.reset(
                 seed=self.args.seed + rank
             )  # Reset the environment with a specific seed
@@ -128,39 +135,29 @@ class EmulatorEvaluator:
 
         experiment_name = self.args.experiment
 
-        agent_filename = f"{self.args.checkpoint}.pt"
-
+        blue_agent_filename = f"blue_{self.args.checkpoint}.pt"
+        red_agent_filename = f"red_{self.args.checkpoint}.pt"
         # If download from W&B, use API to get run data.
         #print(self.envs.envs[0].red_max_action_space_size)
         #print(self.envs.envs[0].red_agent.get_observation_space())
         if self.args.download_model:
             api = wandb.Api()
-            blue_run = api.run(
-                f"{self.args.wandb_entity}/{self.args.wandb_project_name}/runs/{self.args.blue_run}"
+            run = api.run(
+                f"{self.args.wandb_entity}/{self.args.wandb_project_name}/runs/{self.args.run}"
             )
-            blue_model = blue_run.file(agent_filename)
+            blue_model = run.file(blue_agent_filename)
+            red_model = run.file(red_agent_filename)
             blue_model.download(
                 files("cyberwheel.data.models").joinpath(self.args.blue_model), exist_ok=True
             )
-
-            red_run = api.run(
-                f"{self.args.wandb_entity}/{self.args.wandb_project_name}/runs/{self.args.red_run}"
-            )
-            red_model = red_run.file(agent_filename)
             red_model.download(
                 files("cyberwheel.data.models").joinpath(self.args.red_model), exist_ok=True
             )
 
-        self.blue_max_action_space_size = self.env.blue_max_action_space_size
-        self.red_max_action_space_size = self.env.red_max_action_space_size
-
-        blue_obs = self.env.observation_space
-        red_obs = self.env.red_observation_space
-
         #print(f"B: {self.blue_obs.shape} | {self.blue_max_action_space_size}")
         #print(f"R: {self.red_obs.shape} | {self.red_max_action_space_size}")
-        self.blue_agent = RLPolicy(blue_obs.shape, self.blue_max_action_space_size).to(self.device)
-        self.red_agent = RLPolicy(red_obs.shape, self.red_max_action_space_size).to(self.device)
+        self.blue_agent = RLPolicy(self.blue_max_action_space_size, self.blue_max_obs_space_size).to(self.device)
+        self.red_agent = RLPolicy(self.red_max_action_space_size, self.red_max_obs_space_size).to(self.device)
 
         self.red_obs = self.env.red_agent.get_observation_space()
         self.blue_obs = self.env.reset()
@@ -168,13 +165,13 @@ class EmulatorEvaluator:
         # Load model from models/ directory
         self.blue_agent.load_state_dict(
             torch.load(
-                files(f"cyberwheel.data.models.{self.args.blue_model}").joinpath(agent_filename),
+                files(f"cyberwheel.data.models.{self.args.blue_model}").joinpath(blue_agent_filename),
                 map_location=self.device,
             )
         )
         self.red_agent.load_state_dict(
             torch.load(
-                files(f"cyberwheel.data.models.{self.args.red_model}").joinpath(agent_filename),
+                files(f"cyberwheel.data.models.{self.args.red_model}").joinpath(red_agent_filename),
                 map_location=self.device,
             )
         )
@@ -209,51 +206,52 @@ class EmulatorEvaluator:
         self.full_blue_action_successes = []
 
 
-        self.blue_action_mask = [False] * self.blue_max_action_space_size
-        self.blue_action_mask[0:3] = [True, True, True]
-        self.red_action_mask = [False] * self.red_max_action_space_size
+        self.blue_action_mask = torch.zeros(self.blue_max_action_space_size, dtype=torch.bool).to(self.device)
+        self.red_action_mask = torch.zeros(self.red_max_action_space_size, dtype=torch.bool).to(self.device)
 
         with open(self.log_file, 'w') as f: # Create an empty CSV for new action logs, overwrite previous
             pass
+    
+    def mask_actions(self, new_action_mask, action_mask):
+        new_mask = torch.tensor(
+            new_action_mask,
+            dtype=torch.bool,
+            device=action_mask.device,
+        )
+        return new_mask
 
     def evaluate(self):
         self.start_time = time.time()
         for episode in tqdm(range(self.args.num_episodes)):
-            self.blue_obs = self.env.reset()
-            self.red_obs = self.env.red_agent.get_observation_space()
+            obs, _ = self.env.reset()
             for step in range(self.args.num_steps):
                 #print(self.blue_obs)
                 #print(self.red_obs)
-                if step == 0:
-                    self.blue_obs = self.blue_obs[0]
+                #if step == 0:
+                #    self.blue_obs = self.blue_obs[0]
 
-                self.blue_obs = torch.Tensor(self.blue_obs).to(self.device)
-                self.red_obs = torch.Tensor(self.red_obs).to(self.device)
+                self.blue_obs = torch.Tensor(obs["blue"]).to(self.device)
+                self.red_obs = torch.Tensor(obs["red"]).to(self.device)
 
-                #blue_action_space_size = self.env.blue_agent.action_space._action_space_size
-                red_action_space_size = self.env.red_agent.action_space._action_space_size
+                tmp_blue_mask = self.env.blue_action_mask
+                tmp_red_mask = self.env.red_action_mask
 
-                #blue_action_mask = self.blue_action_mask # get_action_mask(blue_action_space_size, self.blue_action_mask)
-                self.red_action_mask = get_action_mask(red_action_space_size, self.red_action_mask)
-
-                blue_action_mask = torch.asarray(self.blue_action_mask)
-                red_action_mask = torch.asarray(self.red_action_mask)
+                self.blue_action_mask = self.mask_actions(tmp_blue_mask, self.blue_action_mask)
+                self.red_action_mask = self.mask_actions(tmp_red_mask, self.red_action_mask)
 
                 blue_action, _, _, _ = self.blue_agent.get_action_and_value(
-                    self.blue_obs, action_mask=blue_action_mask
+                    self.blue_obs, action_mask=self.blue_action_mask
                 )
                 red_action, _, _, _ = self.red_agent.get_action_and_value(
-                    self.red_obs, action_mask=red_action_mask
+                    self.red_obs, action_mask=self.red_action_mask
                 )
-                self.env.red_action = red_action.cpu().numpy()
 
-                #print(red_action.cpu().numpy())
-                #print(blue_action.cpu().numpy())
+                action = {"blue": blue_action, "red": red_action}
 
-                _, rew, done, _, info = self.env.step(blue_action.cpu().numpy())
+                obs, rew, done, _, info = self.env.step(action)
 
-                rew = rew
-                done = done
+                blue_reward = info["blue_reward"]
+                red_reward = info["red_reward"]
 
                 blue_action = info["blue_action"]
                 red_action_type = info["red_action"]
@@ -261,8 +259,8 @@ class EmulatorEvaluator:
                 red_action_dest = info["red_action_dst"]
                 red_action_success = info["red_action_success"]
                 blue_action_success = info["blue_action_success"]
-                self.red_obs = info["red_obs"]
-                self.blue_obs = info["blue_obs"]
+                self.red_obs = obs["red"]
+                self.blue_obs = obs["blue"]
 
                 actions_df = pd.DataFrame(
                 {
@@ -274,6 +272,8 @@ class EmulatorEvaluator:
                     "red_action_dest": [red_action_dest],
                     "blue_action": [blue_action],
                     "blue_success": [blue_action_success],
+                    "blue_reward": [blue_reward],
+                    "red_reward": [red_reward],
                     "reward": [rew],
                 })
                 actions_df.to_csv(self.log_file, mode='a', header = os.path.getsize(self.log_file) == 0, index=False)

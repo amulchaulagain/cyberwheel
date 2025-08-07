@@ -167,7 +167,7 @@ class EmulatorRLRedCampaign(RLRedCampaign):
         ip = str(self.current_host.ip_address)
         self.mapping = {ip: self.current_host}
         self.action_space.reset(ip)
-        return self.observation.reset(ip, ip_as_key=True)
+        return self.observation.reset(network, ip, ip_as_key=True)
         
         
 

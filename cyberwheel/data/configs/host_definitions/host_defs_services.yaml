@@ -62,3 +62,12 @@ host_types:
       - WindowsImpactExploitableService
     decoy: false
     os: windows
+  decoy_server:
+    type: DECOY_SERVER
+    services:
+      - WindowsDiscoveryExploitableService
+      - WindowsLateralMovementExploitableService
+      - WindowsPrivilegeEscalationExploitableService
+      - WindowsImpactExploitableService
+    decoy: true
+    os: windows

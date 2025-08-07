@@ -59,17 +59,16 @@ class CyberwheelMultiAgent(gym.Env, Cyberwheel):
             self.network)
     
     def initialize_agents(self) -> None:
-        args = self.args
         max_net = self.args.network_size_compatibility
-        args.max_num_hosts = 100 if max_net == 'small' else 1000 if max_net == 'medium' else 10000 # if max_net == 'large'
-        #max_num_subnets = max_num_hosts / 10 # 10 if max_net == 'small' else 100 if max_net == 'medium' else 1000 # if max_net == 'large'
-        self.red_agent = RLRedCampaign(self.network, args) if args.campaign else RLARTAgent(self.network, args)
-        self.blue_agent = RLBlueAgent(self.network, args)
+        self.args.max_num_hosts = 100 if max_net == 'small' else 1000 if max_net == 'medium' else 10000 # if max_net == 'large'
+        
+        self.red_agent = RLRedCampaign(self.network, self.args) if self.args.campaign else RLARTAgent(self.network, self.args)
+        self.blue_agent = RLBlueAgent(self.network, self.args)
 
         self.blue_max_action_space_size = self.blue_agent.action_space._action_space_size
-        self.red_max_action_space_size = args.max_num_hosts * self.red_agent.action_space.num_actions * 2
+        self.red_max_action_space_size = self.args.max_num_hosts * self.red_agent.action_space.num_actions * 2
 
-        self.max_blue_attr_value = args.max_decoys + 2 # Max obs attribute is limited to when num_decoys_deployed exceeds max_decoys allowed
+        self.max_blue_attr_value = self.args.max_decoys + 2 # Max obs attribute is limited to when num_decoys_deployed exceeds max_decoys allowed
         self.max_red_attr_value = 4 # Max obs attribute is limited to the 'quadrant' attribute, which goes up to 4.
 
         self.observation_space = spaces.Dict({

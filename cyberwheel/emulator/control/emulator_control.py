@@ -18,7 +18,7 @@ from cyberwheel.emulator.actions.red_actions import (
     EmulateLateralMovement,
 )
 from cyberwheel.emulator.detectors import EmulatorDectector
-from cyberwheel.blue_actions.blue_action import BlueActionReturn
+from cyberwheel.blue_agents.blue_agent import BlueAgentResult
 from cyberwheel.red_actions.red_base import RedActionResults
 from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.host import Host
@@ -94,7 +94,7 @@ class EmulatorControl:
         action_name: str,
         src_host_name: str,
         id: str = "",
-    ) -> BlueActionReturn:
+    ) -> BlueAgentResult:
         """Lookup and execute blue actions in the emulator."""
 
         shell_cmd = ""
@@ -111,6 +111,7 @@ class EmulatorControl:
 
                 shell_cmd = action.build_emulator_cmd(random_decoy_hostname)
                 deploy_return = action.emulator_execute(shell_cmd)
+                deploy_return.host = None
                 if deploy_return.success:
                     host_name = random_decoy_hostname
                     emu_host_ip = self.get_ip_address(host_name)
@@ -130,17 +131,18 @@ class EmulatorControl:
                         f"{random_decoy_hostname}'s agent is already enrolled into fleet, skipping.\n"
                     )
 
-                return deploy_return
+                return BlueAgentResult(action_name, deploy_return.id, deploy_return.success, deploy_return.recurring, target=deploy_return.host)
 
             case "remove_decoy_host":
                 action = EmulateRemoveDecoyHost(network=self.network, configs={})
                 shell_cmd = action.build_emulator_cmd(src_host_name)
-                return action.emulator_execute(shell_cmd)
+                action_result = action.emulator_execute(shell_cmd)
+                return BlueAgentResult(action_name, action_result.id, action_result.success, action_result.recurring, target=action_result.host)
             case "nothing":
-                return BlueActionReturn(action_name, False, 0)
+                return BlueAgentResult(action_name, "nothing", False, 0)
             case _:
                 print("ERROR: This action does not exist!")
-                return BlueActionReturn(action_name, False, 0)
+                return BlueAgentResult(action_name, "invalid", False, 0)
 
     def run_red_action(
         self,

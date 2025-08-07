@@ -31,21 +31,17 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
     def __init__(self, args: YAMLConfig, network: Network = None, networks: dict = {}):
         super().__init__(args, network=network)
         self.colors = {"blue": '\033[94m', 'red': '\033[91m', 'end': '\033[0m'}
-        self.total = 0
-        self.current_step = 0
         self.networks = networks
+        self.evaluation = args.evaluation
 
         reward_function = args.reward_function
         rfm = importlib.import_module("cyberwheel.reward")
         self.reward_calculator = getattr(rfm, reward_function)(
-            self.red_agent, 
-            self.blue_agent,
-            self.args.valid_targets,
-            self.network)
-
-        self.evaluation = args.evaluation
-        self.red_action = None
-        self.total = 0
+            args,
+            red_agent=self.red_agent, 
+            blue_agent=self.blue_agent,
+            valid_targets=self.args.valid_targets,
+            network=self.network)
 
         self.emulator = EmulatorControl(
             network=network,
@@ -98,17 +94,33 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         self.args.max_num_hosts = 100 if max_net == 'small' else 1000 if max_net == 'medium' else 10000 # if max_net == 'large'
 
         self.blue_agent = RLBlueAgent(self.network, self.args)
-        self.observation_space = spaces.MultiDiscrete(np.array([self.args.max_decoys + 2] * self.blue_agent.observation.shape))
-        self.blue_max_action_space_size = self.blue_agent.action_space._action_space_size
-        self.action_space = self.blue_agent.create_action_space(self.blue_max_action_space_size)
-
-        #print(self.args.service_mapping.keys())
         self.red_agent = EmulatorRLRedCampaign(self.network, self.args)
-        self.red_observation_space = spaces.MultiDiscrete(np.array([3] * (self.args.max_num_hosts + self.args.num_steps) * 7))
-        self.red_max_action_space_size = self.args.max_num_hosts * self.red_agent.action_space.num_actions * 2
-        self.red_action_space = self.red_agent.action_space.create_action_space(self.red_max_action_space_size)
 
-    def step(self, blue_action):
+        self.blue_max_action_space_size = self.blue_agent.action_space._action_space_size
+        self.red_max_action_space_size = self.args.max_num_hosts * self.red_agent.action_space.num_actions * 2
+
+        self.max_blue_attr_value = self.args.max_decoys + 2 # Max obs attribute is limited to when num_decoys_deployed exceeds max_decoys allowed
+        self.max_red_attr_value = 4 # Max obs attribute is limited to the 'quadrant' attribute, which goes up to 4.
+
+        self.observation_space = spaces.Dict({
+            "blue": spaces.Box(
+                low  = np.full(self.blue_agent.observation.max_size, -1, dtype=np.int32),
+                high = np.full(self.blue_agent.observation.max_size, self.max_blue_attr_value, dtype=np.int32),
+                dtype=np.int32
+            ),
+            "red": spaces.Box(
+                low  = np.full(self.red_agent.observation.max_size, -1, dtype=np.int32),
+                high = np.full(self.red_agent.observation.max_size,  self.max_red_attr_value, dtype=np.int32),
+                dtype=np.int32
+            )
+        })
+
+        self.action_space = spaces.Dict({
+            "blue": self.blue_agent.create_action_space(self.blue_max_action_space_size),
+            "red": self.red_agent.action_space.create_action_space(self.red_max_action_space_size)
+        })
+
+    def step(self, action):
         """
         Steps through environment.
         1. Blue agent runs action
@@ -119,7 +131,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         """
         print(f"---------------------------------------------------------------------------------------------------------\nStep {self.current_step}\n")
         # print([h.name for h in self.network.get_all_hosts()])
-        blue_action_info = self.blue_agent.action_space.select_action(blue_action)
+        blue_action_info = self.blue_agent.action_space.select_action(action["blue"])
         blue_action_name = blue_action_info.name
         blue_action_src = (
             # blue_action_info.args[0] if blue_action_name != "nothing" else None
@@ -127,17 +139,17 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         )
 
         print(f"{self.colors['blue']}Running Blue Action: {blue_action_name} on {blue_action_src}...{self.colors['end']}")
-        blue_action_result = self.emulator.run_blue_action(
+        blue_agent_result = self.emulator.run_blue_action(
             blue_action_name, blue_action_src, id=self.current_step
         )  # TODO
-        print(f"{self.colors['blue']}Blue Action Success{self.colors['end']}") if blue_action_result.success else print(f"{self.colors['blue']}Blue Action Fail{self.colors['end']}")
+        print(f"{self.colors['blue']}Blue Action Success{self.colors['end']}") if blue_agent_result.success else print(f"{self.colors['blue']}Blue Action Fail{self.colors['end']}")
 
-        blue_action_success = blue_action_result.success
+        blue_action_success = blue_agent_result.success
 
         # TODO: Use the following action metadata to execute the correct command in emulator
         #self.red_agent.handle_network_change()
         print(self.red_agent.observation.obs.keys())
-        red_agent_result = self.red_agent.select_action(self.red_action)
+        red_agent_result = self.red_agent.select_action(action["red"])
 
         # red_action_result, red_action_type = self.red_agent.run_action(red_agent_result.target_host, red_agent_result.action)
         red_action_name = red_agent_result.action.get_name()
@@ -170,12 +182,12 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         ):
             ping_decoy = EmulatePing(
                 src_host=red_action_src,
-                target_host=blue_action_result.host,
+                target_host=blue_agent_result.target,
                 network=self.network,
             )
             cmd = ping_decoy.build_emulator_cmd()
             result = ping_decoy.emulator_execute(cmd)
-            self.red_agent.add_host(blue_action_result.host)
+            self.red_agent.add_host(blue_agent_result.target)
 
         red_action_result.action = red_agent_result.action
 
@@ -191,15 +203,10 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         # red_obs_vec = self.red_agent.get_observation_space()
         # obs_vec = [0] * (2 * len(self.network.get_all_hosts()))
 
-        reward = self.reward_calculator.calculate_reward(
-            red_action_name,
-            blue_action_name,
-            red_action_success,
-            blue_action_success,
-            red_action_dst,
+        blue_reward, red_reward = self.reward_calculator.calculate_reward(
+            blue_agent_result=blue_agent_result,
+            red_agent_result=red_agent_result
         )
-
-        self.total += reward
 
         done = self.current_step >= self.max_steps
 
@@ -208,8 +215,11 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
         # TODO: Reset Detector/Obs?
 
         return (
-            red_obs_vec,
-            reward,
+            {
+                "blue": blue_obs_vec,
+                "red": red_obs_vec
+            },
+            blue_reward + red_reward,
             done,
             False,
             {
@@ -222,13 +232,14 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
                 "red_action_success": red_action_success,
                 "red_obs": red_obs_vec,
                 "blue_obs": blue_obs_vec,
+                "red_reward": red_reward,
+                "blue_reward": blue_reward
             },
         )
 
     def reset(self, seed=None, options=None):
         if seed is not None:
             set_seed(seed)
-        self.total = 0
         self.current_step = 0
         self.network.reset()
 
@@ -240,4 +251,12 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
 
         self.emulator.reset()
 
-        return self.blue_agent.observation.obs_vec, {}
+        return {"blue": self.blue_agent.observation.obs_vec, "red": self.red_agent.observation.obs_vec}, {}
+
+    @property
+    def red_action_mask(self):
+        return self.red_agent.action_space.get_action_mask(self.red_agent.current_host.name)
+
+    @property
+    def blue_action_mask(self):
+        return self.blue_agent.action_space.get_action_mask()
