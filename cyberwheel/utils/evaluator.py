@@ -8,7 +8,6 @@ import wandb
 import os
 import random
 
-from copy import deepcopy
 from importlib.resources import files
 from tqdm import tqdm
 
@@ -18,23 +17,19 @@ from cyberwheel.utils.visualizer import Visualizer
 from cyberwheel.utils.set_seed import set_seed
 
 
-def get_action_mask(action_space_size, action_masks):
-    for i in range(len(action_masks)):
-        if i < action_space_size:
-            action_masks[i] = True
-        else:
-            action_masks[i] = False
-    return action_masks
-
-
 class Evaluator:
     def __init__(self, args):
         self.args = args
         m = importlib.import_module("cyberwheel.cyberwheel_envs")
-        self.env = getattr(m, args.environment)
+        self.env_class = getattr(m, args.environment)
         self.deterministic = os.getenv("CYBERWHEEL_DETERMINISTIC", "False").lower() in ('true', '1', 't')
         self.args.deterministic = self.deterministic
         self.seed = args.seed
+
+        self.red_max_action_space_size = None
+        self.blue_max_action_space_size = None
+        self.red_max_obs_space_size = None
+        self.blue_max_obs_space_size = None
 
     def make_env(self, rank, network: Network):
         """
@@ -47,7 +42,7 @@ class Evaluator:
         """
 
         def _init():
-            env = self.env(self.args, network=random.choice(list(self.networks.values())), networks=self.networks)
+            env = self.env_class(self.args, network=random.choice(list(self.networks.values())), networks=self.networks)
             env.evaluation = True
 
             self.max_action_space_size = env.max_action_space_size
@@ -98,10 +93,9 @@ class Evaluator:
             print("done")
 
 
-        env_funcs = [self.make_env(i, network=network) for i in range(1)]
-        self.envs = gym.vector.SyncVectorEnv(env_funcs)
+        self.env = self.make_env(0)()
 
-        self.agent = RLPolicy(self.envs).to(self.device)
+        self.agent = RLPolicy(self.env).to(self.device)
 
         experiment_name = self.args.experiment_name
 
@@ -132,7 +126,7 @@ class Evaluator:
         self.episode_rewards = []
         self.total_reward = 0
         self.steps = 0
-        self.obs = self.envs.reset()
+        self.obs = self.env.reset()
 
         print("Playing environment...")
 
@@ -155,14 +149,14 @@ class Evaluator:
         self.full_blue_action_targets = []
         self.full_rewards = []
 
-        self.max_action_space_size = self.envs.envs[0].unwrapped.max_action_space_size
+        self.max_action_space_size = self.env.max_action_space_size
         self.action_mask = [False] * self.max_action_space_size
 
     def evaluate(self):
         self.start_time = time.time()
         for episode in tqdm(range(self.args.num_episodes)):
             if self.args.visualize:
-                self.visualizer = Visualizer(self.envs.envs[0].unwrapped.network, self.args.graph_name)
+                self.visualizer = Visualizer(self.env.network, self.args.graph_name)
                 
             for step in range(self.args.num_steps):
                 if self.deterministic:
@@ -172,9 +166,7 @@ class Evaluator:
                     self.obs = self.obs[0]
 
                 self.obs = torch.Tensor(self.obs).to(self.device)
-                action_space_size = self.envs.envs[
-                    0
-                ].unwrapped.rl_agent.action_space._action_space_size
+                action_space_size = self.env.rl_agent.action_space._action_space_size
 
                 self.action_mask = get_action_mask(action_space_size, self.action_mask)
 
@@ -184,7 +176,7 @@ class Evaluator:
                     self.obs, action_mask=self.action_mask
                 )
 
-                self.obs, rew, done, _, info = self.envs.step(action.cpu().numpy())
+                self.obs, rew, done, _, info = self.env.step(action.cpu().numpy())
                 rew = rew[0]
                 done = done[0]
                 if "final_observation" in list(info.keys()):
@@ -224,7 +216,7 @@ class Evaluator:
                 # If generating graphs for dash server view
                 #print(self.args.visualize)
                 if self.args.visualize:
-                    host_info = self.envs.envs[0].unwrapped.red_agent.observation.obs if self.args.train_red else history.hosts
+                    host_info = self.env.red_agent.observation.obs if self.args.train_red else history.hosts
                     step_info = {"source_host": red_action_src, "target_host": red_action_dest, "red_action": red_action_type, "commands": commands, "network": net, "host_info": host_info, "commands": commands}
                     self.visualizer.visualize(episode, step, step_info)
                     pass
@@ -232,7 +224,7 @@ class Evaluator:
                 self.total_reward += rew
                 self.steps += 1
             self.steps = 0
-            self.obs = self.envs.reset()
+            self.obs = self.env.reset()
             self.episode_rewards.append(self.total_reward)
             self.total_reward = 0
 

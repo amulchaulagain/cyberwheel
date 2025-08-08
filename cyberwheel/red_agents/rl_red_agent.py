@@ -33,8 +33,7 @@ class RLARTAgent(ARTAgent):
         self.observation.add_host(self.current_host.name, on_host=True)
     
     def from_yaml(self) -> None:
-        with open(self.config, "r") as f:
-            contents = yaml.safe_load(f)
+        contents = self.args.agent_config["red"]
 
         # Get module import path
         self.killchain = [

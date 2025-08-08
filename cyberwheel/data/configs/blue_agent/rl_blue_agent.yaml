@@ -1,3 +1,6 @@
+name: rl_deception_agent
+class: RLBlueAgent
+rl: true
 actions:
   nothing: # Unique name for this action
     class: Nothing # The action class's name

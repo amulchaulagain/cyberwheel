@@ -1,20 +1,15 @@
 import torch
-import random
 import gymnasium as gym
 import time
 import os
 import importlib
 import wandb
-import numpy as np
 import pandas as pd
 
-from copy import deepcopy
-from torch.utils.tensorboard import SummaryWriter
-from torch import optim, nn
 from importlib.resources import files
 from tqdm import tqdm
 
-from cyberwheel.utils import RLPolicy, get_service_map
+from cyberwheel.utils import RLPolicy, get_service_map, Evaluator
 from cyberwheel.network.network_base import Network
 from cyberwheel.red_actions.actions import (
     ARTDiscovery,
@@ -23,31 +18,12 @@ from cyberwheel.red_actions.actions import (
     ARTImpact,
 )
 from cyberwheel.red_actions import art_techniques
-from cyberwheel.red_agents import ARTAgent
 
 
-def get_action_mask(action_space_size, action_masks):
-    for i in range(len(action_masks)):
-        if i < action_space_size:
-            action_masks[i] = True
-        else:
-            action_masks[i] = False
-    return action_masks
+class EmulatorEvaluator(Evaluator):
+    def __init__(self, args): # TODO: Can remove if no other functionality is nee
+        super().__init__(args)
 
-
-class EmulatorEvaluator:
-    def __init__(self, args):
-        self.args = args
-        m = importlib.import_module("cyberwheel.cyberwheel_envs")
-        self.env_class = getattr(m, args.environment)
-        self.deterministic = os.getenv("CYBERWHEEL_DETERMINISTIC", "False").lower() in ('true', '1', 't')
-        self.args.deterministic = self.deterministic
-        self.seed = args.seed
-
-        self.red_max_action_space_size = None
-        self.blue_max_action_space_size = None
-        self.red_max_obs_space_size = None
-        self.blue_max_obs_space_size = None
 
     def make_env(self, rank):
         """
@@ -138,8 +114,7 @@ class EmulatorEvaluator:
         blue_agent_filename = f"blue_{self.args.checkpoint}.pt"
         red_agent_filename = f"red_{self.args.checkpoint}.pt"
         # If download from W&B, use API to get run data.
-        #print(self.envs.envs[0].red_max_action_space_size)
-        #print(self.envs.envs[0].red_agent.get_observation_space())
+
         if self.args.download_model:
             api = wandb.Api()
             run = api.run(
@@ -225,11 +200,6 @@ class EmulatorEvaluator:
         for episode in tqdm(range(self.args.num_episodes)):
             obs, _ = self.env.reset()
             for step in range(self.args.num_steps):
-                #print(self.blue_obs)
-                #print(self.red_obs)
-                #if step == 0:
-                #    self.blue_obs = self.blue_obs[0]
-
                 self.blue_obs = torch.Tensor(obs["blue"]).to(self.device)
                 self.red_obs = torch.Tensor(obs["red"]).to(self.device)
 

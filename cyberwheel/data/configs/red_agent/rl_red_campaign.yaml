@@ -1,4 +1,6 @@
-name: RLRedCampaign
+name: rl_encryption_campaign_agent
+class: RLRedCampaign
+rl: true
 campaign:
   - technique_name: RemoteSystemDiscovery
     atomic_test_guid: 96db2632-8417-4dbb-b8bb-a8b92ba391de

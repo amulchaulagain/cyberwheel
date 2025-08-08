@@ -50,7 +50,6 @@ class RLBlueAgent(BlueAgent):
     def __init__(self, network: Network, args) -> None:
         super().__init__()
         self.args = args
-        self.config = files("cyberwheel.data.configs.blue_agent").joinpath(args.blue_agent)
         self.network = network
         detector = DetectorHandler(files("cyberwheel.data.configs.detector").joinpath(args.detector_config))
 
@@ -66,8 +65,7 @@ class RLBlueAgent(BlueAgent):
         self.decoys_deployed = 0
 
     def from_yaml(self):
-        with open(self.config, "r") as r:
-            contents = yaml.safe_load(r)
+        contents = self.args.agent_config["blue"]
 
         # Initialize the action space converter
         action_space = contents["action_space"]

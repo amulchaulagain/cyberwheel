@@ -25,8 +25,7 @@ class RLRedCampaign(ARTCampaign):
         self.observation.add_host(self.current_host.name, on_host=True)
         
     def from_yaml(self) -> None:
-        with open(self.config, "r") as f:
-            config = yaml.safe_load(f)
+        config = self.args.agent_config["red"]
         
         action_classes = [
             RemoteSystemDiscovery,

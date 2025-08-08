@@ -88,9 +88,6 @@ class ARTAgent(RedAgent):
         """
         self.name: str = name
         self.network = network
-        self.config = files("cyberwheel.data.configs.red_agent").joinpath(
-            args.red_agent
-        )
         self.args = args
 
         self.from_yaml()
@@ -119,8 +116,7 @@ class ARTAgent(RedAgent):
             self.tracked_hosts = HybridSetList(service_mapping.keys())
     
     def from_yaml(self) -> None:
-        with open(self.config, "r") as r:
-            contents = yaml.safe_load(r)
+        contents = self.args.agent_config["red"]
 
         self.killchain = []
         self.all_kcps = []

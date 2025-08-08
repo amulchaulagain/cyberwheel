@@ -6,10 +6,8 @@ from typing import Iterable, Any
 from gymnasium import spaces
 
 from cyberwheel.cyberwheel_envs.cyberwheel import Cyberwheel
-from cyberwheel.blue_agents import RLBlueAgent, InactiveBlueAgent, RandomBlueAgent
 from cyberwheel.network.network_base import Network
-from cyberwheel.red_agents import RLARTAgent, ARTAgent, ARTCampaign
-from cyberwheel.red_agents.rl_red_campaign import RLRedCampaign
+from cyberwheel import red_agents, blue_agents
 from cyberwheel.utils import YAMLConfig, HybridSetList
 from cyberwheel.utils.set_seed import set_seed
 
@@ -61,32 +59,32 @@ class CyberwheelMultiAgent(gym.Env, Cyberwheel):
     def initialize_agents(self) -> None:
         max_net = self.args.network_size_compatibility
         self.args.max_num_hosts = 100 if max_net == 'small' else 1000 if max_net == 'medium' else 10000 # if max_net == 'large'
-        
-        self.red_agent = RLRedCampaign(self.network, self.args) if self.args.campaign else RLARTAgent(self.network, self.args)
-        self.blue_agent = RLBlueAgent(self.network, self.args)
 
-        self.blue_max_action_space_size = self.blue_agent.action_space._action_space_size
-        self.red_max_action_space_size = self.args.max_num_hosts * self.red_agent.action_space.num_actions * 2
+        self.blue_agent = getattr(blue_agents, self.args.agent_config["blue"]["class"])(self.network, self.args)
+        self.red_agent = getattr(red_agents, self.args.agent_config["red"]["class"])(self.network, self.args)
 
-        self.max_blue_attr_value = self.args.max_decoys + 2 # Max obs attribute is limited to when num_decoys_deployed exceeds max_decoys allowed
-        self.max_red_attr_value = 4 # Max obs attribute is limited to the 'quadrant' attribute, which goes up to 4.
+        self.blue_max_action_space_size = self.blue_agent.action_space._action_space_size if self.args.agent_config["blue"]["rl"] else None
+        self.red_max_action_space_size = self.args.max_num_hosts * self.red_agent.action_space.num_actions * 2 if self.args.agent_config["red"]["rl"] else None
+
+        self.max_blue_attr_value = self.args.max_decoys + 2 if self.args.agent_config["blue"]["rl"] else None # Max obs attribute is limited to when num_decoys_deployed exceeds max_decoys allowed
+        self.max_red_attr_value = 4 if self.args.agent_config["red"]["rl"] else None # Max obs attribute is limited to the 'quadrant' attribute, which goes up to 4.
 
         self.observation_space = spaces.Dict({
             "blue": spaces.Box(
                 low  = np.full(self.blue_agent.observation.max_size, -1, dtype=np.int32),
                 high = np.full(self.blue_agent.observation.max_size, self.max_blue_attr_value, dtype=np.int32),
                 dtype=np.int32
-            ),
+            ) if self.args.agent_config["blue"]["rl"] else None,
             "red": spaces.Box(
                 low  = np.full(self.red_agent.observation.max_size, -1, dtype=np.int32),
                 high = np.full(self.red_agent.observation.max_size,  self.max_red_attr_value, dtype=np.int32),
                 dtype=np.int32
-            )
+            ) if self.args.agent_config["red"]["rl"] else None,
         })
 
         self.action_space = spaces.Dict({
-            "blue": self.blue_agent.create_action_space(self.blue_max_action_space_size),
-            "red": self.red_agent.action_space.create_action_space(self.red_max_action_space_size)
+            "blue": self.blue_agent.create_action_space(self.blue_max_action_space_size) if self.args.agent_config["blue"]["rl"] else None,
+            "red": self.red_agent.action_space.create_action_space(self.red_max_action_space_size) if self.args.agent_config["red"]["rl"] else None,
         })
         self.red_reward_sign = -1
         self.blue_reward_sign = 1
@@ -100,24 +98,18 @@ class CyberwheelMultiAgent(gym.Env, Cyberwheel):
         4. Get obs from Red or Blue Observation
         5. Return obs and related metadata
         """
-        blue_agent_result = self.blue_agent.act(action["blue"])
-        red_agent_result = self.red_agent.act(action["red"])
+        blue_agent_result = self.blue_agent.act(action["blue"] if "blue" in action else None)
+        red_agent_result = self.red_agent.act(action["red"] if "red" in action else None)
 
-        blue_obs_vec = self.blue_agent.get_observation_space(red_agent_result)
-        red_obs_vec = self.red_agent.get_observation_space()
+        blue_obs_vec = self.blue_agent.get_observation_space(red_agent_result) if self.args.agent_config["blue"]["rl"] else None
+        red_obs_vec = self.red_agent.get_observation_space() if self.args.agent_config["red"]["rl"] else None
         
         blue_reward, red_reward = self.reward_calculator.calculate_reward(
             blue_agent_result=blue_agent_result,
             red_agent_result=red_agent_result
         ) # TODO: Double check that the signs are correct
 
-        done = self.current_step == self.max_steps - 1
-        
-        #print(f"Blue: {blue_agent_result.name} {blue_agent_result.id} - {blue_agent_result.success}")
-        #print(f"Red: {red_agent_result.action.get_name()} {red_agent_result.src_host.name} -> {red_agent_result.target_host.name if red_agent_result.target_host != 'invalid' else 'invalid'} - {red_agent_result.success}")
-        #print(f"Red Observation: {self.red_agent.observation.obs.keys()}")
-        #print("-------------------------------------------")
-        
+        done = self.current_step == self.max_steps - 1        
 
         self.current_step += 1
         info = {
@@ -159,7 +151,10 @@ class CyberwheelMultiAgent(gym.Env, Cyberwheel):
         self.red_agent.reset(self.network, self.args.service_mapping[self.network.name])
         self.blue_agent.reset(self.network)
         self.reward_calculator.reset()
-        return {"blue": self.blue_agent.observation.obs_vec, "red": self.red_agent.observation.obs_vec}, {}
+        return {
+            "blue": self.blue_agent.observation.obs_vec if self.args.agent_config["blue"]["rl"] else None, 
+            "red": self.red_agent.observation.obs_vec if self.args.agent_config["red"]["rl"] else None,
+            }, {}
 
         
     def close(self) -> None:
@@ -174,8 +169,11 @@ class CyberwheelMultiAgent(gym.Env, Cyberwheel):
         return self.red_agent.action_space._action_space_size
     
     @property
-    def red_action_mask(self):
-        return self.red_agent.action_space.get_action_mask(self.red_agent.current_host.name)
+    def action_mask(self):
+        return {
+            "blue": self.blue_agent.action_space.get_action_mask(),
+            "red": self.red_agent.action_space.get_action_mask(self.red_agent.current_host.name)
+        }
 
     @property
     def blue_action_mask(self):

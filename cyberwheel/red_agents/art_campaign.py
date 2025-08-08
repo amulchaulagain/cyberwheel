@@ -33,8 +33,7 @@ class ARTCampaign(ARTAgent):
         )
     
     def from_yaml(self) -> None:
-        with open(self.config, "r") as f:
-            config = yaml.safe_load(f)
+        config = self.args.agent_config["red"]
         self.entry_host: Host = config["entry_host"]
         self.current_host: Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
         
