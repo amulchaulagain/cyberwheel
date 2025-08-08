@@ -98,8 +98,9 @@ class CyberwheelMultiAgent(gym.Env, Cyberwheel):
         4. Get obs from Red or Blue Observation
         5. Return obs and related metadata
         """
-        blue_agent_result = self.blue_agent.act(action["blue"] if "blue" in action else None)
-        red_agent_result = self.red_agent.act(action["red"] if "red" in action else None)
+        #print(action)
+        blue_agent_result = self.blue_agent.act(action["blue"]) if "blue" in action and action["blue"] != None else self.blue_agent.act()
+        red_agent_result = self.red_agent.act(action["red"]) if "red" in action and action["red"] != None else self.red_agent.act()
 
         blue_obs_vec = self.blue_agent.get_observation_space(red_agent_result) if self.args.agent_config["blue"]["rl"] else None
         red_obs_vec = self.red_agent.get_observation_space() if self.args.agent_config["red"]["rl"] else None

@@ -18,16 +18,19 @@ class MultiAgentHandler:
         self.device = self.args.device
         print(f"Using device '{self.device}'")
 
-        self.agents = agents.keys()
+        #self.agents = agents.keys()
+        #print(agents)
+        self.agents = {}
 
-        for agent in self.agents:
+        for agent in agents:
+            self.agents[agent] = agents[agent]
             self.agents[agent]["obs"] = spaces.Box(
                 low  = np.full(agents[agent]["max_obs_space_size"], -1, dtype=np.int32),
                 high = np.full(agents[agent]["max_obs_space_size"], agents[agent]["max_attrs"], dtype=np.int32),
                 dtype=np.int32
             )
-            self.agents[agent]["shape"] = self.agents[agent]["obs"].shape,
-            self.agents[agent]["policy"] = RLPolicy(self.agents[agent]["max_action_space_size"], self.agents[agent]["shape"]).to(self.device),
+            self.agents[agent]["shape"] = self.agents[agent]["obs"].shape
+            self.agents[agent]["policy"] = RLPolicy(self.agents[agent]["max_action_space_size"], self.agents[agent]["shape"]).to(self.device)
             self.agents[agent]["optimizer"] = optim.Adam([
                 { 'params': list(self.agents[agent]["policy"].actor.parameters()),  'lr': float(self.args.actor_lr),  'eps': 1e-5 },
                 { 'params': list(self.agents[agent]["policy"].critic.parameters()), 'lr': float(self.args.critic_lr), 'eps': 1e-5 },
@@ -65,7 +68,8 @@ class MultiAgentHandler:
         masks = self.envs.call("action_mask") if self.args.async_env else [env.unwrapped.action_mask for env in self.envs.envs]
         for agent in self.agents:
             for i in range(self.args.num_envs):
-                self.agents[agent]["action_masks"][step][i] = self.mask_actions(masks[agent][i], self.agents[agent]["action_masks"][step][i])
+                #print(agent, step, i, masks[i][agent])
+                self.agents[agent]["action_masks"][step][i] = self.mask_actions(masks[i][agent], self.agents[agent]["action_masks"][step][i])
 
 
     def step_multiagent(self, step: int):
@@ -80,16 +84,17 @@ class MultiAgentHandler:
                 self.agents[agent]["values"][step] = value.flatten()
                 self.agents[agent]["actions"][step] = action
                 self.agents[agent]["logprobs"][step] = logprob
-            policy_action = action.cpu().numpy()
+            action = action.cpu().numpy()
 
             # Execute the selected action in the environment to collect experience for training.
-            policy_action[agent] = policy_action
+            policy_action[agent] = action
+        #print(policy_action)
 
         obs, reward, done, _, info = self.envs.step(policy_action)
 
         for agent in self.agents:
             self.agents[agent]["next_obs"] = torch.Tensor(obs[agent]).to(self.device)
-            self.agents[agent]["rewards"] = torch.tensor(info[f"{agent}_reward"]).to(self.device).view(-1)
+            self.agents[agent]["rewards"][step] = torch.tensor(info[f"{agent}_reward"]).to(self.device).view(-1)
 
         self.next_done = torch.Tensor(done).to(self.device)
     
@@ -116,6 +121,7 @@ class MultiAgentHandler:
                     else:
                         nextnonterminal = 1.0 - self.dones[t + 1]
                         nextvalues = self.agents[agent]["values"][t + 1]
+                    #print(t, self.agents[agent]["rewards"], self.agents[agent]["values"])
                     delta = self.agents[agent]["rewards"][t] + self.args.gamma * nextvalues * nextnonterminal - self.agents[agent]["values"][t]
                     self.agents[agent]["advantages"][t] = lastgaelam = delta + self.args.gamma * self.args.gae_lambda * nextnonterminal * lastgaelam
                 self.agents[agent]["returns"] = self.agents[agent]["advantages"] + self.agents[agent]["values"]

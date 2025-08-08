@@ -55,7 +55,7 @@ class MultiAgentTrainer:
                     print("Agent Not Recognized!")
             self.define_vars = False
             env.reset()
-            env = gym.wrappers.RecordEpisodeStatistics(env)  # This tracks the rewards of the environment that it wraps. Used for logging
+            #env = gym.wrappers.RecordEpisodeStatistics(env)  # This tracks the rewards of the environment that it wraps. Used for logging
             return env
 
         return _init
@@ -96,10 +96,10 @@ class MultiAgentTrainer:
                 action_masks = env.action_mask
 
                 for agent in self.agents:
-                    obs = torch.Tensor(obs[agent]).to(eval_device)
+                    agent_obs = torch.Tensor(obs[agent]).to(eval_device)
                     tmp_mask = action_masks[agent]
                     agent_info[agent]["action_masks"] = self.mask_actions(tmp_mask, agent_info[agent]["action_masks"])
-                    action, _, _, _ = agents[agent].get_action_and_value(obs, action_mask=agent_info[agent]["action_masks"])
+                    action, _, _, _ = agents[agent].get_action_and_value(agent_obs, action_mask=agent_info[agent]["action_masks"])
                     actions[agent] = action
 
                 obs, rew, done, _, info = env.step(actions)
@@ -107,7 +107,7 @@ class MultiAgentTrainer:
                 for agent in self.agents:
                     agent_info[agent]["episode_rewards"][episode] += info[f"{agent}_reward"] if f"{agent}_reward" in info else 0
 
-                if "decoy_attacked" in info and info["decoy_attacked"][0]:
+                if "decoy_attacked" in info and info["decoy_attacked"]:
                     num_decoy_attacks += 1
 
             self.episode_decoy_attacks.append(num_decoy_attacks)
@@ -124,7 +124,7 @@ class MultiAgentTrainer:
 
         results = {}
         for network_name in self.networks:
-            env = self.make_env(0, evaluation=True, net_name = network_name)[0]
+            env = self.make_env(0, evaluation=True, net_name = network_name)()
             for agent in self.agents:
                 eval_agent = None
                 # Load the agent
@@ -207,10 +207,11 @@ class MultiAgentTrainer:
         for agent_type in self.args.agents:
             self.args.agent_config[agent_type] = {}
             self.agents[agent_type] = None
-            for agent_yaml in self.args.agents[agent_type]:
-                agent_config = files(f"cyberwheel.data.configs.{agent_type}_agents").joinpath(agent_yaml)
-                with open(agent_config, "r") as yaml_file:
-                    self.args.agent_config[agent_type] = yaml.safe_load(yaml_file)
+            
+            agent_yaml = self.args.agents[agent_type]
+            agent_config = files(f"cyberwheel.data.configs.{agent_type}_agent").joinpath(agent_yaml)
+            with open(agent_config, "r") as yaml_file:
+                self.args.agent_config[agent_type] = yaml.safe_load(yaml_file)
         
         print("Defining environment(s) and beginning training:", end="\n\n")
 

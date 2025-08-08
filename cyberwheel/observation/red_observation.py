@@ -18,7 +18,7 @@ class RedObservation(Observation):
     
     def _init_vars(self):
         self.size : int = 0
-        self.obs_vec : list[int] = [0] * self.max_size
+        self.obs_vec : list[int] = [-1] * self.max_size
         self.known_subnets = []
         self.obs : dict[str, dict] = {}
         self.standalone_obs: dict[str, int] = {}
