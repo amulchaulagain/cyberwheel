@@ -2,6 +2,7 @@ import torch
 import math
 import random
 import gymnasium as gym
+from gymnasium import spaces
 import time
 import os
 import importlib
@@ -52,7 +53,14 @@ class MultiAgentTrainer:
                 elif agent == 'blue':
                     self.agents[agent] = {"max_action_space_size": env.blue_agent.action_space.max_size, "max_obs_space_size": env.blue_agent.observation.max_size, "max_attrs": env.max_blue_attr_value}
                 else:
-                    print("Agent Not Recognized!")
+                    raise Exception("Agent Not Recognized!")
+                    #print("Agent Not Recognized!")
+                self.agents[agent]["obs"] = spaces.Box(
+                    low  = np.full(self.agents[agent]["max_obs_space_size"], -1, dtype=np.int32),
+                    high = np.full(self.agents[agent]["max_obs_space_size"], self.agents[agent]["max_attrs"], dtype=np.int32),
+                    dtype=np.int32
+                )
+                    
             self.define_vars = False
             env.reset()
             #env = gym.wrappers.RecordEpisodeStatistics(env)  # This tracks the rewards of the environment that it wraps. Used for logging
@@ -67,9 +75,6 @@ class MultiAgentTrainer:
             device=action_mask.device,
         )
         return new_mask
-
-    def step(self):
-        pass
     
     def evaluate(self, agents, env):
         """Evaluate 'agent'"""

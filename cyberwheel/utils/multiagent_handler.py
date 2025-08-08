@@ -2,7 +2,7 @@ from torch import nn, optim
 
 from cyberwheel.utils import RLPolicy
 from gymnasium.vector import VectorEnv, AsyncVectorEnv
-from gymnasium import spaces
+
 from importlib.resources import files
 
 import numpy as np
@@ -24,11 +24,6 @@ class MultiAgentHandler:
 
         for agent in agents:
             self.agents[agent] = agents[agent]
-            self.agents[agent]["obs"] = spaces.Box(
-                low  = np.full(agents[agent]["max_obs_space_size"], -1, dtype=np.int32),
-                high = np.full(agents[agent]["max_obs_space_size"], agents[agent]["max_attrs"], dtype=np.int32),
-                dtype=np.int32
-            )
             self.agents[agent]["shape"] = self.agents[agent]["obs"].shape
             self.agents[agent]["policy"] = RLPolicy(self.agents[agent]["max_action_space_size"], self.agents[agent]["shape"]).to(self.device)
             self.agents[agent]["optimizer"] = optim.Adam([
