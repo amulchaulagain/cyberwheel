@@ -52,23 +52,23 @@
 
 ### New Features! (Release v2.0)
 
-With the latest major update to cyberwheel, we've implemented various new features, namely Emulation and Multi-Agent support! The first iteration of our emulator enviroment is now live, with instruction on setup located in `emulator/README.md`. Cyberwheel environments now also support the ability to train and evaluate multiple RL agents in tandem, allowing you to train an RL Red Agent against an RL Blue Agent, both learning simultaneously. A full list of all of the new features are listed in more detail below:
+With the latest major update to cyberwheel, we've implemented various new features, namely Emulation and Multi-Agent support! The first iteration of our emulator environment is now live, with instructions on setup located in `cyberwheel/emulator/README.md`. Cyberwheel environments now also support the ability to train and evaluate multiple RL agents in tandem, allowing you to train an RL Red Agent against an RL Blue Agent, both learning simultaneously. A full list of all of the new features are listed in more detail below:
 
 #### Multi-agent Support
-As mentioned above, cyberwheel now supports the ability to train multiple agents in the environment. To do so, you just need to enter the red and blue agents' config filename in the 'red' and 'blue' arguments of the training configuration. You may use any of the RL Red/Blue YAML files in the `data/configs` agent directories, and the training config YAML files in `data/configs/environment` as a reference.
+As mentioned above, cyberwheel now supports the ability to train multiple agents in the environment. To do so, you just need to enter the red and blue agents' config filename in the 'red' and 'blue' arguments of the training configuration. You may use any of the RL Red/Blue YAML files in the `cyberwheel/data/configs` agent directories, and the training config YAML files in `cyberwheel/data/configs/environment` as a reference.
 
 #### Emulation
-For our emulator, we've incorporated the [FIREWHEEL](https://github.com/sandialabs/firewheel) network emulation tool by Sandia National Laboratories. More information on setting this up and getting it running can be found [here](/cyberwheel/emulator/README.md).
+For our emulator, we've incorporated the [FIREWHEEL](https://github.com/sandialabs/firewheel) network emulation tool by Sandia National Laboratories. More information on setting this up and getting it running can be found [here](emulator/README.md).
 
 
 #### Multi-Network Training
-We've also implemented the ability to train an agent on multiple different networks in one training run, by allowing three fixed maximum observation space sizes that an agent will train on. This sizes are:
+We've also implemented the ability to train an agent on multiple different networks in one training run, by allowing three fixed maximum observation space sizes that an agent will train on. These sizes are:
 
-| Config Argument | Max # hosts in network | Max # of subnets in network |
+| Config Argument | Max # of hosts in network | Max # of subnets in network |
 | -------- | ------- | --------- |
-| 'small' | 100 | 10 |
-| 'medium' | 1000 | 100 |
-| 'large' | 10000 |  1000 |
+| `small` | 100 | 10 |
+| `medium` | 1000 | 100 |
+| `large` | 10000 |  1000 |
 
 This allows the singular policy to train a fixed obs space and action space on many different networks. During training, the network that the agent will train on in a given episode will be randomly selected from the ones listed. During the checkpoint evaluations of the training, evaluations will be run on all networks in the pool in order to judge the agent's individual performance.
 
@@ -90,7 +90,7 @@ Motivations:
 * Extensibility - allowing for modifying and adding various defensive actions and offensive strategies without requiring structural changes to codebase.
 * Scalability - supporting training on large networks with minimal performance cost
 
-This environment allows for RL training and evaluations with a large set of configurable arguments to swap out networks, strategies, agents, RL parameters, and more. It also includes a visualization server using dash that allows for evaluations to be visualized in a readble graph display showing agent actions througout the episodes.
+This environment allows for RL training and evaluations with a large set of configurable arguments to swap out networks, strategies, agents, RL parameters, and more. It also includes a visualization server using dash that allows for evaluations to be visualized in a readable graph display showing agent actions throughout the episodes.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -145,8 +145,8 @@ Once all dependencies are installed:
     pip install -r requirements.txt
     ```
 
-*On newer OSX systems running on Apple Silicon chips, there may be an error installing the `pygraphviz` package, with poetry not finding the graphviz configuration files. You can work around this by pip installing the pygraphviz package manually, explicitly passing graphviz config paths. [This link](https://stackoverflow.com/a/70439868) helped me work through this issue.*
-*Feel free to comment this package out of the requirements.txt if you want to use cyberwheel without the visualizations and debug this package installation separately.*
+*On newer MacOS systems running on Apple Silicon chips, there may be an error installing the `pygraphviz` package, with poetry not finding the graphviz configuration files. You can work around this by pip installing the pygraphviz package manually, explicitly passing graphviz config paths. [This link](https://stackoverflow.com/a/70439868) helped me work through this issue.*
+*Feel free to comment out this package in requirements.txt if you want to use cyberwheel without the visualizations and debug this package installation separately.*
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -191,7 +191,7 @@ python3 -m cyberwheel train [config_file.yaml]
 ```
 which will run training with the parameters defined in the YAML config file. It will save the model during evaluations in the `models/` directory. If tracking to Weights & Biases, the model and its checkpoints will be saved on your W&B project, as well as locally. This way, you can also view real-time training progress on your W&B account.
 
-Cyberwheel allows for a wide array of configuration options as arguments that can be passed. These parameters are defined in config files stored in the `data/configs/environment` directory which you can pass when training, evaluating, or just running cyberwheel. You may also run any parameter in the command line and it will override the parameter stored in the YAML file.
+Cyberwheel allows for a wide array of configuration options as arguments that can be passed. These parameters are defined in config files stored in the `cyberwheel/data/configs/environment` directory which you can pass when training, evaluating, or just running cyberwheel. You may also run any parameter in the command line and it will override the parameter stored in the YAML file.
 
 Example:
 ```sh
@@ -205,7 +205,7 @@ You can evaluate a model given the parameters defined in the YAML file or comman
 ```sh
 python3 -m cyberwheel evaluate evaluate_rl_red_vs_rl_blue.yaml
 ```
-which will evaluate the trained red and blue models using the parameters defined in the config file. In order to evaluate, the parameter `experiment_name` must be set to a model directory that exists `cyberwheel/data/models/{experiment_name}`. If the training run was tracked to Weights & Biases, the model and its checkpoints can also be downloaded from your W&B project as well. The `experiment_name` argument, like all other arguments, can be defined in the config or overriden in the command line like so:
+which will evaluate the trained red and blue models using the parameters defined in the config file. In order to evaluate, the parameter `experiment_name` must be set to a model directory that exists `cyberwheel/data/models/{experiment_name}`. If the training run was tracked to Weights & Biases, the model and its checkpoints can also be downloaded from your W&B project as well. The `experiment_name` argument, like all other arguments, can be defined in the config or overridden in the command line like so:
 
 ```sh
 python3 -m cyberwheel evaluate evaluate_rl_red_vs_rl_blue.yaml --experiment-name TrainRedBlueAgent
@@ -266,7 +266,7 @@ and access the server on your browser to see a list of the available graphs. The
 Networks in Cyberwheel are comprised of routers, subnets, and hosts represented as nodes in a networkx graph​.
 * Routers manage network traffic between Subnets.
 * Subnets represent the broadcast domain​ and manage network traffic between Hosts.
-* Hosts are machines/devices that belong to a subnet​, and they contain list of running services with ports, CVEs, and other attributes.
+* Hosts are machines/devices that belong to a subnet​, and they contain a list of running services with ports, CVEs, and other attributes.
  ​Cyberwheel builds networks from a config YAML file.
 
 ### RL Blue Agent Design
@@ -275,11 +275,11 @@ The RL blue agent is largely focused on deploying Decoys to slow and/or stop red
 
 ### RL Red Agent Design
 
-The RL red agent is built around the Atomic Red Team techniques, with goals that are influenced by various configurations that can be configured. Different configurations can be found in `cyberwheel/data/configs/red_agent/`. Its observation space is defined by its (initially limited) view of the network as it explores. As it performs certain correct actions, this view can expand up to the size of the network.
+The RL red agent is built around the Atomic Red Team techniques, with goals that you configure. Different configurations can be found in `cyberwheel/data/configs/red_agent/`. Its observation space is defined by its (initially limited) view of the network as it explores. As it performs certain correct actions, this view can expand up to the size of the network.
 
 ### Atomic Red Team Agent Design
 
-The Atomic Red Team (ART) agent is a heuristic agent that has a set of defined rules and strategies that it can use to traverse a network, although its behavior to dictate which Hosts it chooses to target is modular. It's actions are mapped from MITRE ATT&CK Killchain Phases (Discovery, Lateral Movement, Privilege Escalation, Impact) to Atomic Red Team (ART) techniques. We've defined these techniques with a set of attributes mapped from existing cyber attack data. This allows our ART Agent to run a higher level killchain phase (i.e. discovery) on a host, and the environment will cross-reference the target host's attributes with ART Technique attributes. Techniques are valid for the attack by checking:
+The Atomic Red Team (ART) agent is a heuristic agent that has a set of defined rules and strategies that it can use to traverse a network, although its behavior to dictate which Hosts it chooses to target is modular. Its actions are mapped from MITRE ATT&CK Killchain Phases (Discovery, Lateral Movement, Privilege Escalation, Impact) to Atomic Red Team (ART) techniques. We've defined these techniques with a set of attributes mapped from existing cyber attack data. This allows our ART Agent to run a higher level killchain phase (i.e. discovery) on a host, and the environment will cross-reference the target host's attributes with ART Technique attributes. Techniques are valid for the attack by checking:
   - [x] Technique includes the target host's OS in its supported platforms
   - [x] Technique includes the killchain phase in its supported killchain phases
   - [x] Technique can exploit any CVE that is present on the target host
@@ -304,11 +304,11 @@ taskkill /F /IM ${process_name} >nul 2>&1​
 
 ### ART Campaign Design
 
-The ART Campaign is very similar to the ART Agent, but its actions are much more specific. Where the ARTAgent works with higher-level actions that may filter down into more specific actions, the ART Campaign is defined with a killchain of specific ART Techniques. ART Campaigns can be more helpful for more narrow use cases to simulate a killchain of techniques in a defined network, as well as when testing with emulation. When running emulations, we exclusively train and evaluate with ART Campaigns, due to their granular use case and transferability.
+The ART Campaign is very similar to the ART Agent, but its actions are much more specific. Where the ART Agent works with higher-level actions that may filter down into more specific actions, the ART Campaign is defined with a killchain of specific ART Techniques. ART Campaigns can be more helpful for more narrow use cases to simulate a killchain of techniques in a defined network, as well as when testing with emulation. When running emulations, we exclusively train and evaluate with ART Campaigns, due to their granular use case and transferability.
 
 ### Detectors and Alerts
 
-Red actions produce Alerts which contain information such as the actions's source host, target host, exploited services, and techniques. The blue agent has a detector layer set up with Alerts that detect any red agent action on the network. These detectors can filter out Alerts, add noise, or even create false-positive Alerts. You can use multiple detectors together to capture various red agent behavior. These alerts are then converted into the observation space which the RL agent uses to train.
+Red actions produce Alerts which contain information such as the action's source host, target host, exploited services, and techniques. The blue agent has a detector layer set up with Alerts that detect any red agent action on the network. These detectors can filter out Alerts, add noise, or even create false-positive Alerts. You can use multiple detectors together to capture various red agent behavior. These alerts are then converted into the observation space which the RL agent uses to train.
 
 ### Configurations
 
