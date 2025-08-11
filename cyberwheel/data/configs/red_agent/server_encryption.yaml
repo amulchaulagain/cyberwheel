@@ -1,3 +1,5 @@
+class: ARTAgent
+rl: false
 name: ServerEncryption
 entry_host: user01 # optional; defaults to random user
 leader: server02 # optional; defaults to random server

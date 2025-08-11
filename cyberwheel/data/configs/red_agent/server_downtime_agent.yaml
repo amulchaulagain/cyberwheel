@@ -1,3 +1,5 @@
+class: ARTAgent
+rl: false
 actions: # All actions in this killchain (pingsweep -> impact) are required.
   pingsweep:
     class: ARTPingSweep

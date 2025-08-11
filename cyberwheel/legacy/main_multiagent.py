@@ -7,7 +7,7 @@ https://github.com/ray-project/ray/blob/master/rllib/examples/multi_agent_indepe
 """
 
 from pettingzoo.test import parallel_api_test
-from cyberwheel_envs.cyberwheel_multiagent import MultiagentCyberwheel
+from cyberwheel.cyberwheel_envs.cyberwheel_multiagent import MultiagentCyberwheel
 
 import argparse
 from ray import air, tune

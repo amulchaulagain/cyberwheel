@@ -168,8 +168,6 @@ class RLBlueAgent(BlueAgent):
         self.observation.detector.reset()
         asc_return = self.action_space.select_action(action)
 
-        emulation = self.args.emulation # TODO: implement in YAMLConfig
-
         if self.args.deterministic:
             asc_return.kwargs["seed"] = self.args.seed
             self.args.seed += 1

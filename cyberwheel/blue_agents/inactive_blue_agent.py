@@ -6,7 +6,7 @@ class InactiveBlueAgent(BlueAgent):
     This agent does nothing.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, **kwargs) -> None:
         super().__init__()
 
     def act(self, action=None) -> BlueAgentResult:

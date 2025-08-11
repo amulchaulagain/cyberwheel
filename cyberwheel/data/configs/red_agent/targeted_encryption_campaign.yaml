@@ -1,7 +1,9 @@
 name: TargetedEncryption
-entry_host: user01 # optional; defaults to random user
-leader: user03 # optional; defaults to random server
+class: ARTCampaign
+entry_host: host1 # optional; defaults to random user
+leader: server4 # optional; defaults to random server
 strategy: Exfiltration # Set red agent strategy.
+rl: false
 campaign:
   - technique_name: RemoteSystemDiscovery
     atomic_test_guid: 96db2632-8417-4dbb-b8bb-a8b92ba391de

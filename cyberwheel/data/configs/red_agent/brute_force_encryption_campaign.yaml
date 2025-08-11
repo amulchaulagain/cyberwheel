@@ -1,4 +1,6 @@
 name: BruteForceEncryption
+class: ARTCampaign
+rl: false
 entry_host: random # Set an entry host. If 'random', chooses random user host.
 leader: random # Set a leader host. If 'random', chooses random server host
 strategy: Exfiltration # Set red agent strategy.

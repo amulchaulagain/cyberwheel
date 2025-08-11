@@ -26,3 +26,5 @@ campaign:
 action_space: RedDiscreteActionSpace
 entry_host: random # optional; defaults to random user
 leader: random # optional; defaults to random server
+class: RLRedCampaign
+rl: true

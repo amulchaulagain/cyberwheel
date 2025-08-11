@@ -31,6 +31,7 @@ class RLARTAgent(ARTAgent):
         super().__init__(network, args, service_mapping=args.service_mapping)
         self.observation = RedObservation(args, network)
         self.observation.add_host(self.current_host.name, on_host=True)
+        self.current_step = 0
     
     def from_yaml(self) -> None:
         contents = self.args.agent_config["red"]
@@ -94,7 +95,7 @@ class RLARTAgent(ARTAgent):
             self.handle_action(result)
         else:
             result = RedActionResults(source_host, target_host)
-        
+        self.current_step += 1
         return RedAgentResult(
             art_action, 
             source_host, 
@@ -105,6 +106,7 @@ class RLARTAgent(ARTAgent):
         )  # Returns what ARTAgent act() should, probably. Or the observation space?
 
     def handle_action(self, result: RedActionResults) -> None:
+        self.observation.update_obs(current_step=self.current_step, total_steps=self.args.num_steps)
         if not result.attack_success:
             return
         action = result.action
@@ -210,4 +212,5 @@ class RLARTAgent(ARTAgent):
         super().reset(network, service_mapping)
 
         self.action_space.reset(self.current_host.name)
-        return self.observation.reset(self.current_host.name)
+        self.current_step = 0
+        return self.observation.reset(network, self.current_host.name)

@@ -27,6 +27,9 @@
   <summary>Table of Contents</summary>
   <ol>
     <li>
+      <a href="#updates">Updates</a>
+    </li>
+    <li>
       <a href="#about-cyberwheel">About Cyberwheel</a>
       <ul>
         <li><a href="#built-with">Built With</a></li>
@@ -44,6 +47,40 @@
     <li><a href="#contacts">Contacts</a></li>
   </ol>
 </details>
+
+## Updates
+
+### New Features! (Release v2.0)
+
+With the latest major update to cyberwheel, we've implemented various new features, namely Emulation and Multi-Agent support! The first iteration of our emulator enviroment is now live, with instruction on setup located in `emulator/README.md`. Cyberwheel environments now also support the ability to train and evaluate multiple RL agents in tandem, allowing you to train an RL Red Agent against an RL Blue Agent, both learning simultaneously. A full list of all of the new features are listed in more detail below:
+
+#### Multi-agent Support
+As mentioned above, cyberwheel now supports the ability to train multiple agents in the environment. To do so, you just need to enter the red and blue agents' config filename in the 'red' and 'blue' arguments of the training configuration. You may use any of the RL Red/Blue YAML files in the `data/configs` agent directories, and the training config YAML files in `data/configs/environment` as a reference.
+
+#### Emulation
+For our emulator, we've incorporated the [FIREWHEEL](https://github.com/sandialabs/firewheel) network emulation tool by Sandia National Laboratories. More information on setting this up and getting it running can be found [here](/cyberwheel/emulator/README.md).
+
+
+#### Multi-Network Training
+We've also implemented the ability to train an agent on multiple different networks in one training run, by allowing three fixed maximum observation space sizes that an agent will train on. This sizes are:
+
+| Config Argument | Max # hosts in network | Max # of subnets in network |
+| -------- | ------- | --------- |
+| 'small' | 100 | 10 |
+| 'medium' | 1000 | 100 |
+| 'large' | 10000 |  1000 |
+
+This allows the singular policy to train a fixed obs space and action space on many different networks. During training, the network that the agent will train on in a given episode will be randomly selected from the ones listed. During the checkpoint evaluations of the training, evaluations will be run on all networks in the pool in order to judge the agent's individual performance.
+
+#### Next Steps
+
+Looking forward, there are various other features we are planning to add to Cyberwheel, many of which are listed here, along with some QoL changes:
+
+- [ ] Unit Testing
+- [ ] More modular red agent killchains
+- [ ] Detailed documentation
+- [ ] Multi-Agent Support (> 2 RL agents at a time)
+
 
 ## About Cyberwheel
 

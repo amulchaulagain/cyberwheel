@@ -31,6 +31,7 @@ class ARTCampaign(ARTAgent):
             network,
             args
         )
+        self.campaign = True
     
     def from_yaml(self) -> None:
         config = self.args.agent_config["red"]

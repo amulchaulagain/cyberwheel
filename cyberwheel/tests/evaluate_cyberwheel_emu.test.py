@@ -6,9 +6,8 @@ from cyberwheel.utils import (
     parse_override_args,
     parse_eval_override_args,
     YAMLConfig,
-    Evaluator,
-    EmulatorEvaluator,
 )
+from cyberwheel.runners import RLEvaluator
 
 """
 This script will train cyberwheel. Using the args from the config file passed, it will run an Actor-Critic RL algorithm and run training
@@ -28,7 +27,7 @@ for arg in override_args_dict:
 args.evaluation = True  # Should be set anyway?
 
 # Initialize the Evaluator object
-evaluator = EmulatorEvaluator(args)
+evaluator = RLEvaluator(args)
 
 # Configure training parameters and train
 evaluator.configure_evaluation()

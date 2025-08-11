@@ -25,9 +25,10 @@ def reward_decoy_hits(rewarder, **kwargs):
         r_recurring = 0
 
     # TODO: If 'prioritize_early_success' flag is set, else red_multiplier is 1
-    rewarder.red_agent.observation.update_obs(current_step=rewarder.current_step, total_steps=rewarder.red_agent.args.num_steps)
 
-    quad = rewarder.red_agent.observation.standalone_obs["quadrant"]
+    #rewarder.red_agent.observation.update_obs(current_step=rewarder.current_step, total_steps=rewarder.red_agent.args.num_steps)
+
+    quad = (rewarder.current_step * 4) // rewarder.red_agent.args.num_steps + 1  #rewarder.red_agent.args.num_steps rewarder.red_agent.observation.standalone_obs["quadrant"]
     red_multiplier = 10 if quad == 1 else 1
     r *= red_multiplier
 

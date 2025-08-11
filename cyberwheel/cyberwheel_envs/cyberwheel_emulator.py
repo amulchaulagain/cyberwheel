@@ -7,7 +7,7 @@ import os
 import networkx as nx
 from tqdm import tqdm
 
-from cyberwheel.cyberwheel_envs.cyberwheel_multiagent import CyberwheelMultiAgent
+from cyberwheel.cyberwheel_envs.cyberwheel_rl import CyberwheelRL
 from cyberwheel.blue_agents import RLBlueAgent
 from cyberwheel.network.network_base import Network
 from cyberwheel.red_actions.red_base import RedActionResults
@@ -18,7 +18,7 @@ from cyberwheel.emulator.actions.red_actions import EmulatePing
 from cyberwheel.utils.set_seed import set_seed
 
 
-class CyberwheelEmulator(CyberwheelMultiAgent):
+class CyberwheelEmulator(CyberwheelRL):
     metadata = {"render.modes": ["human"]}
 
     def __init__(self, args: YAMLConfig, network: Network = None, evaluation = True, networks = {}):

@@ -1,53 +1,8 @@
+name: inactive_blue_agent
+class: InactiveBlueAgent
+rl: false
 actions:
-  nothing1: # Unique name for this action
-    class: Nothing # The action class's name
-    configs: # List of config file names this action needs. Must be in cyberwheel/data/configs
-    reward:
-      immediate: 0.0 # Reward gained for executing this action.
-      recurring: 0.0 # Reward gained for on this step and all subsequent steps after taking this action.
-    action_space_args:
-      type: standalone
-  nothing2: # Unique name for this action
-    class: Nothing # The action class's name
-    configs: # List of config file names this action needs. Must be in cyberwheel/data/configs
-    reward:
-      immediate: 0.0 # Reward gained for executing this action.
-      recurring: 0.0 # Reward gained for on this step and all subsequent steps after taking this action.
-    action_space_args:
-      type: standalone
-  nothing3: # Unique name for this action
-    class: Nothing # The action class's name
-    configs: # List of config file names this action needs. Must be in cyberwheel/data/configs
-    reward:
-      immediate: 0.0 # Reward gained for executing this action.
-      recurring: 0.0 # Reward gained for on this step and all subsequent steps after taking this action.
-    action_space_args:
-      type: standalone
-  nothing4: # Unique name for this action
-    class: Nothing # The action class's name
-    configs: # List of config file names this action needs. Must be in cyberwheel/data/configs
-    reward:
-      immediate: 0.0 # Reward gained for executing this action.
-      recurring: 0.0 # Reward gained for on this step and all subsequent steps after taking this action.
-    action_space_args:
-      type: standalone
-  nothing5: # Unique name for this action
-    class: Nothing # The action class's name
-    configs: # List of config file names this action needs. Must be in cyberwheel/data/configs
-    reward:
-      immediate: 0.0 # Reward gained for executing this action.
-      recurring: 0.0 # Reward gained for on this step and all subsequent steps after taking this action.
-    action_space_args:
-      type: standalone
-  nothing6: # Unique name for this action
-    class: Nothing # The action class's name
-    configs: # List of config file names this action needs. Must be in cyberwheel/data/configs
-    reward:
-      immediate: 0.0 # Reward gained for executing this action.
-      recurring: 0.0 # Reward gained for on this step and all subsequent steps after taking this action.
-    action_space_args:
-      type: standalone
-  nothing7: # Unique name for this action
+  nothing: # Unique name for this action
     class: Nothing # The action class's name
     configs: # List of config file names this action needs. Must be in cyberwheel/data/configs
     reward:

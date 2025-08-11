@@ -1,5 +1,6 @@
 import sys
-from cyberwheel.utils import train_cyberwheel, evaluate_cyberwheel, run_cyberwheel, run_visualization_server, parse_default_override_args, parse_eval_override_args, parse_override_args, parse
+from cyberwheel.utils import parse_default_override_args, parse_eval_override_args, parse_override_args, parse
+from cyberwheel.runners import train_cyberwheel, evaluate_cyberwheel, run_cyberwheel, run_visualization_server
 def display_help():
     sys.argv = ['']
     print("---------------------------------------------------------------------------------------------------\nTraining Cyberwheel:\n\n")
