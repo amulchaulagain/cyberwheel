@@ -166,11 +166,11 @@ class EmulatorDectector(Detector):
 
             # skip hits that have already been
             if hit["id"] in self.alert_ids:
-                print(f"found duplicate decoy hit, skipping id {hit['id']}")
+                #print(f"found duplicate decoy hit, skipping id {hit['id']}")
                 continue
 
-            print("found new decoy hit, creating alert...")
-            pprint(hit)
+            #print("found new decoy hit, creating alert...")
+            #pprint(hit)
             self.alert_ids.add(hit["id"])  # save id
 
             # get the source emulator Host name

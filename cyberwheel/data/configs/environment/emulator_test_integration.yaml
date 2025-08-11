@@ -1,10 +1,12 @@
 # Evaluation Parameters
-red_agent: rl_red_campaign.yaml
-blue_agent: rl_blue_agent.yaml
+agents:
+  red: rl_red_campaign.yaml
+  blue: rl_blue_agent.yaml
+
 environment: CyberwheelEmulator
 valid_targets: servers
-red_model: MultiAgentRedModel2
-blue_model: MultiAgentBlueModel2
+red_model: MultiAgentRedModel5
+blue_model: MultiAgentBlueModel5
 campaign: true
 seed: 1
 max_decoys: 5
@@ -15,9 +17,9 @@ run: mpalb8n8
 wandb_project_name: Cyberwheel # required if download_model is true
 wandb_entity: oeschsec # required if download_model is true
 
-experiment: MultiAgentTest2
+experiment_name: MultiAgentTest5
 visualize: false
-graph_name: MultiAgentTest2
+graph_name: MultiAgentTest5
 network_config: emulator_integration_config.yaml
 decoy_config: decoy_hosts.yaml
 host_config: host_defs_services.yaml

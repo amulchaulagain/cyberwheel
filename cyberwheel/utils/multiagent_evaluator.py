@@ -13,12 +13,12 @@ from importlib.resources import files
 from tqdm import tqdm
 
 from cyberwheel.network.network_base import Network
-from cyberwheel.utils import RLPolicy, get_service_map, Trainer
+from cyberwheel.utils import RLPolicy, get_service_map, MultiAgentTrainer
 from cyberwheel.utils.visualizer import Visualizer
 from cyberwheel.utils.set_seed import set_seed
 
 
-class MultiAgentEvaluator(Trainer):
+class MultiAgentEvaluator(MultiAgentTrainer):
     def __init__(self, args):
         super().__init__(args)
         if self.args.download_model:
@@ -28,7 +28,7 @@ class MultiAgentEvaluator(Trainer):
             )
 
     def configure_evaluation(self):
-        if self.deterministic:
+        if self.args.deterministic:
             set_seed(self.seed)
             torch.backends.cudnn.deterministic = True
         else:
@@ -57,13 +57,14 @@ class MultiAgentEvaluator(Trainer):
 
             network = Network.create_network_from_yaml(network_config)
             network_name = network.name
-            self.networks[network_name] = network
+            self.networks[network_name] = [network]
 
             print("Mapping attack validity to hosts...", end=" ")
             self.args.service_mapping[network_name] = get_service_map(network)
             print("done")
         
         self.args.agent_config = {}
+        #print(self.networks)
 
         for agent_type in self.args.agents:
             self.args.agent_config[agent_type] = {}
@@ -76,7 +77,7 @@ class MultiAgentEvaluator(Trainer):
 
 
 
-        self.env = self.make_env(0)()
+        self.env = self.make_env(0, evaluation=True, net_name=list(self.networks.keys())[0])()
         self.policy = {}
 
     def load_models(self):
@@ -148,10 +149,10 @@ class MultiAgentEvaluator(Trainer):
     def evaluate(self):
         for agent in self.agents:
             self.action_mask[agent] = torch.zeros(self.agents[agent]["max_action_space_size"], dtype=torch.bool).to(self.device)
-            self.rewards[agent] = [0] * self.args.eval_episodes
+            self.rewards[agent] = [0] * self.args.num_episodes
 
         self.start_time = time.time()
-        for episode in range(self.args.eval_episodes):
+        for episode in range(self.args.num_episodes):
             obs, _ = self.env.reset()
             for step in range(self.args.num_steps):
                 action = None
@@ -182,8 +183,9 @@ class MultiAgentEvaluator(Trainer):
 
                 actions_df = pd.DataFrame(actions_df)
                 actions_df.to_csv(self.log_file, mode='a', header = os.path.getsize(self.log_file) == 0, index=False)
+                #return # TODO
 
-
+"""
     def evaluate(self):
         
         for episode in tqdm(range(self.args.num_episodes)):
@@ -256,3 +258,4 @@ class MultiAgentEvaluator(Trainer):
         #self.total_reward = sum(self.episode_rewards)
         #self.episodes = len(self.episode_rewards)
         print(f"Total Time Elapsed: {self.total_time}")
+"""

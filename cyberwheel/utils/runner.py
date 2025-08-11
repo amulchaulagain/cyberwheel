@@ -4,7 +4,7 @@ import time
 from importlib.resources import files
 from tqdm import tqdm
 
-from cyberwheel.cyberwheel_envs import Cyberwheel
+from cyberwheel.cyberwheel_envs.cyberwheel import Cyberwheel
 from cyberwheel.network.network_base import Network
 from cyberwheel.utils import get_service_map
 

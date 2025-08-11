@@ -17,8 +17,8 @@ class EmulateDataEncryptedForImpact(EmulateRedAction):
 
     name = "Data Encrypted for Impact"
 
-    def __init__(self, src_host, target_host):
-        super().__init__(src_host, target_host)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.name = EmulateDataEncryptedForImpact.name
 
     def build_emulator_cmd(
@@ -56,27 +56,3 @@ class EmulateDataEncryptedForImpact(EmulateRedAction):
         action_cmd = " ".join(action_cmd_arr)
         shell_cmd = self.prefix_emulator_cmd(action_cmd)
         return shell_cmd
-
-    def emulator_execute(self, shell_cmd: str):
-        """
-        Execute attack in the emulator.
-
-        Argrument:
-            shell_cmd - shell command to execute a port scan in emulator host VM.
-
-        Returns:
-            RedActionResults
-        """
-
-        #print(f"executing shell command: {shell_cmd}")
-        result = self.run_cmd(shell_cmd)
-
-        if result.returncode != 0:
-            self.action_results.attack_success = False
-            #print(result.stderr)
-        else:
-            self.action_results.attack_success = True
-            # print("Attack successful. Output is suppressed.")
-            #print(result.stdout)
-
-        return self.action_results

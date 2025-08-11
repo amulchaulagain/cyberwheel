@@ -1,4 +1,2 @@
-from cyberwheel.cyberwheel_envs.cyberwheel import Cyberwheel
-from cyberwheel.cyberwheel_envs.cyberwheel_rl import CyberwheelRL
-from cyberwheel.cyberwheel_envs.cyberwheel_emulator import CyberwheelEmulator
-from cyberwheel.cyberwheel_envs.cyberwheel_multiagent import CyberwheelMultiAgent
+from cyberwheel.cyberwheel_envs.cyberwheel_rl import CyberwheelRL, Cyberwheel
+from cyberwheel.cyberwheel_envs.cyberwheel_emulator import CyberwheelEmulator, CyberwheelMultiAgent

@@ -19,10 +19,10 @@ class EmulatePing(EmulateRedAction):
 
     name = "Remote System Discovery"
 
-    def __init__(self, src_host, target_host, network: Network):
-        super().__init__(src_host, target_host)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.name = EmulatePing.name
-        self.network = network
+        self.network = kwargs.get("network")
         self.host = None
 
     def build_emulator_cmd(self):
@@ -50,14 +50,10 @@ class EmulatePing(EmulateRedAction):
 
         # Execute ping sweep in emulator VM
         #print(f"executing shell command: {shell_cmd}")
-        result = self.run_cmd(shell_cmd)
+        result = super().emulator_execute(shell_cmd=shell_cmd)
 
         # Capture output after executing command
-        if result.returncode != 0:
-            self.action_results.attack_success = False
-            #print(result.stderr)
-        else:
-            self.action_results.attack_success = True
+        if self.action_results.attack_success:
             discovered_ip = result.stdout.strip()
             #print("discovered a new host: ", discovered_ip)
             self.action_results.add_host(self.network.get_node_from_ip(discovered_ip))

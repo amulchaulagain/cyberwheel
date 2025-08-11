@@ -30,7 +30,8 @@ class MultiAgentHandler:
                 { 'params': list(self.agents[agent]["policy"].actor.parameters()),  'lr': float(self.args.actor_lr),  'eps': 1e-5 },
                 { 'params': list(self.agents[agent]["policy"].critic.parameters()), 'lr': float(self.args.critic_lr), 'eps': 1e-5 },
             ])
-            self.agents[agent]["scheduler"] = optim.lr_scheduler.CosineAnnealingWarmRestarts(self.agents[agent]["optimizer"], T_0=int(self.args.restart_T0), T_mult=int(self.args.restart_Tmult), eta_min=float(self.args.min_lr), last_epoch=-1) if self.args.anneal_lr == 'cosine_restarts' else None
+            if self.args.anneal_lr == 'cosine_restarts':
+                self.agents[agent]["scheduler"] = optim.lr_scheduler.CosineAnnealingWarmRestarts(self.agents[agent]["optimizer"], T_0=int(self.args.restart_T0), T_mult=int(self.args.restart_Tmult), eta_min=float(self.args.min_lr), last_epoch=-1) if self.args.anneal_lr == 'cosine_restarts' else None
             # TODO: Reconfigure LR
 
 
@@ -194,8 +195,14 @@ class MultiAgentHandler:
             nn.utils.clip_grad_norm_(self.agents[agent]["policy"].parameters(), self.args.max_grad_norm)
             self.agents[agent]["optimizer"].step()
 
-            if self.args.anneal_lr == 'cosine_restarts':
+            if self.args.anneal_lr == 'cosine_restarts': # cosine lr annealing, resetting at each evaluation/checkpoint
                 self.agents[agent]["scheduler"].step(update)
+            else: # linear lr annealing
+                frac = 1.0 - (update - 1.0) / self.args.num_updates
+                lrnow = frac * self.args.learning_rate
+                self.optimizer.param_groups[0]["lr"] = lrnow
+
+
     
     def calculate_explained_variance(self):
         for agent in self.agents:

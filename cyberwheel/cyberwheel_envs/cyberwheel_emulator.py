@@ -1,92 +1,62 @@
 from importlib.resources import files
 from gymnasium import spaces
 import gymnasium as gym
-from typing import Dict, List, Iterable
 import yaml
 import numpy as np
-import importlib
-import torch
-import time
 import os
+import networkx as nx
+from tqdm import tqdm
 
-from .cyberwheel import Cyberwheel
-from cyberwheel.blue_agents import RLBlueAgent, InactiveBlueAgent
-from cyberwheel.detectors.alert import Alert
+from cyberwheel.cyberwheel_envs.cyberwheel_multiagent import CyberwheelMultiAgent
+from cyberwheel.blue_agents import RLBlueAgent
 from cyberwheel.network.network_base import Network
-from cyberwheel.network.host import Host
-from cyberwheel.red_agents import RLARTAgent, ARTAgent, ARTCampaign
 from cyberwheel.red_actions.red_base import RedActionResults
 from cyberwheel.utils import YAMLConfig
-from cyberwheel.observation.blue_observation import BlueObservation
-from cyberwheel.detectors.handler import DetectorHandler
 from cyberwheel.emulator.control import EmulatorControl
 from cyberwheel.red_agents import EmulatorRLRedCampaign
 from cyberwheel.emulator.actions.red_actions import EmulatePing
 from cyberwheel.utils.set_seed import set_seed
 
 
-class CyberwheelEmulator(gym.Env, Cyberwheel):
+class CyberwheelEmulator(CyberwheelMultiAgent):
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, args: YAMLConfig, network: Network = None, networks: dict = {}):
-        super().__init__(args, network=network)
+    def __init__(self, args: YAMLConfig, network: Network = None, evaluation = True, networks = {}):
+        super().__init__(args, network=network, evaluation=evaluation)
+
         self.colors = {"blue": '\033[94m', 'red': '\033[91m', 'end': '\033[0m'}
-        self.networks = networks
-        self.evaluation = args.evaluation
-
-        reward_function = args.reward_function
-        rfm = importlib.import_module("cyberwheel.reward")
-        self.reward_calculator = getattr(rfm, reward_function)(
-            args,
-            red_agent=self.red_agent, 
-            blue_agent=self.blue_agent,
-            valid_targets=self.args.valid_targets,
-            network=self.network)
-
         self.emulator = EmulatorControl(
             network=network,
             network_config_name=args.network_config,
         )
-
         self.initialize_network()
         self.initialize_agents()
+        nx.write_network_text(self.network.graph, sources=list(self.network.subnets.keys())) #self.network.graph.nodes["core_router"]) # TODO
 
 
     def initialize_network(self):
-        print("Initializing Hosts...")
-
+        
         # get host IP addresses from emulator
         file_path = files("cyberwheel.emulator.configs").joinpath(f"{self.network.name}_host_ips.yaml")
-        initialize_ips = True
         if os.path.exists(file_path):
             with open(file_path, 'r') as file:
                 host_ips = yaml.safe_load(file)
-            initialize_ips = host_ips == None
-            host_ips = {} if initialize_ips else host_ips
+            host_ips = {} if not host_ips else host_ips
         else:
             host_ips = {}
 
+        init_host_pbar = tqdm(self.network.hosts.items())
+
         if self.network.hosts.keys() != host_ips.keys():
-            #print("YAML does not match Network, reinitializing IPs")
-            initialize_ips = True
-        
-        for host_name, h in self.network.hosts.items():
-            if host_name in host_ips and not initialize_ips: # If host found in config
-                emu_host_ip = host_ips[host_name]
-            else: # Otherwise add host_name and IP to config
-                emu_host_ip = self.emulator.get_ip_address(host_name.replace("_", "-"))
-                host_ips[host_name] = emu_host_ip 
-            h.set_ip_from_str(emu_host_ip)
-            #print(f"Retried and saved emulator ip address for {h.name}.")
-        
-        if initialize_ips:
-            #print(file_path)
+            print("Fetching IP Addresses from VM hosts and saving to cache...")
+            [h.set_ip_from_str(self.emulator.get_ip_address(host_name.replace("_", "-"))) for host_name, h in init_host_pbar]
             with open(file_path, 'w') as f:
                 yaml.dump(host_ips, f, default_flow_style=False)
+        else:
+            print("Matching config found in cache, copying IP addresses...")
+            [h.set_ip_from_str(host_ips[host_name]) for host_name, h in init_host_pbar]
 
         self.emulator.init_hosts()
-
-        print("done")
 
 
     def initialize_agents(self):
@@ -148,7 +118,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
 
         # TODO: Use the following action metadata to execute the correct command in emulator
         #self.red_agent.handle_network_change()
-        print(self.red_agent.observation.obs.keys())
+        #print(self.red_agent.observation.obs.keys())
         red_agent_result = self.red_agent.select_action(action["red"])
 
         # red_action_result, red_action_type = self.red_agent.run_action(red_agent_result.target_host, red_agent_result.action)
@@ -161,11 +131,11 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             red_action_result = RedActionResults(red_action_src, red_action_dst)
             red_action_result.attack_success = True
             red_action_success = True
-        elif red_agent_result.success:
+        elif red_agent_result.success: # TODO
             red_action_result = self.emulator.run_red_action(
                 red_action_name, red_action_src, red_action_dst, id=self.current_step
             )  # TODO
-            red_action_success = red_action_result.attack_success
+            red_action_success = red_action_result.attack_success            
         else:
             red_action_result = RedActionResults(
                 red_agent_result.src_host, red_agent_result.target_host
@@ -212,7 +182,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
 
         self.current_step += 1
 
-        # TODO: Reset Detector/Obs?
+        #nx.write_network_text(self.network.graph, sources= ["core_router", "user_subnet"]) #self.network.graph.nodes["core_router"])
 
         return (
             {
@@ -225,6 +195,7 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
             {
                 "blue_action": blue_action_name,
                 "blue_action_src": blue_action_src,
+                "blue_action_dst": blue_agent_result.id,
                 "red_action": red_action_name,
                 "red_action_src": red_action_src.name,
                 "red_action_dst": red_action_dst.name,
@@ -260,3 +231,10 @@ class CyberwheelEmulator(gym.Env, Cyberwheel):
     @property
     def blue_action_mask(self):
         return self.blue_agent.action_space.get_action_mask()
+
+    @property
+    def action_mask(self):
+        return {
+            "blue": self.blue_agent.action_space.get_action_mask(),
+            "red": self.red_agent.action_space.get_action_mask(self.red_agent.current_host.name)
+        }

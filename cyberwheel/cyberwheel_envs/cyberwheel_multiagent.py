@@ -10,6 +10,7 @@ from cyberwheel.network.network_base import Network
 from cyberwheel import red_agents, blue_agents
 from cyberwheel.utils import YAMLConfig, HybridSetList
 from cyberwheel.utils.set_seed import set_seed
+from cyberwheel.reward import RLReward
 
 import pandas as pd
 import random
@@ -26,7 +27,6 @@ class CyberwheelMultiAgent(gym.Env, Cyberwheel):
         network: Network = None,
         evaluation: bool = False,
         networks : dict = {},
-        multiagent: bool = False
     ):
         """
         The CyberwheelRL class is used to define the Cyberwheel environment. It allows you to use a YAML
@@ -43,18 +43,19 @@ class CyberwheelMultiAgent(gym.Env, Cyberwheel):
             - Default: None
         """
         super().__init__(args, network=network)
-        self.evaluation = evaluation
+
+        if len(networks) == 0:
+            networks = {network.name: network}
         self.networks = networks
+        self.evaluation = evaluation
 
-        reward_function = args.reward_function
-        rfm = importlib.import_module("cyberwheel.reward")
-
-        self.reward_calculator = getattr(rfm, reward_function)(
-            self.args,
-            self.red_agent, 
-            self.blue_agent,
-            self.args.valid_targets,
-            self.network)
+        self.reward_calculator = RLReward(
+            args,
+            red_agent=self.red_agent, 
+            blue_agent=self.blue_agent,
+            valid_targets=self.args.valid_targets,
+            network=self.network
+        )
     
     def initialize_agents(self) -> None:
         max_net = self.args.network_size_compatibility

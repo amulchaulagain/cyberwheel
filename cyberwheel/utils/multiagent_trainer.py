@@ -41,9 +41,9 @@ class MultiAgentTrainer:
 
         def _init():
             if evaluation: # Only evaluate on one network at a time
-                env = self.env(self.args, network=self.networks[net_name][rank], evaluation=True, networks={net_name: self.networks[net_name][rank]}, multiagent=True)
+                env = self.env(self.args, network=self.networks[net_name][rank], evaluation=True, networks={net_name: self.networks[net_name][rank]})
             else:
-                env = self.env(self.args, network=random.choice(list(self.networks.values()))[rank], evaluation=False, networks={name: net[rank] for name, net in self.networks.items()}, multiagent=True)
+                env = self.env(self.args, network=random.choice(list(self.networks.values()))[rank], evaluation=False, networks={name: net[rank] for name, net in self.networks.items()})
 
             for agent in self.agents:
                 if not self.args.agent_config[agent]["rl"] or not self.define_vars:

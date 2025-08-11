@@ -1,5 +1,5 @@
 """
-Utilit funcions for emulator actions.
+Utility funcions for emulator actions.
 """
 
 

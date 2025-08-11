@@ -88,7 +88,7 @@ class EmulatorRLRedCampaign(RLRedCampaign):
         if target_host not in self.observation.obs:
             return False
         host_view = self.observation.obs[target_host]
-        print(f"On Host: {host_view['on_host']}\nSweeped: {host_view['sweeped']}\nScanned: {host_view['scanned']}\nDiscovered: {host_view['discovered']}\nEscalated: {host_view['escalated']}\nImpacted: {host_view['impacted']}\n")
+        #print(f"On Host: {host_view['on_host']}\nSweeped: {host_view['sweeped']}\nScanned: {host_view['scanned']}\nDiscovered: {host_view['discovered']}\nEscalated: {host_view['escalated']}\nImpacted: {host_view['impacted']}\n")
         if action == RemoteSystemDiscovery:  # valid if host["sweeped"] == False
             return not host_view["sweeped"]
         elif (

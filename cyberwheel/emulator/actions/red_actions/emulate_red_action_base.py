@@ -29,12 +29,17 @@ class EmulateRedAction(ARTAction, ABC):
 
     emu_config = read_config(EMULATOR_CONFIG_PATH, EMULATOR_CONFIG)
 
+    def __init__(self, src_host=None, target_host=None, network=None, ssh_pool=None):
+        super().__init__(src_host=src_host, target_host=target_host)
+        self.src_host = src_host
+        self.target_host = target_host
+        self.network = network
+
     @abstractmethod
     def build_emulator_cmd(self) -> str | type[NotImplementedError]:
         """Construct the full emulator command."""
         raise NotImplementedError
 
-    @abstractmethod
     def emulator_execute(
         self, shell_cmd: str
     ) -> RedActionResults | type[NotImplementedError]:
@@ -47,7 +52,10 @@ class EmulateRedAction(ARTAction, ABC):
         Returns
             RedActionResults
         """
-        raise NotImplementedError
+        result = self.run_cmd(shell_cmd)
+        self.action_results.attack_success = result.returncode == 0
+        return result
+
 
     def prefix_emulator_cmd(self, action_cmd: str) -> str:
         """
@@ -61,6 +69,8 @@ class EmulateRedAction(ARTAction, ABC):
         """
         host_user = EmulateRedAction.emu_config["firewheel"]["host"]["username"]
         host_pwd = EmulateRedAction.emu_config["firewheel"]["host"]["password"]
+
+        self.action_results.action_cmd = f"{self.src_host.name} > {action_cmd}"
 
         # Ensure hostname is replaced with dash
         src_host_name = self.src_host.name.replace("_", "-")

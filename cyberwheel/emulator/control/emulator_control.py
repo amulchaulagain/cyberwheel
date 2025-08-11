@@ -40,8 +40,12 @@ class EmulatorControl:
     """
 
     emu_config = read_config(str(EMULATOR_CONFIG_PATH), EMULATOR_CONFIG)
-    host_username = emu_config["firewheel"]["host"]["username"]
-    host_password = emu_config["firewheel"]["host"]["password"]
+    HOST_USERNAME = emu_config["firewheel"]["host"]["username"]
+    HOST_PASSWORD = emu_config["firewheel"]["host"]["password"]
+    ELASTIC_USERNAME = emu_config["elastic"]["username"]
+    ELASTIC_PASSWORD = emu_config["elastic"]["password"]
+    SIEM_HOSTNAME = emu_config["firewheel"]["siem"]["hostname"]
+    KIBANA_PORT = emu_config["kibana"]["port"]
 
     def __init__(self, network: Network, network_config_name: str):
         self.network = network
@@ -53,23 +57,17 @@ class EmulatorControl:
 
     def init_hosts(self) -> bool:
         """Setup hosts and run scripts before an experiment begins."""
-
-        # print("Initializing Hosts...")
-
         # Action #1: Enroll non-decoy hosts' agent to fleet
         # print("\tEnrolling elastic agents into fleet server...")
         all_host_names = self._get_host_names()
         decoy_names = self._get_decoy_host_names()
-        non_decoy_names = [name for name in all_host_names if name not in decoy_names]
+        #non_decoy_names = all_host_names - decoy_names # [name for name in all_host_names if name not in decoy_names]
         enrolled_host_names = self._get_enrolled_host_names()
         successfully_enrolled = True
 
-        for host_name in non_decoy_names:
-            if host_name not in enrolled_host_names:
+        for host_name in all_host_names:
+            if host_name not in enrolled_host_names and host_name not in decoy_names:
                 successfully_enrolled = self._enroll_agent_to_fleet(host_name)
-            else:
-                # print(f"{host_name}'s agent is already enrolled into fleet, skipping.")
-                pass
 
         if not successfully_enrolled:
             print("Error with enrolling agent(s) into fleet.")
@@ -106,8 +104,8 @@ class EmulatorControl:
 
                 # random pick decoy within subnet
                 decoy_names = self._get_decoy_host_names()
-                random_int = random.randint(0, len(decoy_names) - 1)
-                random_decoy_hostname = decoy_names[random_int]
+                #random_int = random.randint(0, len(decoy_names) - 1)
+                random_decoy_hostname = decoy_names.pop()
 
                 shell_cmd = action.build_emulator_cmd(random_decoy_hostname)
                 deploy_return = action.emulator_execute(shell_cmd)
@@ -127,9 +125,10 @@ class EmulatorControl:
                 if random_decoy_hostname not in enrolled_host_names:
                     self._enroll_agent_to_fleet(random_decoy_hostname)
                 else:
-                    print(
-                        f"{random_decoy_hostname}'s agent is already enrolled into fleet, skipping.\n"
-                    )
+                    #print(
+                    #    f"{random_decoy_hostname}'s agent is already enrolled into fleet, skipping.\n"
+                    #)
+                    pass
 
                 return BlueAgentResult(action_name, deploy_return.id, deploy_return.success, deploy_return.recurring, target=deploy_return.host)
 
@@ -141,7 +140,7 @@ class EmulatorControl:
             case "nothing":
                 return BlueAgentResult(action_name, "nothing", False, 0)
             case _:
-                print("ERROR: This action does not exist!")
+                #print("ERROR: This action does not exist!")
                 return BlueAgentResult(action_name, "invalid", False, 0)
 
     def run_red_action(
@@ -186,10 +185,10 @@ class EmulatorControl:
                     end_host=options["end_host"],
                     ip_range=ip_range,
                 )
-                action_results = action.emulator_execute(shell_cmd)
+                action.emulator_execute(shell_cmd)
 
                 if not self._host_has_multi_interfaces(src_host):
-                    return action_results
+                    return action.action_results
 
                 # Host has another interface defined in config and will ping each connected host
                 interfaces = self.net_config["interfaces"]
@@ -217,25 +216,29 @@ class EmulatorControl:
             case "Network Service Discovery":
                 action = EmulatePortScan(src_host=src_host, target_host=dst_host)
                 shell_cmd = action.build_emulator_cmd()
-                return action.emulator_execute(shell_cmd)
+                action.emulator_execute(shell_cmd)
+                return action.action_results
             case "Sudo and Sudo Caching":
                 action = EmulateSudoandSudoCaching(
                     src_host=src_host, target_host=dst_host
                 )
                 shell_cmd = action.build_emulator_cmd()
-                return action.emulator_execute(shell_cmd)
+                action.emulator_execute(shell_cmd)
+                return action.action_results
             case "Data Encrypted for Impact":
                 action = EmulateDataEncryptedForImpact(
                     src_host=src_host, target_host=dst_host
                 )
                 shell_cmd = action.build_emulator_cmd()
-                return action.emulator_execute(shell_cmd)
+                action.emulator_execute(shell_cmd)
+                return action.action_results
             case "LinuxLateralMovement":
                 action = EmulateLateralMovement(src_host=src_host, target_host=dst_host)
                 shell_cmd = action.build_emulator_cmd()
-                return action.emulator_execute(shell_cmd)
+                action.emulator_execute(shell_cmd)
+                return action.action_results
             case _:
-                print("ERROR: This attack does not exist.")
+                #print(f"ERROR: This attack {action_name} does not exist.")
                 results = RedActionResults(src_host=src_host, target_host=dst_host)
                 results.attack_success = False
                 return results
@@ -250,7 +253,9 @@ class EmulatorControl:
 
         # print("\n")
         alerts = self.detector.obs()
-        print(f"SIEM: {len(alerts)} New Alerts")
+        print(f"{len(alerts)} New SIEM Alerts:")
+        for alert in alerts:
+            print(f"Activity Detected on Host [{alert.src_host.name}]")
         return alerts
 
     def get_ip_address(self, host_name: str) -> str:
@@ -275,7 +280,7 @@ class EmulatorControl:
         )
 
         if result.returncode != 0:
-            print(f"ERROR: {result.stderr}")
+            #print(f"ERROR: {result.stderr}")
             return ""
         elif result.stdout == "":
             return ""
@@ -285,29 +290,15 @@ class EmulatorControl:
 
     def _get_host_names(self) -> List[str]:
         """Returns list of all host names."""
-
-        hosts = self.net_config["hosts"]
-        host_names = []
-
         # Firewheel host names cannot have "_" and are replaced with "-"
         # when creating the VM.
-        for name, _ in hosts.items():
-            host_names.append(name.replace("_", "-"))
-
-        return host_names
+        return {name.replace("_", "-") for name in self.net_config["hosts"]}
 
     def _get_decoy_host_names(self) -> List[str]:
         """Returns list of all decoy host names."""
-
-        decoys = self.net_config["decoys"]
-        decoy_names = []
-
         # Firewheel host names cannot have "_" and are replaced with "-"
         # when creating the VM.
-        for name in decoys:
-            decoy_names.append(name.replace("_", "-"))
-
-        return decoy_names
+        return {name.replace("_", "-") for name in self.net_config["decoys"]}
 
     def _enroll_agent_to_fleet(self, host_name: str):
         """Enroll elastic agent to fleet server."""
@@ -335,7 +326,7 @@ class EmulatorControl:
         )
 
         if result.returncode != 0:
-            print(f"ERROR: {result.stderr}")
+            #print(f"ERROR: {result.stderr}")
             return False
         else:
             print(f"Successfully enrolled {host_name}'s elastic agent to fleet.")
@@ -367,17 +358,23 @@ class EmulatorControl:
             return True
 
         return False
+    
 
     def _get_enrolled_host_names(self) -> list[str]:
         """Retun a list of agent hostnames enrolled in fleet"""
+        # Calls the Elastic API within the SIEM host, to retrieve hostnames enrolled in the SIEM
+        cmd = f"""curl -X GET http://{self.ELASTIC_USERNAME}:{self.ELASTIC_PASSWORD}@localhost:{self.KIBANA_PORT}/api/fleet/agents"""
 
-        siem_hostname = EmulatorControl.emu_config["firewheel"]["siem"]["hostname"]
-        elastic_username = EmulatorControl.emu_config["elastic"]["username"]
-        elastic_password = EmulatorControl.emu_config["elastic"]["password"]
-        kibana_port = EmulatorControl.emu_config["kibana"]["port"]
+        result = self.run_command_on_host(self.SIEM_HOSTNAME, cmd)
+        if not result:
+            return []   # print(result.stdout)
 
-        cmd = f"""sshpass -p {self.host_password} firewheel ssh {self.host_username}@{siem_hostname} \
-        'curl -X GET http://{elastic_username}:{elastic_password}@localhost:{kibana_port}/api/fleet/agents'
+        resDict = json.loads(result.stdout)
+        return [item["local_metadata"]["host"]["name"] for item in resDict["items"]]
+
+    def run_command_on_host(self, hostname, cmd):
+        cmd = f"""sshpass -p {self.HOST_PASSWORD} firewheel ssh {self.HOST_USERNAME}@{hostname} \
+        '{cmd}'
         """
 
         result = subprocess.run(
@@ -390,16 +387,6 @@ class EmulatorControl:
         )
 
         if result.returncode != 0:
-            print(f"ERROR: {result.stderr}")
-            return []
-
-        # print(result.stdout)
-        resDict = json.loads(result.stdout)
-        items = resDict["items"]
-
-        hostnames = []
-        for item in items:
-            hostname = item["local_metadata"]["host"]["name"]
-            hostnames.append(hostname)
-
-        return hostnames
+            #print(f"ERROR: {result.stderr}")
+            return None
+        return result
