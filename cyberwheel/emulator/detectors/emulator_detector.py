@@ -7,17 +7,18 @@ from cyberwheel.detectors.alert import Alert
 from cyberwheel.detectors.detector_base import Detector
 from cyberwheel.emulator.utils import read_config
 from cyberwheel.network.host import Host, HostType
-from cyberwheel.network.subnet import Subnet
+from cyberwheel.network.network_base import Network
 from pprint import pprint
 from subprocess import CompletedProcess
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, cast
+from importlib.resources import files
 import json
-import pathlib
 import re
 import subprocess
 
 # Librares for testing
 # from cyberwheel.network.router import Router
+# from cyberwheel.network.subnet import Subnet
 
 # TEST variables
 # decoy_ips = ["192.168.0.5", "192.168.0.6"]
@@ -25,11 +26,10 @@ import subprocess
 # subnet = Subnet(name="192.168.0.0", ip_range="192.168.0.0/24", router=router)
 
 # Paths and file locations
-DIR_PATH = pathlib.Path(__file__).parent.resolve()
-EMULATOR_CONFIG_PATH = f"{DIR_PATH}/../"
-NETWORK_CONFIG_PATH = f"{DIR_PATH}/../../resources/configs/network"
+NETWORK_CONFIG_PATH = files("cyberwheel.data.configs").joinpath("network")
+EMULATOR_CONFIG_PATH = files("cyberwheel.emulator").joinpath("configs")
 EMULATOR_CONFIG = "emulator_config.yaml"
-QUERY_FILE = f"query.txt"
+QUERY_FILE = files("cyberwheel.emulator.detectors").joinpath("query.txt")
 
 
 class EmulatorDectector(Detector):
@@ -38,13 +38,12 @@ class EmulatorDectector(Detector):
     The detector, Sysmon, fowards information to the SIEM.
     """
 
-    emu_config = read_config(EMULATOR_CONFIG_PATH, EMULATOR_CONFIG)
+    emu_config = read_config(str(EMULATOR_CONFIG_PATH), EMULATOR_CONFIG)
 
-    def __init__(self, network_config: str, subnet: Subnet):
-        self.network_config = read_config(NETWORK_CONFIG_PATH, network_config)
-
-        # For now, assuming detector detects for a single subnet
-        self.subnet = subnet
+    def __init__(self, network_config: str, network: Network):
+        self.network_config = read_config(str(NETWORK_CONFIG_PATH), network_config)
+        self.network = network
+        self.alert_ids = set()  # Keep history of alerts
 
     def query_to_json(self, result: CompletedProcess[str]) -> Any | None:
         """Converts SIEM query reponse to JSON."""
@@ -88,11 +87,11 @@ class EmulatorDectector(Detector):
 
         cmd_arr = [
             f"sshpass -p {siem_pwd} firewheel ssh {siem_user}@{siem_hostname}",
-            f"$(cat {DIR_PATH / QUERY_FILE})",
+            f"$(cat {QUERY_FILE})",
         ]
         cmd = " ".join(cmd_arr)
-        print("Querying SIEM logs in the last 5 minutes...")
-        print(f"{cmd}\n")
+        # print("Querying SIEM logs in the last 5 minutes...")
+        # print(f"{cmd}\n")
 
         result = subprocess.run(
             cmd,
@@ -116,9 +115,10 @@ class EmulatorDectector(Detector):
     def parse_query_response(self, response: Dict[Any, Any]) -> List[Dict[Any, Any]]:
         hits = response["hits"]["hits"]
         parsed_hits = []
-        print("parsing logs into hits...\n")
+        # print("parsing logs into hits...\n")
 
         for hit in hits:
+            # pprint(hit)
             id = hit["_id"]
             source = hit["_source"]
             timestamp = source["@timestamp"]
@@ -157,27 +157,67 @@ class EmulatorDectector(Detector):
             dst_ip = hit["target_ip"]
 
             # skip hits with same target ip (we're assuming its from in the same action)
-            if prev_dst_ip == dst_ip:
+            # if prev_dst_ip == dst_ip:
+            #    continue
+
+            # if 'ccencrypt' in hit["command"]:
+            #    print("Impact Detected:")
+            #    pprint(hit)
+
+            # skip hits that have already been
+            if hit["id"] in self.alert_ids:
+                #print(f"found duplicate decoy hit, skipping id {hit['id']}")
                 continue
 
-            print("found decoy hit, creating a new alert...")
-            pprint(hit)
+            #print("found new decoy hit, creating alert...")
+            #pprint(hit)
+            self.alert_ids.add(hit["id"])  # save id
 
-            src_host = Host(name="src_host", subnet=self.subnet, host_type=None)
-            src_host.set_ip_from_str(hit["src_ip"])
+            # get the source emulator Host name
+            src_emu_hostname = hit["hostname"]
+            # hosts defined with underscores in config file (dashes used in emulator)
+            src_hostname = src_emu_hostname.replace("-", "_")
 
-            dst_host_type = HostType()
-            dst_host_type.decoy = True
-            dst_host = Host(
-                name="dst_host", subnet=self.subnet, host_type=dst_host_type
-            )
-            dst_host.set_ip_from_str(dst_ip)
+            decoys: list[Host] = self.network.decoys_reserve
+            decoy_hostnames: list[str] = [decoy.name for decoy in decoys]
 
+            # Check if the src_host is a decoy itself
+            src_host = None
+            if src_hostname in decoy_hostnames:
+                src_host = [decoy for decoy in decoys if decoy.name == src_hostname][0]
+            else:
+                src_host = self.network.get_node_from_name(src_hostname)
+
+            # Get the destination (target) decoy Host object
+            target_decoy_host = [
+                decoy for decoy in decoys if decoy.ip_address == dst_ip
+            ]
+
+            # Ensure decoy Host exist in network topology.
+            # If no decoy Host, create a temporary Host to create the Alert.
+            if len(target_decoy_host) > 0 and isinstance(target_decoy_host[0], Host):
+                target_decoy_host = target_decoy_host[0]  # assume first option
+            else:
+                # print(
+                #    f"Cannot find decoy Host with {dst_ip} in network topology, creating Host for alert."
+                # )
+                dst_host_type = HostType()
+                dst_host_type.decoy = True
+                temp_dst_host = Host(
+                    name="dst_host",
+                    subnet=next(iter(self.network.subnets.values())),
+                    host_type=dst_host_type,
+                )
+                temp_dst_host.set_ip_from_str(dst_ip)
+                target_decoy_host = temp_dst_host
+
+            # Create the Alert
             new_alert = Alert()
-            new_alert.add_src_host(src_host)
-            new_alert.add_dst_host(dst_host)
+            new_alert.add_src_host(cast(Host, src_host))
+            new_alert.add_dst_host(target_decoy_host)
             alerts.append(new_alert)
 
+            # Keep track of previous dst_ip for comparison
             prev_dst_ip = dst_ip
 
         return alerts

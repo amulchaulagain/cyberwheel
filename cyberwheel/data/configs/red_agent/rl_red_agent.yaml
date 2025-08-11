@@ -32,3 +32,5 @@ actions: # All actions in this killchain (pingsweep -> impact) are required.
 action_space: RedDiscreteActionSpace
 entry_host: host1 # optional; defaults to random user
 leader: server1 # optional; defaults to random server
+class: RLARTAgent
+rl: true

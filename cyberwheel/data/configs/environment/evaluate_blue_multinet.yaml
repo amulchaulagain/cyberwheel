@@ -1,0 +1,30 @@
+# Evaluation Parameters
+agents:
+  red: art_agent.yaml
+  blue: rl_blue_agent.yaml
+environment: CyberwheelRL
+valid_targets: leader
+max_decoys: 5
+network_size_compatibility: small
+campaign: false
+seed: 1
+deterministic: false
+
+checkpoint: agent
+download_model: false
+run: # required if download_model is true
+wandb_project_name: # required if download_model is true
+wandb_entity: # required if download_model is true
+
+experiment_name: ARTAgentvsRLBlueAgent
+visualize: true
+graph_name: ARTAgentvsRLBlueAgent
+network_config: 15-host-network.yaml
+decoy_config: decoy_hosts.yaml
+host_config: host_defs_services.yaml
+detector_config: perfect_detector.yaml
+blue_reward_function: reward_red_delay
+red_reward_function: reward_decoy_hits
+reward_function: RLReward
+num_steps: 100
+num_episodes: 10

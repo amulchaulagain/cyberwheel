@@ -1,6 +1,9 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
-from cyberwheel.reward import RewardMap
+if TYPE_CHECKING:
+    from cyberwheel.reward import RewardMap
 
 class BlueAgentResult():
     def __init__(self, name: str, id: str, success: bool, recurring: int, target=None) -> None:

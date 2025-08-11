@@ -1,3 +1,6 @@
+name: inactive_blue_agent
+class: InactiveBlueAgent
+rl: false
 actions:
   nothing: # Unique name for this action
     class: Nothing # The action class's name

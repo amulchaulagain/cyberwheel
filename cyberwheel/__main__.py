@@ -1,6 +1,6 @@
 import sys
-from cyberwheel.utils import train_cyberwheel, evaluate_cyberwheel, run_cyberwheel, run_visualization_server, parse_default_override_args, parse_eval_override_args, parse_override_args, parse
-
+from cyberwheel.utils import parse_default_override_args, parse_eval_override_args, parse_override_args, parse
+from cyberwheel.runners import train_cyberwheel, evaluate_cyberwheel, run_cyberwheel, run_visualization_server
 def display_help():
     sys.argv = ['']
     print("---------------------------------------------------------------------------------------------------\nTraining Cyberwheel:\n\n")
@@ -18,16 +18,15 @@ if __name__ == "__main__":
             run_visualization_server(config)
             sys.exit(0)
 
-        args = parse(config, mode) if mode in ['train', 'evaluate', 'run'] else None
+        args = parse(config, mode) if mode in ['train', 'evaluate', 'emulate', 'run'] else None
 
         if mode == 'train':
             train_cyberwheel(args)
-            sys.exit(0)
         elif mode == 'evaluate':
-            evaluate_cyberwheel(args)
-            sys.exit(0)
+            evaluate_cyberwheel(args, emulate=False)
+        elif mode == 'emulate':
+            evaluate_cyberwheel(args, emulate=True)
         elif mode == 'run':
             run_cyberwheel(args)
-            sys.exit(0)
-    display_help()
-    
+        else:
+            display_help()

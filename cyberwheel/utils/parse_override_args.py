@@ -47,6 +47,7 @@ def parse_override_args(print_help: bool = False):
     training_group.add_argument("--num-envs", type=int, help="the number of parallel game environments")
     training_group.add_argument("--num-steps", type=int, help="the number of steps to run in each environment per policy rollout")
     training_group.add_argument('--eval-episodes', type=int, help='Number of evaluation episodes to run')
+    training_group.add_argument("--debug-mode", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if debug mode is on, sets num_envs to 1, doesn't track, and uses cpu")
     
     # Cyberwheel Environment Parameters
     env_group.add_argument("--environment", type=str, help="the environment class to use. Current options: CyberwheelRL | Cyberwheel")
@@ -78,11 +79,11 @@ def parse_override_args(print_help: bool = False):
     rl_group.add_argument("--max-grad-norm", type=float, help="the maximum norm for the gradient clipping")
     rl_group.add_argument("--target-kl", type=float, help="the target KL divergence threshold")
 
+    args = parser.parse_args()
     if print_help:
-        parser.parse_args()
         parser.print_help()
-    else:
-        return parser.parse_args()
+        return
+    return args
 
 def parse_eval_override_args(print_help: bool = False):
     """

@@ -1,0 +1,34 @@
+# Evaluation Parameters
+agents:
+  red: rl_red_campaign.yaml
+  blue: rl_blue_agent.yaml
+
+environment: CyberwheelEmulator
+valid_targets: servers
+red_model: RedAgentEmulatorModel
+blue_model: RedAgentEmulatorModel
+campaign: true
+seed: 1
+max_decoys: 5
+
+checkpoint: agent
+download_model: false
+run:
+wandb_project_name: # required if download_model is true
+wandb_entity: # required if download_model is true
+
+experiment_name: MultiAgentEmulatorTest
+visualize: false
+graph_name: MultiAgenEmulatorTest
+network_config: emulator_integration_config.yaml
+decoy_config: decoy_hosts.yaml
+host_config: host_defs_services.yaml
+detector_config: perfect_detector.yaml
+reward_scaling: 10.0
+reward_function: RLReward
+blue_reward_function: reward_red_delay
+red_reward_function: reward_decoy_hits
+num_steps: 100
+num_episodes: 10
+deterministic: false
+network_size_compatibility: small

@@ -1,3 +1,6 @@
+name: rl_deception_agent
+class: RLBlueAgent
+rl: true
 actions:
   nothing: # Unique name for this action
     class: Nothing # The action class's name
@@ -9,14 +12,14 @@ actions:
       type: standalone
     shared_data:
 
-  decoy0:
+  deploy_decoy:
     class: DeployDecoyHost
     configs:
       decoy_hosts: decoy_server_hosts.yaml
       host_definitions: host_defs_services.yaml
       services: windows_exploitable_services.yaml
     reward:
-      immediate: -20.0
+      immediate: 0.0
       recurring: 0.0
     action_space_args:
       type: subnet
@@ -28,8 +31,8 @@ actions:
     class: RemoveDecoyHost
     configs:
     reward:
-      immediate: 0
-      recurring: 0
+      immediate: -1.0
+      recurring: 0.0
     action_space_args:
       type: subnet
     shared_data:

@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from typing import Dict, NewType, Tuple
+from cyberwheel.network.network_base import Host
 
 RewardMap = NewType("RewardMap", Dict[str, Tuple[int | float, int | float]])
 

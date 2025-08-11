@@ -1,6 +1,15 @@
-from cyberwheel.network.network_base import Network
+from __future__ import annotations
 from cyberwheel.red_actions import art_techniques
-from cyberwheel.red_actions.actions import ARTDiscovery, ARTLateralMovement, ARTPrivilegeEscalation, ARTImpact
+from cyberwheel.red_actions.actions import (
+    ARTDiscovery,
+    ARTLateralMovement,
+    ARTPrivilegeEscalation,
+    ARTImpact,
+)
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cyberwheel.network.network_base import Network
 
 
 def get_service_map(network: Network):

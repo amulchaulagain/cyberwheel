@@ -23,6 +23,7 @@ class _ActionRangeChecker:
         self.upper_bound = upper_bound
 
     def check_range(self, index: int) -> bool:
+        #print(f"index {index} needs to be between {self.lower_bound} and {self.upper_bound}")
         return index >= self.lower_bound and index < self.upper_bound
 
 
@@ -31,10 +32,12 @@ class DiscreteActionSpace(ActionSpace):
         super().__init__(network)
         self._action_space_size: int = 0
         self._action_checkers: List[_ActionRangeChecker] = []
+        self.num_actions = 0
 
     def select_action(self, action: ActType) -> ASReturn:
         try:
             action = int(action)
+            #print(f"BLUE ACTION BEING CHOSEN: {action}")
         except:
             raise TypeError(
                 f"provided action is of type {type(action)} and is unsupported by the chosen ActionSpaceConverter"
@@ -77,6 +80,7 @@ class DiscreteActionSpace(ActionSpace):
             raise ValueError(
                 f"action_type must be 'host', 'subnet', 'standalone', or 'range'"
             )
+        self.num_actions += 1
         upper_bound = self._action_space_size
         self._action_checkers.append(
             _ActionRangeChecker(name, action, action_type, lower_bound, upper_bound)
@@ -85,5 +89,12 @@ class DiscreteActionSpace(ActionSpace):
     def get_shape(self) -> tuple[int, ...]:
         return (self._action_space_size,)
 
+    def get_action_mask(self):
+        mask = [False] * self.max_size
+        for i in range(self._action_space_size):
+            mask[i] = True
+        return mask
+
     def create_action_space(self, max_size: int) -> Space:
+        self.max_size = max_size
         return Discrete(max_size)

@@ -1,0 +1,36 @@
+class: ARTAgent
+rl: false
+actions: # All actions in this killchain (pingsweep -> impact) are required.
+  pingsweep:
+    class: ARTPingSweep
+    reward:
+      immediate: 1.0
+      recurring: 0
+  portscan:
+    class: ARTPortScan
+    reward:
+      immediate: 2.0
+      recurring: 0
+  discovery:
+    class: ARTDiscovery
+    reward:
+      immediate: 5.0
+      recurring: 0
+  lateral-movement:
+    class: ARTLateralMovement
+    reward:
+      immediate: 10.0
+      recurring: 0
+  privilege-escalation:
+    class: ARTPrivilegeEscalation
+    reward:
+      immediate: 20.0
+      recurring: 0
+  impact:
+    class: ARTImpact
+    reward:
+      immediate: 50.0
+      recurring: 0
+strategy: BFSServerDowntime
+entry_host: dmz5 # optional; defaults to random user
+leader: random # optional; defaults to random server

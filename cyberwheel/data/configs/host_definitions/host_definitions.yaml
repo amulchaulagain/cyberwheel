@@ -17,6 +17,7 @@ host_types:
     decoy: False
     os: linux
   workstation:
+    type: USER
     services:
       - name: rdp
         port: 3389
@@ -24,6 +25,7 @@ host_types:
     decoy: false
     os: windows
   web_server:
+    type: SERVER
     services:
       - name: http
         port: 80
@@ -32,6 +34,7 @@ host_types:
         port: 443
         protocol: tcp
   mail_server:
+    type: SERVER
     services:
       - name: smtp
         port: 25
@@ -49,6 +52,7 @@ host_types:
         port: 110
         protocol: tcp
   file_server:
+    type: SERVER
     services:
       - name: ftp
         port: 21
@@ -60,11 +64,13 @@ host_types:
         port: 445
         protocol: tcp
   ssh_jump_server:
+    type: SERVER
     services:
       - name: ssh
         port: 22
         protocol: tcp
   proxy_server:
+    type: SERVER
     services:
       - name: squid
         port: 3128
@@ -76,6 +82,7 @@ host_types:
         port: 443
         protocol: tcp
   decoy_workstation:
+    type: DECOY_USER
     services:
       - name: rdp
         port: 3389

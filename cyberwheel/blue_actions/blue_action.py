@@ -80,6 +80,7 @@ class SubnetAction(BlueAction):
         self.host_info = self.configs["host_definitions"]
         self.service_info = self.configs["services"]
         self.type = list(self.decoy_info.values())[0]["type"]
+        self.max_decoys = self.configs["max_decoys"]
 
     def define_services(self) -> None:
         type_info = self.host_info["host_types"][self.type]

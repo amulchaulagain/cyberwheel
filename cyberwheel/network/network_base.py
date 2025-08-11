@@ -10,13 +10,15 @@ from os import PathLike
 from pathlib import PosixPath
 from typing import Union, List
 from tqdm import tqdm
+from copy import deepcopy
 
-from cyberwheel.network.host import Host, HostType
+from cyberwheel.network.host import Host, HostType, HostTypes, host_types_map
 from cyberwheel.network.network_object import NetworkObject, FirewallRule
 from cyberwheel.network.router import Router
 from cyberwheel.network.service import Service
 from cyberwheel.network.subnet import Subnet
 from cyberwheel.utils.hybrid_set_list import HybridSetList
+
 
 class Network:
 
@@ -35,8 +37,17 @@ class Network:
         self.subnets : dict[str, Subnet] = {name:subnet for name, subnet in self if isinstance(subnet, Subnet)}
         self.decoys : dict[str, Host] = {hn:host for hn, host in self.hosts if host.decoy}
 
-        self.user_hosts : HybridSetList = HybridSetList({hn for hn, host in self.hosts if "workstation" in host.host_type.name.lower() or "user" in host.host_type.name.lower()})
-        self.server_hosts : HybridSetList = HybridSetList({hn for hn, host in self.hosts if "server" in host.host_type.name.lower()})
+        self.all_hosts = HybridSetList()
+        self.user_hosts = HybridSetList()
+        self.server_hosts = HybridSetList()
+
+        for hn, host in self.hosts:
+            self.all_hosts.add(hn)
+            if "workstation" in host.host_type.name.lower() or "user" in host.host_type.name.lower():
+                self.user_hosts.add(hn)
+            elif "server" in host.host_type.name.lower():
+                self.server_hosts.add(hn)
+        self.decoys_reserve: List[Host] = []
 
     def __iter__(self):
         #print(self.graph.nodes.items())
@@ -45,6 +56,11 @@ class Network:
 
     def __len__(self):
         return len(self.graph)
+
+    def copy(self):
+        name = self.name
+        graph = self.graph.copy()
+        return Network(name=name, graph=graph)
     
     def get_num_hosts(self) -> int:
         """
@@ -92,6 +108,7 @@ class Network:
         if host.decoy:
             return
         host_type = host.host_type.name.lower()
+        self.all_hosts.add(host.name)
         if "server" in host_type:
             self.server_hosts.add(host.name)
         else:
@@ -110,7 +127,10 @@ class Network:
         """
         try:
             self.graph.remove_node(host.name)
-            self.decoys.pop(host.name, None)
+            self.decoys.pop(host.name)
+            self.all_hosts.remove(host.name)
+            self.server_hosts.remove(host.name)
+            self.user_hosts.remove(host.name)
             return self.hosts.pop(host.name, None)
         except nx.NetworkXError as e:
             raise e
@@ -136,7 +156,7 @@ class Network:
         return nx.has_path(self.graph, subnet1.name, subnet2.name)
 
     def get_random_host(self): # Does not support determinism yet
-        return self.hosts[random.choice(list(self.hosts.keys()))]
+        return self.hosts[self.all_hosts.get_random()]
 
     def get_random_user_host(self):
         return self.hosts[self.user_hosts.get_random()]
@@ -222,6 +242,7 @@ class Network:
             config = yaml.safe_load(yaml_file)
 
         # Create an instance of the Network class
+        #print(config)
         network = cls(name=config["network"].get("name"))
 
         conf_dir = files("cyberwheel.data.configs.host_definitions")
@@ -319,17 +340,21 @@ class Network:
                         )
                     )
             interfaces = []
-            if h in config["interfaces"]:
+            if config["interfaces"] and h in config["interfaces"]:
                 interfaces = config["interfaces"][h]
             # instantiate host
-            host = network.add_host_to_subnet(
-                name=h,
-                subnet=network.subnets[val["subnet"]],
-                host_type=type,
-                firewall_rules=fw_rules,
-                services=services,
-                interfaces=interfaces,
-            )
+            if "decoy" in h:
+                d = Host(name=h, subnet=network.subnets[val["subnet"]], host_type=type)
+                network.decoys_reserve.append(d)
+            else:
+                host = network.add_host_to_subnet(
+                    name=h,
+                    subnet=network.subnets[val["subnet"]],
+                    host_type=type,
+                    firewall_rules=fw_rules,
+                    services=services,
+                    interfaces=interfaces,
+                )
 
             if routes := val.get("routes"):
                 host.add_routes_from_dict(routes)
@@ -348,6 +373,27 @@ class Network:
         except KeyError as e:
             print(f"{node} not found in {self.name}")
             raise e
+        
+    def get_node_from_ip(self, ip: str) -> NetworkObject | Host | Subnet | Router:
+        """
+        Return network object by name
+
+        :param str node: node.name of object
+        :returns NetworkObject:
+        """
+        for name, h in self.hosts.items():
+            temp_ip = str(h.ip_address)
+            #print(f"{name}: {temp_ip} == {ip}")
+            if temp_ip == ip:
+                return h
+        for name, d in self.decoys:
+            temp_ip = str(d.ip_address)
+            #print(f"{name}: {temp_ip} == {ip}")
+            if temp_ip == ip:
+                return d
+    
+    def get_all_decoys(self) -> list[Host]:
+        return self.decoys
 
     def _is_valid_port_number(self, port) -> bool:
         """
@@ -550,11 +596,19 @@ class Network:
         """
         host = self.add_host_to_subnet(*args, decoy=True, **kwargs)
         self.decoys[host.name] = host
+        self.all_hosts.add(host.name)
+        if host.host_type.name.lower() == "server":
+            self.server_hosts.add(host.name)
+        elif host.host_type.name.lower() in ["user", "workstation"]:
+            self.user_hosts.add(host.name)
         return host
 
     def remove_decoy_host(self, host: Host) -> None:
         self.remove_host_from_subnet(host)
         self.decoys.pop(host.name, None)
+        self.server_hosts.remove(host.name)
+        self.user_hosts.remove(host.name)
+        self.all_hosts.remove(host.name)
         #for _, h in self.graph.nodes(data="data"):
         #    if not isinstance(h, Host):
         #        continue
@@ -566,9 +620,34 @@ class Network:
         #        break
         #self.decoys.remove(i)
 
+    def enable_decoy_host(self, name: str, subnet: Subnet, host_type: HostType) -> Host:
+        i = random.randint(0, len(self.decoys_reserve - 1))
+        decoy = self.decoys_reserve.pop(i)
+
+        decoy.name = name
+        decoy.host_type = host_type
+
+        self.add_node(decoy)
+        # connect node to parent subnet
+        self.connect_nodes(decoy.name, subnet.name)
+        # assign IP, DNS, route for subnet, and default route
+        decoy.get_dhcp_lease()
+        # set decoy status
+        decoy.decoy = True
+        decoy.interfaces = []
+        self.decoys.append(decoy)
+
+        # print(decoy)
+        # print([h.name for h in self.get_all_hosts()])
+
+        return decoy
+
     def reset(self):
         for decoy in list(self.decoys.values()):
             self.remove_host_from_subnet(decoy)
+            self.server_hosts.remove(decoy.name)
+            self.user_hosts.remove(decoy.name)
+            self.all_hosts.remove(decoy.name)
         self.decoys = {}
 
         for edge in self.disconnected_nodes:
@@ -584,45 +663,6 @@ class Network:
             host.restored = False
 
     @staticmethod
-    def create_host_type_from_json(name: str, config_file: PathLike) -> HostType:
-        """
-        Return a matching HostType object from json file
-
-        :param str name: host type name to match against
-        :param str config_file: JSON config file path
-        :raises HostTypeNotFoundError:
-        :returns HostType:
-        """
-        with open(config_file) as f:
-            config = json.load(f)
-        types: list = config["host_types"]
-
-        host_type = [t for t in types if t["type"].lower() == name.lower()]
-        if not host_type:
-            msg = f"Host type ({name}) not found in config file ({config_file})"
-            raise HostTypeNotFoundError(value=name, message=msg)
-
-        services_list = host_type[0]["services"]
-        service_objects = []
-        for service in services_list:
-            service_objects.append(
-                Service(
-                    name=name,
-                    port=service.get("port"),
-                    protocol=service.get("protocol"),
-                    version=service.get("version"),
-                    vulns=service.get("vulns"),
-                    description=service.get("description"),
-                    decoy=service.get("decoy"),
-                )
-            )
-
-        decoy = host_type[0].get("decoy", False)
-        os = host_type[0].get("os")
-
-        return HostType(name=name, services=service_objects, decoy=decoy, os=os)
-
-    @staticmethod
     def create_host_type_from_yaml(name: str, config_file: PathLike, types) -> HostType:
         """
         Return a matching HostType object from yaml file
@@ -633,16 +673,17 @@ class Network:
         :returns HostType:
         """
         # match name to defined host_type name
+        
         host_type = {}
-        host_type_name = ""
-        for k, v in types.items():
-            if k == name.lower():
-                host_type_name = k
-                host_type = v
+        host_type_name = name.lower()
 
-        if "host_type" not in locals():
+        try:
+            host_type = types[host_type_name]
+        except KeyError:
             msg = f"Host type ({name}) not found in config file ({config_file})"
             raise HostTypeNotFoundError(value=name, message=msg)
+
+        host_type_enum = host_types_map[host_type["type"]]
 
         services_list = host_type.get("services", [])
 
@@ -665,6 +706,7 @@ class Network:
 
         host_type = HostType(
             name=host_type_name,
+            type=host_type_enum,
             services=running_services,
             decoy=decoy,
             os=os,

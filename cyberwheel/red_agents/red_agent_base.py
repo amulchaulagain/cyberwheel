@@ -1,14 +1,16 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Type, List, Any, Iterable
 from ipaddress import IPv4Address, IPv6Address
-from typing import Type, List, Any, Iterable
-
-from cyberwheel.red_actions.red_base import ARTAction
-from cyberwheel.network.network_base import Host
-from cyberwheel.network.service import Service
 from cyberwheel.red_actions.red_base import RedActionResults
-from cyberwheel.red_actions.actions import ARTKillChainPhase
 from cyberwheel.red_actions.technique import Technique
-from cyberwheel.reward import RewardMap
+from cyberwheel.red_actions.actions import ARTKillChainPhase
+from cyberwheel.red_actions.red_base import ARTAction
+from cyberwheel.network.service import Service
+from cyberwheel.network.network_base import Host
+
+if TYPE_CHECKING:
+    from cyberwheel.reward import RewardMap
 
 
 class RedAgent(ABC):
@@ -180,22 +182,23 @@ class AgentHistory:
         """
         Updates the history of the red agent at a given step with action and RedActionResults metadata
         """
+        #print(red_action_results.metadata)
         self.step += 1
-        target_host_metadata = red_action_results.metadata[
-            red_action_results.target_host.name
-        ]
-        techniques = {
-            "mitre_id": target_host_metadata["mitre_id"],
-            "technique": target_host_metadata["technique"],
-            "commands": target_host_metadata["commands"],
-        }
+        #target_host_metadata = red_action_results.metadata[
+        #    red_action_results.target_host.name
+        #]
+        #techniques = {
+        #    "mitre_id": target_host_metadata["mitre_id"],
+        #    "technique": target_host_metadata["technique"],
+        #    "commands": target_host_metadata["commands"],
+        #}
         self.history.append(
             {
                 "step": self.step,
                 "action": action.__name__,
                 "src_host": red_action_results.src_host.name,
                 "target_host": red_action_results.target_host.name,
-                "techniques": techniques,
+                #"techniques": techniques,
                 "success": red_action_results.attack_success,
             }
         )

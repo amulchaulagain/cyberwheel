@@ -1,0 +1,11 @@
+[Unit]
+Description=Qemu Guest Agent
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=/usr/sbin/qemu-ga-patched-static
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+sudo /usr/bin/qemu-system-x86_64 -nographic -nodefaults --enable-kvm \
+    -name ubuntu \
+    -drive file=/opt/firewheel/model_components/linux/ubuntu/cyberwheel/images/ubuntu-22.04.4-desktop-amd64_v2.qcow2,if=virtio,cache=writeback \
+    -vnc 0.0.0.0:0 -cpu qemu64 -smp sockets=1,cores=8,threads=4 \
+    -m 8092 \
+    -vga std -netdev tap,ifname=installer,id=hostnet0,script=no,downscript=no \
+    -device virtio-net-pci,netdev=hostnet0,id=net0,mac=00:00:00:ff:ff:01 \
+    -device piix3-usb-uhci -device usb-tablet -device piix3-usb-uhci \
+    -chardev socket,id=qga0,server,nowait,path=/tmp/ga.sock -device virtio-serial \
+    -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0 \
+    -drive file=/opt/firewheel/model_components/linux/ubuntu/cyberwheel/images/ubuntu-22.04.4-desktop-amd64.iso,index=2,media=cdrom \
+    -boot d
