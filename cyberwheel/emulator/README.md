@@ -105,10 +105,10 @@ Once all machines are configured. Open a new terminal (no need to switch to `fw`
 cd path-to-repo/cyberwheel
 poetry install   # if you have not already installed dependencies
 poetry shell     # enter virtual environment
-python cyberwheel/emulator/evaluate_cyberwheel_emu.py --eval-config <evaluation-config>.yaml   # run evaluation
+python3 -m cyberwheel emulate <evaluation-config>.yaml   # run evaluation
 
 # example 
-python cyberwheel/emulator/evaluate_cyberwheel_emu.py --eval-config emulator_test_integration.yaml
+python3 -m cyberwheel emulate emulator_test_integration.yaml
 ```
 
 ## Resetting Firewheel
