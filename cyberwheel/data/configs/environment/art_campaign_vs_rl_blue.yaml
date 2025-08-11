@@ -2,7 +2,7 @@
 experiment_name: ARTCampaignvsRLBlueAgent #TrainRedAgent_TwoLRs_AnnealonUpdate_BothHigh_ActionMask #EmulatorIntegrationCampaign_FixedTypeObs
 seed: 1 # The seed to use for the experiment
 deterministic: false # Whether or not the training is deterministic
-device: cuda:2 # Which device to train on
+device: cpu # Which device to train on
 async_env: true # Whether to run the environments in parallel
 total_timesteps: 1000000000 # Total number of steps to run throughout training
 num_saves: 100 # Number of times the model is evaluated and saved during the training run

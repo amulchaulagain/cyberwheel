@@ -145,7 +145,7 @@ Once all dependencies are installed:
     pip install -r requirements.txt
     ```
 
-*On newer OSX systems running on silicone chips, there may be an error installing the `pygraphviz` package, with poetry not finding the graphviz configuration files. You can work around this by pip installing the pygraphviz package manually, explicitly passing graphviz config paths. [This link](https://stackoverflow.com/a/70439868) helped me work through this issue.*
+*On newer OSX systems running on Apple Silicon chips, there may be an error installing the `pygraphviz` package, with poetry not finding the graphviz configuration files. You can work around this by pip installing the pygraphviz package manually, explicitly passing graphviz config paths. [This link](https://stackoverflow.com/a/70439868) helped me work through this issue.*
 *Feel free to comment this package out of the requirements.txt if you want to use cyberwheel without the visualizations and debug this package installation separately.*
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -181,7 +181,7 @@ or look at the config files in `cyberwheel/data/configs/environment`.
 
 ### Running Cyberwheel
 
-There are 4 modes for running cyberwheel: `train`, `evaluate`, `visualizer`, and `run`
+There are 5 modes for running cyberwheel: `train`, `evaluate`, `emulate`, `visualizer`, and `run`
 
 #### Training
 
@@ -195,21 +195,30 @@ Cyberwheel allows for a wide array of configuration options as arguments that ca
 
 Example:
 ```sh
-python3 -m cyberwheel train train_blue.yaml
+python3 -m cyberwheel train train_rl_red_agent_vs_rl_blue_agent.yaml
 ```
-will train a blue agent using the parameters defined in `cyberwheel/data/configs/environment/train_blue.yaml`
+will train both an RL Red and an RL Blue agent using the parameters defined in `cyberwheel/data/configs/environment/rl_red_agent_vs_rl_blue_agent.yaml`
 
 #### Evaluating
 
-You can evaluate a model given the parameters defined in the YAML file or command line. For example, to evaluate a pre-trained RL blue agent, you can run
+You can evaluate a model given the parameters defined in the YAML file or command line. For example, to evaluate the pre-trained RL blue and red agents you just trained, you can run
 ```sh
-python3 -m cyberwheel evaluate evaluate_blue.yaml
+python3 -m cyberwheel evaluate evaluate_rl_red_vs_rl_blue.yaml
 ```
-which will evaluate the model using the parameters defined in `cyberwheel/data/configs/environment/evaluate_blue.yaml`. In order to evaluate, the parameter `experiment_name` must be set to a model directory that exists `cyberwheel/data/models/{experiment_name}`. If the training run was tracked to Weights & Biases, the model and its checkpoints can be loaded from your W&B project as well. The `experiment_name` argument, like all other arguments, can be defined in the config or overriden in the command line like so:
+which will evaluate the trained red and blue models using the parameters defined in the config file. In order to evaluate, the parameter `experiment_name` must be set to a model directory that exists `cyberwheel/data/models/{experiment_name}`. If the training run was tracked to Weights & Biases, the model and its checkpoints can also be downloaded from your W&B project as well. The `experiment_name` argument, like all other arguments, can be defined in the config or overriden in the command line like so:
 
 ```sh
-python3 -m cyberwheel evaluate evaluate_blue.yaml --experiment-name TrainBlueAgent
+python3 -m cyberwheel evaluate evaluate_rl_red_vs_rl_blue.yaml --experiment-name TrainRedBlueAgent
 ```
+
+#### Emulating
+
+The command to run an emulation is essentially the same as the one to run an evaluation, just with the words switched around. You will need to have the emulation environment and FIREWHEEL set up first, the tutorial for which you can find in the emulator directory.
+
+```sh
+python3 -m cyberwheel emulate evaluate_rl_red_vs_rl_blue.yaml --experiment-name TrainRedBlueAgent
+```
+
 #### Visualizer
 
 To view the visualizations of the evaluations that were run, you can run the visualization server with:
@@ -232,16 +241,16 @@ python3 -m cyberwheel run cyberwheel.yaml
 
 ### Demos
 
-#### Training, Evaluating, and Visualizing an RL Blue Agent
+#### Training, Evaluating, and Visualizing your RL Agents
 ```sh
-python3 -m cyberwheel train train_blue.yaml
+python3 -m cyberwheel train train_rl_red_agent_vs_rl_blue_agent.yaml
 ```
 This may run long depending on hardware. For demo purposes, you can ctrl-C after a few training iterations or change the `total_timesteps` argument in the config file.
 
 ```sh
-python3 -m cyberwheel evaluate evaluate_blue.yaml
+python3 -m cyberwheel evaluate evaluate_rl_red_vs_rl_blue.yaml
 ```
-This will evaluate the model under the current environment, and save the logs of the evaluation in `cyberwheel/data/action_logs/{graph_name}.csv` If the `visualizer` parameter is set to true, this will also generate and store visualizations in `cyberwheel/data/graphs/{graph_name}/` to be viewed later. (Note: The visualization generation has a longer runtime than a basic evaluation, so if you only care about the CSV logs, you can set it to false to greatly speed up the evaluation.)
+This will evaluate the model under the current environment, and save the logs of the evaluation in `cyberwheel/data/action_logs/{graph_name}.csv` If the `visualize` parameter is set to true, this will also generate and store visualizations in `cyberwheel/data/graphs/{graph_name}/` to be viewed later. (Note: The visualization generation has a longer runtime than a basic evaluation, so if you only care about the CSV logs, you can set it to false to greatly speed up the evaluation.)
 
 Once these have run, you can run the server on http://localhost:8050 by running:
 ```sh
@@ -249,14 +258,6 @@ python3 -m cyberwheel visualizer 8050
 ```
 and access the server on your browser to see a list of the available graphs. These are dependent on what is listed in the `cyberwheel/data/graphs/` directory.
 
-#### Training, Evaluating, and Visualizing an RL Red Agent
-The steps are virtually the same for the RL Red Agent:
-
-```sh
-python3 -m cyberwheel train train_red.yaml
-python3 -m cyberwheel evaluate evaluate_red.yaml
-python3 -m cyberwheel visualizer 8050
-```
 
 ## Cyberwheel Design
 
@@ -303,7 +304,7 @@ taskkill /F /IM ${process_name} >nul 2>&1​
 
 ### ART Campaign Design
 
-The ART Campaign is very similar to the ART Agent, but its actions are much more specific. Where the ARTAgent works with higher-level actions that may filter down into more specific actions, the ART Campaign is defined with a killchain of specific ART Techniques. ART Campaigns can be more helpful for more narrow use cases to simulate a killchain of techniques in a defined network, as well as when testing with emulation.
+The ART Campaign is very similar to the ART Agent, but its actions are much more specific. Where the ARTAgent works with higher-level actions that may filter down into more specific actions, the ART Campaign is defined with a killchain of specific ART Techniques. ART Campaigns can be more helpful for more narrow use cases to simulate a killchain of techniques in a defined network, as well as when testing with emulation. When running emulations, we exclusively train and evaluate with ART Campaigns, due to their granular use case and transferability.
 
 ### Detectors and Alerts
 
