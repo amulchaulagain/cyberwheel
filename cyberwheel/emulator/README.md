@@ -2,13 +2,13 @@
 
 ## Overview
 
-<figure align="center">
+<p align="center" width="100%">
 <img 
   alt="Cyberwheel Emulation Environment Diagram"
-  src="images/emulation-environment.png" 
+  src="/images/emulation-environment.png"
   width="500"
 >
-</figure>
+</p>
 
 Cyberwheel uses [Firewheel](https://github.com/sandialabs/firewheel) for emulation and evaluating agents. Firewheel provides a high-fidelity testing environment to perform repeatable experiments and scale to large networks.
 
@@ -64,12 +64,17 @@ Ensure you have enough disk space before downloading.
 
 - [ubuntu-16.04.4-desktop-siem-cyberwheel.qcow2.xz](https://drive.google.com/file/d/1Qep4Llbsujz480F5bHdwY24eAk47yidM/view?usp=sharing)
 - [ubuntu-22.04.4-desktop-host-cyberwheel.qcow2.xz](https://drive.google.com/file/d/1-7g1Wx-2-oDRMGZIeYz9r1ObDQ6VwxUP/view?usp=sharing)
+- [vyos-1.1.8.qc2.xz](https://drive.google.com/file/d/1bZVsSqtayXK1kZq2HL7GkaQGcqsGyQa7/view?usp=sharing)
+
+NOTE: Firewheel is missing images after installation and we are currenlty investigating to resolve this issue. 
+At the moment, the three images above are the only images needed to run the evaluation.
 
 **Move and extract images**:
 
 ```
 mv ubuntu-16.04.4-desktop-siem-cyberwheel.qcow2.xz /opt/firewheel/model_components/linux/ubuntu/cyberwheel/images
 mv ubuntu-22.04.4-desktop-host-cyberwheel.qcow2.xz /opt/firewheel/model_components/linux/ubuntu/cyberwheel/images
+mv vyos-1.1.8.qc2.xz /opt/firewheel/model_components/vyos/vyos-1.1.8
 
 cd /opt/firewheel/model_components/linux/ubuntu/cyberwheel/images
 xz --decompress ubuntu-16.04.4-desktop-siem-cyberwheel.qcow2.xz
