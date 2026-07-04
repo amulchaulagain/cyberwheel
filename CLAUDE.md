@@ -10,7 +10,12 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   Biases. Network graphs: `networkx`. (graphviz/pygraphviz and Dash/Plotly are retired —
   do not reintroduce them.)
 - Web UI: FastAPI + uvicorn (`cyberwheel/server/`) serving a JSON API and the built React
-  SPA from `cyberwheel/server/static/` (source in `frontend/`, Vite build).
+  SPA from `cyberwheel/server/static/` (source in `frontend/`, Vite build). Graph rendering is
+  a custom Canvas 2D renderer over a deterministic pure-Python layout (no graphviz).
+  **Rebuild rule:** any change under `frontend/src` requires `cd frontend && npm run build`
+  (emits into `cyberwheel/server/static/`) committed in the SAME commit — the committed bundle
+  is what `python -m cyberwheel frontend <port>` serves, and the frontend suite's static-serving
+  case fails loudly if it is missing.
 - Env note: this sandbox has no system Python 3.10 — it's provisioned via `uv python install 3.10`
   and Poetry (`uv tool install poetry`; `poetry env use $(uv python find 3.10)`).
 

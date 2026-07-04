@@ -161,10 +161,58 @@ Pre-fix rl-step @15-host: 0.107 ms/step (RL red vs RL blue), 0.164 (ART vs RL bl
 - The `train` scenario is never gated (cProfile skews absolute numbers); gated training SPS
   remains the perf suite's `train_sps_15host`.
 
+## Feature 3 — experimentation web frontend (done)
+
+**Status:** complete. Five commits (graphviz/dash retirement → viz artifacts → server backend →
+web UI → this log). A polished web UI to run everything: launch training (all params from
+dropdowns), watch live/finished progress, launch evaluations, replay the network/agent-behavior
+visualization. Retired graphviz/pygraphviz.
+
+### What was built
+- **Retired** `pygraphviz` + `dash` (poetry remove; drops flask/plotly too), deleted
+  `runners/visualizer.py` + `run_visualization_server.py` and the `visualizer` CLI mode. The old
+  pickle viz path was dead code (never wired into the live evaluator). CI/docs/requirements scrubbed.
+- **`cyberwheel/visualization/`** — graphviz-free JSON artifacts written during evaluate (gated on
+  `visualize`): `layout.py` (deterministic radial-cluster layout: phyllotaxis host discs with
+  reserved decoy slots, arc-budgeted subnet ring / disc-of-discs, crc32 rotations — byte-identical
+  per topology), `states.py` (killchain severity codes), `writer.py` (`VizWriter`: per-step deltas
+  → `data/graphs/<graph_name>/{meta,layout,episode_N}.json`, flushed per episode). Hooked into
+  `RLEvaluator`; also fixed the `graph_name` fallback crash (read nonexistent `args.red_agent`).
+- **`cyberwheel/server/`** — FastAPI + uvicorn behind `python -m cyberwheel frontend <port>`.
+  Runs launched as real CLI subprocesses driven by generated env YAML (CLI overrides can't express
+  `agents.*`/LRs/rewards/`anneal_lr`). Run registry (`data/frontend/runs/<id>/run.json` +
+  stdout.log, atomic writes, orphan detection, external-model discovery), job manager (Popen +
+  process-group stop that reaps the child, reaper thread), TensorBoard metrics reader, action-log
+  reader. Endpoints: options, train/evaluate launch, status, stop/delete, logs, metrics/scalars,
+  checkpoints, actions, viz meta/layout/episodes, SPA static.
+- **`frontend/`** — React 18 + TS + Vite + Tailwind; built bundle committed into
+  `cyberwheel/server/static/`. Dashboard, new-training form (multi-network chips + all-dropdown
+  config), training detail (live recharts + checkpoints + log tail), new-evaluation form (source/
+  checkpoint pickers, prefilled from source run), evaluation replay (custom Canvas 2D renderer with
+  d3-free zoom/pan + quadtree-free world-space hit-testing, LOD subnet aggregation for 10k-host
+  legibility, step scrubber with play/keyboard, node-details, action panel synced to scrubber).
+
+### Tests / verification
+- New **`frontend` suite** in the custom framework (`--suite frontend`): boots the server, checks
+  options-vs-disk, SPA serving, real train+evaluate e2e through the API (generated-YAML fidelity,
+  metrics, logs, checkpoints, viz artifacts), stop/orphan, validation, cleanup via DELETE. Smoke
+  suite's evaluate case now runs `--visualize true` and asserts artifacts + a layout-determinism
+  case. All suites green; profiler `--check` clean (viz writer is outside `env.step`, gated on
+  visualize — no hot-path change; no baseline re-record). UI iterated against Playwright screenshots.
+
+### Notes / gotchas
+- `network_size_compatibility` fixes the policy's obs/action dims at train time — a `small`-trained
+  model can't be evaluated on a >100-host network (checkpoint dim mismatch). Surfaced as a run
+  failure with the torch error in the logs, not hidden.
+- Committed `static/` must be rebuilt (`cd frontend && npm run build`) in the same commit as any
+  `frontend/src` change; the static-serving test guards this.
+
 ## Next
 - Awaiting next numbered feature. Candidates surfaced by feature 1: fix run mode, fix
   base-env reset, fix/retire the two broken campaign env configs. Surfaced by feature 2:
   trainer-side wins (batch policy forwards are dominated by per-call torch overhead at
   num_envs=1; eval agents re-run orthogonal init before load_state_dict), and
   `RLReward.network` is never updated on multi-network reset (pre-existing; reward computed
-  against the initial network's decoys).
+  against the initial network's decoys). Surfaced by feature 3: multi-agent (RL red vs RL blue)
+  eval viz shows both agents' actions but the writer's red-position/knowledge is single-red-agent;
+  extend if multi-red is added.

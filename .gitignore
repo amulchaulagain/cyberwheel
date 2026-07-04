@@ -197,3 +197,7 @@ cyberwheel/data/configs/environment/generated/
 
 # Frontend toolchain
 frontend/node_modules/
+
+# Vite/TS build cache
+frontend/tsconfig.tsbuildinfo
+frontend/dist/
