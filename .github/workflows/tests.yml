@@ -1,0 +1,138 @@
+# Cyberwheel test framework CI.
+#
+# Two jobs:
+#   functional -- config validation + end-to-end smoke tests (hard gate).
+#   perf-gate  -- the final gate: measures BOTH this commit and its parent on
+#                 the same runner (--compare-rev) so the perf comparison is
+#                 immune to cross-machine variance, with a generous tolerance
+#                 for shared-runner noise.
+#
+# Note: this repository is developed in a sandbox that never pushes, so this
+# workflow is committed but will not trigger there. It runs once the repo is
+# hosted on GitHub.
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WANDB_MODE: disabled
+  WANDB_SILENT: "true"
+  MPLBACKEND: Agg
+  TQDM_DISABLE: "1"
+
+jobs:
+  functional:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history: the framework reads git metadata
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz graphviz-dev build-essential pkg-config
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-py3.10-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        # CFLAGS workaround: pygraphviz 1.13 fails to compile against
+        # graphviz >= 14 under GCC 14 without it; harmless when unneeded.
+        run: CFLAGS="-Wno-incompatible-pointer-types" poetry install --no-interaction
+
+      - name: Config suite
+        run: poetry run python -m cyberwheel.tests --suite config --quick --json reports/config.json
+
+      - name: Smoke suite
+        run: poetry run python -m cyberwheel.tests --suite smoke --json reports/smoke.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: functional-reports
+          path: reports/
+
+  perf-gate:
+    needs: functional
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz graphviz-dev build-essential pkg-config
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-py3.10-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        run: CFLAGS="-Wno-incompatible-pointer-types" poetry install --no-interaction
+
+      - name: Resolve parent revision
+        id: parent
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PARENT_REV="${{ github.event.pull_request.base.sha }}"
+          else
+            PARENT_REV="${{ github.event.before }}"
+            # First push or force-push: 'before' is absent or all zeros.
+            case "$PARENT_REV" in
+              ""|0000000000000000000000000000000000000000)
+                PARENT_REV="$(git rev-parse HEAD~1 2>/dev/null || true)";;
+            esac
+          fi
+          if [ -n "$PARENT_REV" ] && git rev-parse --verify --quiet "$PARENT_REV^{commit}" > /dev/null; then
+            echo "rev=$PARENT_REV" >> "$GITHUB_OUTPUT"
+          else
+            echo "rev=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Perf gate (same-runner dual measurement vs parent)
+        if: steps.parent.outputs.rev != ''
+        run: >
+          poetry run python -m cyberwheel.tests --suite perf
+          --compare-rev "${{ steps.parent.outputs.rev }}"
+          --tolerance 0.30
+          --json reports/perf.json
+
+      - name: Perf run (informational; no parent revision)
+        if: steps.parent.outputs.rev == ''
+        run: poetry run python -m cyberwheel.tests --suite perf --json reports/perf.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-reports
+          path: reports/

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-07-04T12:59:10Z",
+  "recorded_at_commit": "dirty+7b9b3373d2df0f34f6bdd80409b1264f7cf4eadb",
+  "environment": {
+    "python": "3.10.19",
+    "system": "Linux",
+    "machine": "aarch64",
+    "cpu_count": 8
+  },
+  "metrics": {
+    "network_build_200host_s": {
+      "value": 0.675671833999786,
+      "samples": [
+        0.6569391250000081,
+        0.675671833999786,
+        0.7420416250001836
+      ],
+      "unit": "s",
+      "higher_is_better": false
+    },
+    "sim_step_sps_15host": {
+      "value": 393791.2896324859,
+      "samples": [
+        391658.8416489553,
+        393791.2896324859,
+        395147.2628499543
+      ],
+      "unit": "steps/s",
+      "higher_is_better": true
+    },
+    "train_sps_15host": {
+      "value": 63.0,
+      "samples": [
+        63,
+        63,
+        56,
+        64,
+        64,
+        54
+      ],
+      "unit": "steps/s",
+      "higher_is_better": true
+    }
+  }
+}

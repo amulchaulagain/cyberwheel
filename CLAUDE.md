@@ -23,6 +23,21 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 - CLI args override YAML values. Dispatch needs `<mode> <config>` (2+ argv); a bare `-h` prints
   nothing. To list all parameters use an unknown mode, e.g. `python3 -m cyberwheel help x`.
 
+## Testing — `python3 -m cyberwheel.tests`
+- Custom framework (no pytest) in `cyberwheel/tests/framework/`; suites: `config` (every YAML
+  loads + references resolve), `smoke` (train/evaluate end-to-end at tiny scale via the real
+  CLI), `perf` (benchmarks gated against the parent commit's results).
+- Common invocations: `--suite {config,smoke,perf,all}`, `--quick`, `--list`, `--json PATH`,
+  `--record-baseline`, `--compare-rev REV` (same-machine dual measurement), `--tolerance F`.
+  Exit codes: 0 ok · 1 config/smoke failure · 2 perf regression · 3 framework error.
+- **Baseline convention:** `cyberwheel/tests/baselines/baseline.json` is committed; re-record it
+  (`--record-baseline`) in the SAME commit as any intentional perf change. The working-tree
+  baseline therefore always holds the parent commit's results; CI re-measures the parent on the
+  same runner via `--compare-rev` (`.github/workflows/tests.yml`, final `perf-gate` job).
+- Known pre-existing bugs are encoded as xfail ("known-issue") cases, not fixed: `run` mode
+  (baseline_runner service_mapping/agent_config), base-env `reset()` (InactiveRedAgent),
+  and two env configs referencing the missing `network/emulator_15_host.yaml`.
+
 ## Architecture (conceptual — stable)
 - **Env loop (per step):** the red agent acts on a host → the action emits **Alerts** → the
   blue agent's **detector** layer filters/perturbs those Alerts → Alerts become the blue
@@ -75,6 +90,11 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 - **Utils:** `cyberwheel/utils/` — arg parsing (`parse_override_args.py`), `yaml_config.py`,
   `rl_policy.py`, `get_service_map.py`, `host_types.py`, `step_metrics.py`, `set_seed.py`.
 - `cyberwheel/legacy/` — old multiagent / pyattck / scripts; not part of the active path.
+- **Tests:** `cyberwheel/tests/framework/` — `core.py` (registry/runner), `cli.py`,
+  `baseline.py` (perf baseline + comparison), `gitio.py`, `artifacts.py`,
+  `suites/{config,smoke,perf}_suite.py`, `benchmarks/bench_*.py` (standalone scripts);
+  committed baseline in `cyberwheel/tests/baselines/`. The old `cyberwheel/tests/*.py` files
+  are stale (pre-reorg imports) and are not imported by the framework.
 
 ## Conventions & red lines
 - **Never `git push`. Never add or restore a git remote.** (A hook enforces this; do not
