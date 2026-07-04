@@ -31,6 +31,8 @@ class RLReward(Reward):
         self.red_reward_function = getattr(red_reward_functions, self.args.red_reward_function)
 
         self.current_step = 0
+        self._valid_targets_cache = None
+        self._valid_targets_key = None
 
     def calculate_reward(self, blue_agent_result: BlueAgentResult, red_agent_result: RedAgentResult) -> int | float:
         """
@@ -58,6 +60,13 @@ class RLReward(Reward):
 
     
     def get_valid_targets(self) -> HybridSetList:
+        # Rebuilding the target set is O(hosts); reuse it until the network's
+        # host membership changes (reset() also clears the cache, which covers
+        # network swaps and re-rolled leaders).
+        key = (id(self.network), getattr(self.network, "topology_version", None))
+        if key == self._valid_targets_key and key[1] is not None:
+            return self._valid_targets_cache
+
         if self.valid_targets == "servers":
             valid_targets = self.network.server_hosts.data_set
         elif self.valid_targets == "users":
@@ -72,9 +81,14 @@ class RLReward(Reward):
             valid_targets = set([self.valid_targets])
         else:
             valid_targets = self.network.hosts.keys()
-        return valid_targets | set(self.network.decoys)
+        result = valid_targets | set(self.network.decoys)
+        self._valid_targets_cache = result
+        self._valid_targets_key = key
+        return result
 
     def reset(self) -> None:
         self.blue_recurring_reward = []
         self.red_recurring_reward = []
         self.current_step = 0
+        self._valid_targets_cache = None
+        self._valid_targets_key = None

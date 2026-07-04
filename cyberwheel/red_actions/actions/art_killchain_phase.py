@@ -5,6 +5,25 @@ from cyberwheel.network.host import Host
 import cyberwheel.red_actions.art_techniques as art_techniques
 import random
 
+# The atomic tests supported per (technique, OS) never change at runtime;
+# memoize them so sim_execute doesn't refilter the technique's test list on
+# every action.
+_VALID_TESTS_CACHE: dict = {}
+
+
+def get_valid_tests(mitre_id: str, host_os: str) -> list:
+    key = (mitre_id, host_os)
+    tests = _VALID_TESTS_CACHE.get(key)
+    if tests is None:
+        technique = art_techniques.technique_mapping[mitre_id]
+        tests = [
+            at
+            for at in technique.get_atomic_tests()
+            if host_os in at.supported_platforms
+        ]
+        _VALID_TESTS_CACHE[key] = tests
+    return tests
+
 
 class ARTKillChainPhase(ARTAction):
     """
@@ -235,11 +254,7 @@ class ARTKillChainPhase(ARTAction):
             art_technique = art_techniques.technique_mapping[mitre_id]
 
             processes = []
-            valid_tests = [
-                at
-                for at in art_technique.get_atomic_tests()
-                if host_os in at.supported_platforms
-            ]
+            valid_tests = get_valid_tests(mitre_id, host_os)
             chosen_test = random.choice(valid_tests)
             # Get prereq command, prereq command (if dependency). then run executor command(s) and cleanup command.
             for dep in chosen_test.dependencies:

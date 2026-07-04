@@ -61,24 +61,25 @@ class DetectorHandler:
 
         - `perfect_alerts`: an iterable of Alerts produced by the red agent. Used as input to the detector graph.
         """
+        # Every node's detector_output list exists (set by _from_config/reset);
+        # appending to it in place updates the graph attribute directly.
+        nodes = self.DG.nodes
         for edge in self.DG.edges:
-            node_data_view = self.DG.nodes.data("detector_output", default=[])
-            next_node_input = node_data_view[edge[1]]
+            next_node_input = nodes[edge[1]]["detector_output"]
             if edge[0] == 'start':
                 result = perfect_alerts
             else:
-                input_alerts = node_data_view[edge[0]]
-                detector = self.DG.get_edge_data(*edge)['attr']['detector'] 
+                input_alerts = nodes[edge[0]]["detector_output"]
+                detector = self.DG.get_edge_data(*edge)['attr']['detector']
                 result = detector.obs(input_alerts)
             for r in result:
                 if r not in next_node_input:
                     next_node_input.append(r)
-            self.DG.add_node(edge[1], detector_output=next_node_input)
-        return self.DG.nodes.data("detector_output", default=[])['end']
+        return nodes['end']["detector_output"]
 
     def reset(self) -> None:
-        for node in self.DG.nodes:
-            self.DG.add_node(node, detector_output=[])
+        for _, data in self.DG.nodes(data=True):
+            data["detector_output"] = []
 
     def draw(self, filename="detector.png"):
         """

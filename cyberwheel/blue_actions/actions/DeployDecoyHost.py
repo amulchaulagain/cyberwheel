@@ -26,6 +26,21 @@ class DeployDecoyHost(SubnetAction):
         super().__init__(network, configs)
         self.define_configs()
         self.define_services()
+        # The decoy's HostType is fully determined by the action's config, so
+        # validate it once here instead of on every deploy; all decoys share
+        # this (read-only) instance.
+        if "server" in self.type.lower():
+            self.host_type = HostType(
+                name="Server", type=HostTypes.DECOY_SERVER, services=self.services, decoy=True, cve_list=self.cves
+            )
+        else:
+            self.host_type = HostType(
+                name="Workstation",
+                type=HostTypes.DECOY_USER,
+                services=self.services,
+                decoy=True,
+                cve_list=self.cves,
+            )
 
     def execute(self, subnet: Subnet, **kwargs) ->  BlueActionReturn:
         """
@@ -37,19 +52,8 @@ class DeployDecoyHost(SubnetAction):
         seed = kwargs.get("seed", None)
         emulation = kwargs.get("emulation", False)
         name = generate_id(seed=seed)
-        if "server" in self.type.lower():
-            host_type = HostType(
-                name="Server", type=HostTypes.DECOY_SERVER, services=self.services, decoy=True, cve_list=self.cves
-            )
-        else:
-            host_type = HostType(
-                name="Workstation",
-                type=HostTypes.DECOY_USER,
-                services=self.services,
-                decoy=True,
-                cve_list=self.cves,
-            )
-        
+        host_type = self.host_type
+
         decoy_limit_exceeded = len(self.network.decoys) > self.max_decoys
         if decoy_limit_exceeded:
             return BlueActionReturn("decoy_limit_exceeded", False, 0)

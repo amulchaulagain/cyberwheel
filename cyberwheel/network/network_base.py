@@ -19,6 +19,27 @@ from cyberwheel.network.service import Service
 from cyberwheel.network.subnet import Subnet
 from cyberwheel.utils.hybrid_set_list import HybridSetList
 
+# create_host_type_from_yaml runs once per host while building a network;
+# both the services YAML and the resulting HostType depend only on their
+# file/name, so parse and build each once. Cached HostType instances are
+# shared across hosts and treated as read-only everywhere.
+_WINDOWS_SERVICES_CACHE: dict = {}
+_HOST_TYPE_CACHE: dict = {}
+
+
+def _load_windows_services() -> dict:
+    config_dir = files("cyberwheel.data.configs.services")
+    config_file_path: PosixPath = config_dir.joinpath(
+        "windows_exploitable_services.yaml"
+    )  # type:ignore
+    key = str(config_file_path)
+    services = _WINDOWS_SERVICES_CACHE.get(key)
+    if services is None:
+        with open(config_file_path, "r") as f:
+            services = yaml.safe_load(f)
+        _WINDOWS_SERVICES_CACHE[key] = services
+    return services
+
 
 class Network:
 
@@ -29,7 +50,12 @@ class Network:
     ):
         self.graph : nx.DiGraph = graph if graph else nx.DiGraph(name=name)
         self.name : str = name
-        
+
+        # Bumped whenever a host joins or leaves the network so per-step
+        # consumers (e.g. red agents) can skip change detection when nothing
+        # changed.
+        self.topology_version: int = 0
+
         self.disconnected_nodes: list[Host] = []
         self.isolated_hosts: list[Host] = []
 
@@ -103,6 +129,7 @@ class Network:
         """
         Adds a Host to the Network.
         """
+        self.topology_version += 1
         self.add_node(host)
         self.hosts[host.name] = host
         if host.decoy:
@@ -126,6 +153,7 @@ class Network:
         Removes a Host from the Network
         """
         try:
+            self.topology_version += 1
             self.graph.remove_node(host.name)
             self.decoys.pop(host.name)
             self.all_hosts.remove(host.name)
@@ -627,6 +655,7 @@ class Network:
         decoy.name = name
         decoy.host_type = host_type
 
+        self.topology_version += 1
         self.add_node(decoy)
         # connect node to parent subnet
         self.connect_nodes(decoy.name, subnet.name)
@@ -643,6 +672,7 @@ class Network:
         return decoy
 
     def reset(self):
+        self.topology_version += 1
         for decoy in list(self.decoys.values()):
             self.remove_host_from_subnet(decoy)
             self.server_hosts.remove(decoy.name)
@@ -673,9 +703,14 @@ class Network:
         :returns HostType:
         """
         # match name to defined host_type name
-        
+
         host_type = {}
         host_type_name = name.lower()
+
+        cache_key = (host_type_name, str(config_file))
+        cached = _HOST_TYPE_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
 
         try:
             host_type = types[host_type_name]
@@ -687,13 +722,7 @@ class Network:
 
         services_list = host_type.get("services", [])
 
-        windows_services = {}
-        config_dir = files("cyberwheel.data.configs.services")
-        config_file_path: PosixPath = config_dir.joinpath(
-            "windows_exploitable_services.yaml"
-        )  # type:ignore
-        with open(config_file_path, "r") as f:
-            windows_services = yaml.safe_load(f)
+        windows_services = _load_windows_services()
 
         cve_list = set()
         running_services = []
@@ -713,6 +742,7 @@ class Network:
             cve_list=cve_list,
         )
 
+        _HOST_TYPE_CACHE[cache_key] = host_type
         return host_type
 
 

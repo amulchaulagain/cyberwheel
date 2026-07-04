@@ -33,16 +33,14 @@ class BlueObservation(Observation):
         self.mapping = {host: i for i, host in enumerate(sorted(list(self.network.hosts.keys())))}
         self.len_alerts = len(self.mapping) * 2
         self.obs_vec = np.full(self.max_size, -1)
-        for i in range(self.len_alerts):
-            self.obs_vec[i] = 0
-    
+        self.obs_vec[: self.len_alerts] = 0
+
     def create_obs_vector(self, alerts: Iterable[Alert], **kwargs) -> Iterable:
         barrier = self.len_alerts // 2
 
         # Refresh the non-history portion of the obs_vec
-        for i in range(barrier):
-            self.obs_vec[i] = 0
-        
+        self.obs_vec[:barrier] = 0
+
         # Trip alerts in observation space
         for alert in alerts:
             alerted_host = alert.src_host

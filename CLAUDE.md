@@ -37,6 +37,24 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 - Known pre-existing bugs are encoded as xfail ("known-issue") cases, not fixed: `run` mode
   (baseline_runner service_mapping/agent_config), base-env `reset()` (InactiveRedAgent),
   and two env configs referencing the missing `network/emulator_15_host.yaml`.
+- Perf benchmarks: `bench_network_build` (200-host), `bench_sim_step` (inactive base env),
+  `bench_rl_step` (full RL env step: masks, blue/red actions, detector, obs, reward),
+  `bench_train_sps` (real train CLI). In `--compare-rev` mode a benchmark the compared
+  revision cannot run is skipped there and its metric reported as NEW (not gated).
+
+## Profiling — `python3 -m cyberwheel.profiler`
+- Reusable env profiler in `cyberwheel/profiler/`: per-phase wall-time attribution
+  (blue/red act, detector, observations, reward, action mask, reset) via non-invasive method
+  wrapping + cProfile hotspot tables, per scenario: `network-build`, `sim-step`, `rl-step`
+  (deterministic defaults), `train` (opt-in; cProfiles a tiny real train run, never gated).
+- Options: `--scenario X` (repeatable, or `all`), `--network`, `--env-config`, `--network-size`
+  (profile networks bigger than the env config's compat size), `--quick`, `--json PATH`,
+  `--top N`, `--no-hotspots`, `--seed N`. Exit codes: 0 ok · 2 regression (`--check`) · 3 error.
+- **Profile baseline:** `cyberwheel/profiler/baselines/profile_baseline.json` is committed and
+  follows the same parent-commit convention as the test baseline: `--record-baseline` in the
+  SAME commit as intentional perf changes; `--check` gates against it (exit 2), same-machine
+  only. Sub-floor metrics are reported but never gated (timer noise): phases < 0.02 ms/step,
+  one-shot `ms` metrics < 1 ms (per-step `ms/step` metrics are gated at any magnitude).
 
 ## Architecture (conceptual — stable)
 - **Env loop (per step):** the red agent acts on a host → the action emits **Alerts** → the
@@ -95,6 +113,10 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   `suites/{config,smoke,perf}_suite.py`, `benchmarks/bench_*.py` (standalone scripts);
   committed baseline in `cyberwheel/tests/baselines/`. The old `cyberwheel/tests/*.py` files
   are stale (pre-reorg imports) and are not imported by the framework.
+- **Profiler:** `cyberwheel/profiler/` — `cli.py`/`__main__.py`, `scenarios.py` (workloads +
+  drivers), `phase_timer.py` (PhaseAccumulator/MethodInstrumenter), `hotspots.py` (cProfile),
+  `baseline_io.py` (reuses the test framework's baseline machinery), `report.py`;
+  committed baseline in `cyberwheel/profiler/baselines/profile_baseline.json`.
 
 ## Conventions & red lines
 - **Never `git push`. Never add or restore a git remote.** (A hook enforces this; do not

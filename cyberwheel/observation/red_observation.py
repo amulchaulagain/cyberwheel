@@ -18,7 +18,9 @@ class RedObservation(Observation):
     
     def _init_vars(self):
         self.size : int = 0
-        self.obs_vec : list[int] = [-1] * self.max_size
+        # Kept as a numpy array so per-step consumers get it without paying a
+        # list -> ndarray conversion; updates below write into slices in place.
+        self.obs_vec : np.ndarray = np.full(self.max_size, -1, dtype=np.int64)
         self.known_subnets = []
         self.obs : dict[str, dict] = {}
         self.standalone_obs: dict[str, int] = {}
@@ -78,4 +80,4 @@ class RedObservation(Observation):
         #self.define_attributes()
         self._init_vars()
         self.add_host(entry_host, ip_as_key=ip_as_key, on_host=True)
-        return np.array(self.obs_vec)
+        return self.obs_vec

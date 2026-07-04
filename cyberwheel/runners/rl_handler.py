@@ -241,7 +241,10 @@ class RLHandler:
             writer.add_scalar(f"losses/{agent}_explained_variance", self.agents[agent]["explained_variance"], self.global_step)
 
     def reset(self):
+        # One vector reset for all agents: resetting once per agent both did
+        # redundant work and handed each agent observations from a different
+        # reset (only the last one described the live env state).
+        reset = self.envs.reset()[0]
         for agent in self.agents:
-            reset = self.envs.reset()[0]
             self.agents[agent]["resets"] = np.array(reset[agent])
             self.agents[agent]["next_obs"] = torch.Tensor(self.agents[agent]["resets"]).to(self.device)

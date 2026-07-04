@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-07-04T14:05:40Z",
+  "recorded_at_commit": "dirty+3944c9e7a8a12a448ad30552fda610196028062c",
+  "environment": {
+    "python": "3.10.19",
+    "system": "Linux",
+    "machine": "aarch64",
+    "cpu_count": 8
+  },
+  "metrics": {
+    "network_build/build_ms": {
+      "value": 13.427416,
+      "unit": "ms",
+      "higher_is_better": false,
+      "samples": [
+        18.183625,
+        13.427416,
+        11.652459
+      ]
+    },
+    "network_build/service_map_ms": {
+      "value": 0.027209,
+      "unit": "ms",
+      "higher_is_better": false,
+      "samples": [
+        0.213333,
+        0.027209,
+        0.027125
+      ]
+    },
+    "rl_step/action_mask_ms": {
+      "value": 0.004417937,
+      "unit": "ms/step",
+      "higher_is_better": false,
+      "samples": [
+        0.004594915,
+        0.004417937,
+        0.004370046999999999
+      ]
+    },
+    "rl_step/phase/blue.act": {
+      "value": 0.016776524,
+      "unit": "ms/step",
+      "higher_is_better": false
+    },
+    "rl_step/phase/blue.detector": {
+      "value": 0.002835629,
+      "unit": "ms/step",
+      "higher_is_better": false
+    },
+    "rl_step/phase/blue.observation": {
+      "value": 0.0031390149999999998,
+      "unit": "ms/step",
+      "higher_is_better": false
+    },
+    "rl_step/phase/blue.select_action": {
+      "value": 0.0016924190000000001,
+      "unit": "ms/step",
+      "higher_is_better": false
+    },
+    "rl_step/phase/red.act": {
+      "value": 0.00727705,
+      "unit": "ms/step",
+      "higher_is_better": false
+    },
+    "rl_step/phase/red.observation": {
+      "value": 0.000758263,
+      "unit": "ms/step",
+      "higher_is_better": false
+    },
+    "rl_step/phase/red.select_action": {
+      "value": 0.0006458880000000001,
+      "unit": "ms/step",
+      "higher_is_better": false
+    },
+    "rl_step/phase/red.sim_execute": {
+      "value": 0.001791796,
+      "unit": "ms/step",
+      "higher_is_better": false
+    },
+    "rl_step/phase/reward": {
+      "value": 0.0037422460000000003,
+      "unit": "ms/step",
+      "higher_is_better": false
+    },
+    "rl_step/reset_ms": {
+      "value": 0.08728473333333334,
+      "unit": "ms/reset",
+      "higher_is_better": false
+    },
+    "rl_step/step_ms": {
+      "value": 0.036208661999999996,
+      "unit": "ms/step",
+      "higher_is_better": false,
+      "samples": [
+        0.036727546,
+        0.036208661999999996,
+        0.035596302
+      ]
+    },
+    "sim_step/step_ms": {
+      "value": 0.0028376525,
+      "unit": "ms/step",
+      "higher_is_better": false,
+      "samples": [
+        0.0031307183399999997,
+        0.0028374974999999998,
+        0.0028376525
+      ]
+    }
+  }
+}

@@ -1,6 +1,5 @@
 import importlib
 import yaml
-import numpy as np
 
 from typing import Iterable
 
@@ -45,6 +44,14 @@ class RLARTAgent(ARTAgent):
             ARTPrivilegeEscalation,
             ARTImpact,
         ]
+        # Phases that need a per-host service mapping (same set the startup
+        # service map covers; pingsweep/portscan don't use one).
+        self.all_kcps = [
+            ARTDiscovery,
+            ARTLateralMovement,
+            ARTPrivilegeEscalation,
+            ARTImpact,
+        ]
 
         self.reward_map = {}
 
@@ -76,9 +83,11 @@ class RLARTAgent(ARTAgent):
             action
         )  # Selects ART Action, should include the action and target host
         source_host = self.current_host
-        target_host = self.network.hosts[target_host_name] if target_host_name != "nothing" else self.current_host
+        # A discovered host may no longer exist (e.g. a decoy the blue agent
+        # removed); targeting it is a failed no-op rather than a KeyError.
+        target_host = self.network.hosts.get(target_host_name) if target_host_name != "nothing" else self.current_host
         success = False
-        if self.validate_action(art_action, target_host_name):
+        if target_host is not None and self.validate_action(art_action, target_host_name):
             if art_action == ARTPingSweep or art_action == ARTPortScan:
                 result = art_action(
                     self.current_host, target_host
@@ -94,13 +103,15 @@ class RLARTAgent(ARTAgent):
             success = result.attack_success
             self.handle_action(result)
         else:
+            if target_host is None:
+                target_host = "invalid"
             result = RedActionResults(source_host, target_host)
         self.current_step += 1
         return RedAgentResult(
-            art_action, 
-            source_host, 
-            target_host, 
-            success, 
+            art_action,
+            source_host,
+            target_host,
+            success,
             self.get_observation_space(),
             result
         )  # Returns what ARTAgent act() should, probably. Or the observation space?
@@ -122,6 +133,13 @@ class RLARTAgent(ARTAgent):
                 sweeped = h.subnet.name == result.target_host.subnet.name
                 self.observation.add_host(h_name, sweeped=sweeped)
                 self.action_space.add_host(h_name)
+                # A swept host that joined after startup (a decoy) has no
+                # service mapping yet; without one, attacking it later would
+                # KeyError once it becomes a valid action target.
+                if h_name not in self.service_mapping:
+                    self.service_mapping[h_name] = self.get_valid_techniques_by_host(
+                        h, self.all_kcps
+                    )
         elif action == ARTPortScan:  # Scans target host
             self.observation.update_host(target_host, scanned=True)
         elif action == ARTDiscovery:  # Discovers host type
@@ -136,8 +154,14 @@ class RLARTAgent(ARTAgent):
             self.observation.update_host(target_host, impacted=True)
 
     def handle_network_change(self):
+        # Only diff the host sets on steps where the topology actually changed.
+        topology_version = getattr(self.network, "topology_version", None)
+        if topology_version is not None and topology_version == self._seen_topology_version:
+            return
+        self._seen_topology_version = topology_version
+
         current_hosts = self.network.hosts.keys()
-        new_hosts = current_hosts - self.tracked_hosts
+        new_hosts = current_hosts - self.tracked_hosts.data_set
         for h in new_hosts:
             host = self.network.hosts[h]
             self.service_mapping[h] = self.get_valid_techniques_by_host(
@@ -145,7 +169,7 @@ class RLARTAgent(ARTAgent):
             )
             self.observation.add_host(h, sweeped=True)
             self.action_space.add_host(h)
-        self.tracked_hosts = current_hosts
+            self.tracked_hosts.add(h)
     
 
     def validate_action(self, action: ARTKillChainPhase, target_host: str) -> bool:
@@ -206,7 +230,9 @@ class RLARTAgent(ARTAgent):
         """
         Takes red agent view of network and transforms it into the obs vector.
         """
-        return np.array(self.observation.obs_vec, dtype=np.int64)
+        # obs_vec is maintained as an int64 ndarray in place; hand it out
+        # directly (downstream consumers copy it into tensors/buffers).
+        return self.observation.obs_vec
 
     def reset(self, network: Network, service_mapping: dict) -> Iterable:
         super().reset(network, service_mapping)

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "recorded_at": "2026-07-04T12:59:10Z",
-  "recorded_at_commit": "dirty+7b9b3373d2df0f34f6bdd80409b1264f7cf4eadb",
+  "recorded_at": "2026-07-04T14:05:59Z",
+  "recorded_at_commit": "dirty+3944c9e7a8a12a448ad30552fda610196028062c",
   "environment": {
     "python": "3.10.19",
     "system": "Linux",
@@ -10,34 +10,44 @@
   },
   "metrics": {
     "network_build_200host_s": {
-      "value": 0.675671833999786,
+      "value": 0.0605670420000024,
       "samples": [
-        0.6569391250000081,
-        0.675671833999786,
-        0.7420416250001836
+        0.06132254199974341,
+        0.05965741699992577,
+        0.0605670420000024
       ],
       "unit": "s",
       "higher_is_better": false
     },
-    "sim_step_sps_15host": {
-      "value": 393791.2896324859,
+    "rl_step_sps_15host": {
+      "value": 25473.25616329254,
       "samples": [
-        391658.8416489553,
-        393791.2896324859,
-        395147.2628499543
+        25093.816054373583,
+        25473.25616329254,
+        27204.55032014111
+      ],
+      "unit": "steps/s",
+      "higher_is_better": true
+    },
+    "sim_step_sps_15host": {
+      "value": 323588.2917949975,
+      "samples": [
+        370812.88473314734,
+        317665.91790192627,
+        323588.2917949975
       ],
       "unit": "steps/s",
       "higher_is_better": true
     },
     "train_sps_15host": {
-      "value": 63.0,
+      "value": 57.5,
       "samples": [
-        63,
-        63,
-        56,
-        64,
-        64,
-        54
+        50,
+        55,
+        51,
+        60,
+        62,
+        60
       ],
       "unit": "steps/s",
       "higher_is_better": true

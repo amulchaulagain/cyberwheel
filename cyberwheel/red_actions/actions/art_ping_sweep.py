@@ -1,4 +1,4 @@
-from cyberwheel.red_actions.actions.art_killchain_phase import ARTKillChainPhase
+from cyberwheel.red_actions.actions.art_killchain_phase import ARTKillChainPhase, get_valid_tests
 from cyberwheel.red_actions import art_techniques
 from cyberwheel.network.host import Host
 
@@ -42,11 +42,7 @@ class ARTPingSweep(ARTKillChainPhase):
         art_technique = art_techniques.technique_mapping["T1018"]
         mitre_id = art_technique.mitre_id
         processes = []
-        valid_tests = [
-            at
-            for at in art_technique.get_atomic_tests()
-            if host_os in at.supported_platforms
-        ]
+        valid_tests = get_valid_tests(mitre_id, host_os)
         chosen_test = random.choice(valid_tests)
         # Get prereq command, prereq command (if dependency). then run executor command(s) and cleanup command.
         for dep in chosen_test.dependencies:

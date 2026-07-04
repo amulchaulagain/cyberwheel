@@ -245,7 +245,9 @@ def _gate_perf(args: argparse.Namespace, ctx: Context, perf_report: dict) -> int
         print(f"Measuring {args.compare_rev} in a temporary worktree ...", flush=True)
         with gitio.worktree(args.compare_rev) as parent_root:
             try:
-                parent_metrics = perf_suite.measure_metrics(ctx.quick, parent_root)
+                parent_metrics = perf_suite.measure_metrics(
+                    ctx.quick, parent_root, skip_failing=True
+                )
             finally:
                 artifacts.cleanup(parent_root)
         source = f"same-machine re-measurement of {args.compare_rev}"

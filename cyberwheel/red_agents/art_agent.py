@@ -7,7 +7,6 @@ from importlib.resources import files
 from cyberwheel.reward import RewardMap
 from cyberwheel.red_agents import strategies
 from cyberwheel.network.network_base import Network, Host
-from cyberwheel.red_actions import art_techniques
 from cyberwheel.red_actions.actions import (
     ARTDiscovery,
     ARTImpact,
@@ -25,7 +24,7 @@ from cyberwheel.red_agents.red_agent_base import (
     RedActionResults,
     RedAgentResult
 )
-from cyberwheel.utils import HybridSetList
+from cyberwheel.utils import HybridSetList, get_valid_techniques_by_host
 
 
 class ARTAgent(RedAgent):
@@ -99,22 +98,18 @@ class ARTAgent(RedAgent):
         self.campaign = args.campaign if hasattr(args, 'campaign') else False
 
         self.service_mapping = args.service_mapping[self.network.name] if hasattr(args, 'service_mapping') else {}
+        self._seen_topology_version = None
 
         if self.service_mapping == {} and not self.campaign and map_services:
             self.tracked_hosts = HybridSetList()
             for _, host in self.network.hosts.items():
                 self.tracked_hosts.add(host.name)
-                self.service_mapping[host.name] = {}
-                for kcp in self.all_kcps:
-                    self.service_mapping[host.name][kcp] = []
-                    kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
-                    for mid in kcp_valid_techniques:
-                        technique = art_techniques.technique_mapping[mid]
-                        if len(host.host_type.cve_list & technique.cve_list) > 0:
-                            self.service_mapping[host.name][kcp].append(mid)
+                self.service_mapping[host.name] = get_valid_techniques_by_host(
+                    host, self.all_kcps
+                )
         else:
             self.tracked_hosts = HybridSetList(service_mapping.keys())
-    
+
     def from_yaml(self) -> None:
         contents = self.args.agent_config["red"]
 
@@ -151,34 +146,26 @@ class ARTAgent(RedAgent):
         """
         Returns service mapping for a given host and killchain phases.
         """
-        valid_techniques = {}
-        for kcp in all_kcps:
-            valid_techniques[kcp] = []
-            kcp_valid_techniques = kcp.validity_mapping[host.os][kcp.get_name()]
-            for mid in kcp_valid_techniques:
-                technique = art_techniques.technique_mapping[mid]
-                if len(host.host_type.cve_list & technique.cve_list) > 0:
-                    valid_techniques[kcp].append(mid)
-        return valid_techniques
+        return get_valid_techniques_by_host(host, all_kcps)
 
     def handle_network_change(self):
         """
         Does a 'check' at every step to initialize any newly added decoys to view or remove any removed decoys
         """
-        current_hosts = self.network.hosts.keys()
+        # The full check diffs host sets (O(hosts)); only pay it on steps where
+        # the network topology actually changed (decoy deployed/removed).
+        topology_version = getattr(self.network, "topology_version", None)
+        if topology_version is not None and topology_version == self._seen_topology_version:
+            return
+        self._seen_topology_version = topology_version
 
-        #print(f"Decoys: {list(self.network.decoys.keys())}")
+        current_hosts = self.network.hosts.keys()
 
         new_hosts = current_hosts - self.tracked_hosts.data_set
 
-        #if len(new_hosts) != 0:
-            #print(new_hosts)
-
         removed_hosts = (self.unknowns.data_set | self.unimpacted_hosts.data_set | self.unimpacted_servers.data_set) - self.network.hosts.keys()
-        #print(removed_hosts)
-        
-        if len(removed_hosts) > 0:
-            removed_host = removed_hosts.pop()
+
+        for removed_host in removed_hosts:
             self.unknowns.remove(removed_host)
             self.unimpacted_hosts.remove(removed_host)
             self.unimpacted_servers.remove(removed_host)
@@ -386,6 +373,7 @@ class ARTAgent(RedAgent):
         """
         self.network = network
         self.service_mapping = service_mapping
+        self._seen_topology_version = None
         self.current_host : Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
         self.history: AgentHistory = AgentHistory(initial_host=self.current_host)
         self.unimpacted_servers.reset()

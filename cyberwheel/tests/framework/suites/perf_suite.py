@@ -29,6 +29,7 @@ _BENCH_DIR = Path(__file__).resolve().parent.parent / "benchmarks"
 _BENCHMARKS = (
     ("bench_network_build.py", 600.0),
     ("bench_sim_step.py", 900.0),
+    ("bench_rl_step.py", 900.0),
     ("bench_train_sps.py", 1200.0),
 )
 
@@ -69,11 +70,29 @@ def run_benchmark(
     return payload
 
 
-def measure_metrics(quick: bool, code_root: Path = REPO_ROOT) -> dict:
-    """Run all benchmarks against ``code_root`` (used for --compare-rev)."""
+def measure_metrics(
+    quick: bool, code_root: Path = REPO_ROOT, skip_failing: bool = False
+) -> dict:
+    """Run all benchmarks against ``code_root`` (used for --compare-rev).
+
+    With ``skip_failing``, a benchmark that cannot run at ``code_root`` is
+    skipped instead of raising — e.g. when the compared (parent) revision
+    still has a bug that this checkout's benchmark would trip on. Its metric
+    is then absent and shows up as NEW in the comparison rather than gating.
+    """
     metrics = {}
     for script, timeout in _BENCHMARKS:
-        payload = run_benchmark(script, timeout, quick, code_root)
+        try:
+            payload = run_benchmark(script, timeout, quick, code_root)
+        except TestFailure as failure:
+            if not skip_failing:
+                raise
+            print(
+                f"NOTE: {script} could not run against {code_root} "
+                f"({failure}); reporting its metric as NEW.",
+                flush=True,
+            )
+            continue
         metrics[payload["metric"]] = {
             "value": payload["value"],
             "samples": payload["samples"],
