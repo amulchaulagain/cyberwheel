@@ -154,21 +154,26 @@ export function Toggle({
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={value}
       onClick={() => onChange(!value)}
-      className="flex items-center gap-2 py-1"
+      className="flex items-center gap-2.5 py-1"
     >
       <span
-        className={`relative h-5 w-9 rounded-full transition-colors ${
+        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
           value ? "bg-accent-dim" : "bg-ink-600"
         }`}
       >
+        {/* 36px track, 16px knob, symmetric 2px inset: off=2px, on=18px */}
         <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-            value ? "translate-x-4" : "translate-x-0.5"
-          }`}
+          className="inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-150"
+          style={{ transform: `translateX(${value ? 18 : 2}px)` }}
         />
       </span>
-      <span className="text-sm text-slate-300">{label ?? (value ? "on" : "off")}</span>
+      {/* fixed width so "on"/"off" never shift surrounding layout */}
+      <span className="w-6 text-left text-sm text-slate-300">
+        {label ?? (value ? "on" : "off")}
+      </span>
     </button>
   );
 }
