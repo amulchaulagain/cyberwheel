@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "./client";
 import type {
@@ -149,6 +149,57 @@ export function useVizEpisode(
     enabled: enabled && episode !== undefined,
     staleTime: Infinity,
     retry: false,
+  });
+}
+
+// Multi-run hooks for the compare view. No polling — comparison targets
+// finished runs; a stale minute of data is fine there.
+
+export function useRunRecords(ids: string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ["run", id],
+      queryFn: () => api.get<RunRecord>(`/api/runs/${id}`),
+      staleTime: 10_000,
+      retry: false,
+    })),
+  });
+}
+
+export function useMetricsSummaries(ids: string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ["metrics", id],
+      queryFn: () => api.get<MetricsSummary>(`/api/runs/${id}/metrics`),
+      staleTime: 10_000,
+      retry: false,
+    })),
+  });
+}
+
+export function useScalarsFor(pairs: { runId: string; tags: string[] }[]) {
+  return useQueries({
+    queries: pairs.map(({ runId, tags }) => ({
+      queryKey: ["scalars", runId, tags.join(",")],
+      queryFn: () =>
+        api.get<{ series: Record<string, ScalarPoint[]> }>(
+          `/api/runs/${runId}/metrics/scalars?tags=${encodeURIComponent(tags.join(","))}`,
+        ),
+      enabled: tags.length > 0,
+      staleTime: 10_000,
+      retry: false,
+    })),
+  });
+}
+
+export function useEvalSummaries(ids: string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ["eval-summary", id, false],
+      queryFn: () => api.get<EvalSummary>(`/api/runs/${id}/summary`),
+      staleTime: 10_000,
+      retry: false,
+    })),
   });
 }
 

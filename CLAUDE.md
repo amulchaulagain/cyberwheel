@@ -36,6 +36,9 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   per-optimizer LRs, reward selection, and the string `anneal_lr` are unreachable/corrupted
   via flags). Run registry (config snapshot + status + stdout) lives in
   `cyberwheel/data/frontend/runs/<run_id>/`; both locations are git-ignored.
+  Dashboard multi-select (up to 6 runs) → `/compare` view: overlaid training curves
+  (episodic return + SPS), evaluation-summary comparison (mean ± 95% CI), config diff.
+  Frontend-only feature — it composes existing endpoints plus `GET /api/runs/<id>/summary`.
 - CLI args override YAML values. Dispatch needs `<mode> <config>` (2+ argv); a bare `-h` prints
   nothing. To list all parameters use an unknown mode, e.g. `python3 -m cyberwheel help x`.
 

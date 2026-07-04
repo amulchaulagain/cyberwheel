@@ -26,7 +26,17 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
   );
 }
 
-function RunRow({ run }: { run: RunRecord }) {
+function RunRow({
+  run,
+  selected,
+  selectable,
+  onToggle,
+}: {
+  run: RunRecord;
+  selected: boolean;
+  selectable: boolean;
+  onToggle: () => void;
+}) {
   const navigate = useNavigate();
   const stop = useStopRun();
   const remove = useDeleteRun();
@@ -36,6 +46,20 @@ function RunRow({ run }: { run: RunRecord }) {
       className="cursor-pointer border-t border-ink-700/70 transition-colors hover:bg-ink-800/50"
       onClick={() => navigate(runPath(run))}
     >
+      <td className="w-8 pl-4 pr-1 py-2.5" onClick={(event) => event.stopPropagation()}>
+        <input
+          type="checkbox"
+          className="accent-sky-500"
+          checked={selected}
+          disabled={!selected && !selectable}
+          title={
+            !selected && !selectable
+              ? "at most 6 runs can be compared at once"
+              : "select for comparison"
+          }
+          onChange={onToggle}
+        />
+      </td>
       <td className="px-4 py-2.5">
         <div className="text-sm font-medium text-slate-200">{run.display_name}</div>
         <div className="font-mono text-[11px] text-slate-500">{run.id}</div>
@@ -112,8 +136,19 @@ function RunRow({ run }: { run: RunRecord }) {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const { data, isLoading, error } = useRuns();
   const [kind, setKind] = useState<KindFilter>("all");
+  // 6 = the metric-chart series palette size.
+  const MAX_COMPARE = 6;
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSelected = (runId: string) =>
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(runId)) next.delete(runId);
+      else next.add(runId);
+      return next;
+    });
 
   const runs = useMemo(() => {
     const all = data?.runs ?? [];
@@ -174,6 +209,24 @@ export default function DashboardPage() {
                 {option === "all" ? "All" : option === "train" ? "Training" : "Evaluations"}
               </button>
             ))}
+            {selected.size > 0 && (
+              <div className="ml-auto flex items-center gap-1.5">
+                <button
+                  className="btn-primary !px-3 !py-1 !text-xs"
+                  disabled={selected.size < 2}
+                  title={selected.size < 2 ? "select at least 2 runs" : undefined}
+                  onClick={() => navigate(`/compare?runs=${[...selected].join(",")}`)}
+                >
+                  Compare ({selected.size})
+                </button>
+                <button
+                  className="btn-ghost !px-2 !py-1 !text-xs text-slate-500"
+                  onClick={() => setSelected(new Set())}
+                >
+                  clear
+                </button>
+              </div>
+            )}
           </div>
           {isLoading ? (
             <div className="px-4 py-12 text-center text-sm text-slate-500">Loading…</div>
@@ -195,6 +248,7 @@ export default function DashboardPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wider text-slate-500">
+                  <th className="w-8 pl-4 pr-1 py-2" />
                   <th className="px-4 py-2 font-medium">Run</th>
                   <th className="px-3 py-2 font-medium">Kind</th>
                   <th className="px-3 py-2 font-medium">Status</th>
@@ -207,7 +261,13 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {runs.map((run) => (
-                  <RunRow key={run.id} run={run} />
+                  <RunRow
+                    key={run.id}
+                    run={run}
+                    selected={selected.has(run.id)}
+                    selectable={selected.size < MAX_COMPARE}
+                    onToggle={() => toggleSelected(run.id)}
+                  />
                 ))}
               </tbody>
             </table>

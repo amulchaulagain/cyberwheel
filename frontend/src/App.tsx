@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api/client";
+import ComparePage from "./pages/ComparePage";
 import DashboardPage from "./pages/DashboardPage";
 import EvaluationRunPage from "./pages/EvaluationRunPage";
 import NewEvaluationPage from "./pages/NewEvaluationPage";
@@ -82,6 +83,7 @@ export default function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/train/new" element={<NewTrainingPage />} />
           <Route path="/evaluate/new" element={<NewEvaluationPage />} />
+          <Route path="/compare" element={<ComparePage />} />
           <Route path="/runs/train/:runId" element={<TrainingRunPage />} />
           <Route path="/runs/evaluate/:runId" element={<EvaluationRunPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

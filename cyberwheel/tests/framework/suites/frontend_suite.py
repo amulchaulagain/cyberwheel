@@ -401,6 +401,53 @@ def _case_evaluate_batch() -> Outcome:
     )
 
 
+def _case_compare_contract() -> Outcome:
+    """The exact server contract the /compare page consumes stays intact."""
+    server = _server()
+    train_id = _STATE["train_id"]
+
+    record = server.api("GET", f"/api/runs/{train_id}")
+    check(isinstance(record.get("params"), dict), "run record missing params dict")
+    check(bool(record.get("display_name")), "run record missing display_name")
+
+    metrics = server.api("GET", f"/api/runs/{train_id}/metrics")
+    all_tags = [tag for tags in metrics["tags"].values() for tag in tags]
+    return_tags = [
+        tag
+        for tag in all_tags
+        if tag.startswith("charts/") and tag.endswith("_episodic_return")
+    ]
+    check(bool(return_tags), f"no charts/*_episodic_return tags: {all_tags}")
+
+    wanted = ",".join(return_tags)
+    series = server.api(
+        "GET", f"/api/runs/{train_id}/metrics/scalars?tags={wanted}"
+    )["series"]
+    for tag in return_tags:
+        points = series.get(tag)
+        check(bool(points), f"scalars for {tag!r} are empty")
+        check(
+            all(len(point) == 3 for point in points),
+            f"scalar points for {tag!r} are not [step, wall_time, value] triples",
+        )
+
+    for key in ("eval_id", "eval_batch_id"):
+        run_id = _STATE.get(key)
+        check(bool(run_id), f"prerequisite run {key} missing (earlier case failed?)")
+        eval_record = server.api("GET", f"/api/runs/{run_id}")
+        check(isinstance(eval_record.get("params"), dict), f"{key} missing params")
+        summary = server.api("GET", f"/api/runs/{run_id}/summary")
+        check(
+            isinstance(summary["metrics"], list)
+            and summary["overall"]["total_reward"]["mean"] is not None,
+            f"{key} summary lacks comparable stats: {summary.get('overall')}",
+        )
+    return Outcome(
+        Status.PASS,
+        f"compare-view contract OK ({len(return_tags)} return tags, 2 eval summaries)",
+    )
+
+
 def _case_stop_and_orphan() -> Outcome:
     server = _server()
     created = server.api(
@@ -533,6 +580,7 @@ def register(registry: Registry, ctx: Context) -> None:
         ("frontend:train_e2e_via_api", _case_train, 900.0, None),
         ("frontend:evaluate_e2e_via_api", _case_evaluate, 600.0, "frontend:train_e2e_via_api"),
         ("frontend:evaluate_batch_via_api", _case_evaluate_batch, 600.0, "frontend:train_e2e_via_api"),
+        ("frontend:compare_view_contract", _case_compare_contract, 120.0, "frontend:evaluate_batch_via_api"),
         ("frontend:job_stop_and_orphan", _case_stop_and_orphan, 300.0, None),
         ("frontend:launch_validation", _case_validation, 120.0, None),
         ("frontend:cleanup_via_api", _case_cleanup, 300.0, None),

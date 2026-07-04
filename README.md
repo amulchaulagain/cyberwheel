@@ -249,7 +249,10 @@ then open `http://localhost:8080/`. The UI lets you:
   prefilled from the source run and a checkpoint picker;
 * **replay the network / agent-behavior visualization** of an evaluation — a zoomable, scrubable
   view of the network state at each step (compromise progression, decoys, isolation, the red
-  agent's position), which stays legible from 10 up to 10,000 hosts.
+  agent's position), which stays legible from 10 up to 10,000 hosts;
+* **compare runs side by side** — select up to six runs on the dashboard and open the compare
+  view: training curves overlaid on shared axes, evaluation summaries as mean ± 95% CI, and a
+  configuration diff highlighting exactly which parameters differ between the runs.
 
 Runs launch as normal `train` / `evaluate` subprocesses, so anything started in the UI behaves
 exactly like the CLI (and vice-versa — CLI-trained models show up in the UI as evaluable). The UI
