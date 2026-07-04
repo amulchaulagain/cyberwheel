@@ -10,6 +10,7 @@ covered by an xfail case).
 from __future__ import annotations
 
 import csv
+import json
 
 import yaml
 
@@ -157,6 +158,8 @@ def _smoke_evaluate(run_id: str) -> Outcome:
             graph_name,
             "--download-model",
             "false",
+            "--visualize",
+            "true",
             "--seed",
             "1",
             "--deterministic",
@@ -180,10 +183,86 @@ def _smoke_evaluate(run_id: str) -> Outcome:
         check(
             column in rows[0], f"action log missing column {column!r}: {list(rows[0])}"
         )
+
+    # Visualization artifacts (evaluate ran with --visualize true).
+    viz_dir = DATA_ROOT / "graphs" / graph_name
+    for artifact in ("meta.json", "layout.json", "episode_0.json"):
+        check_file(viz_dir / artifact)
+    with open(viz_dir / "layout.json") as f:
+        layout = json.load(f)
+    node_count = len(layout["nodes"])
+    kinds = {node["kind"] for node in layout["nodes"]}
+    check(
+        kinds == {"router", "subnet", "host"},
+        f"layout node kinds unexpected: {kinds}",
+    )
+    check(
+        all(0 <= a < node_count and 0 <= b < node_count for a, b in layout["edges"]),
+        "layout edge references out-of-range node ids",
+    )
+    check(bool(layout["decoy_slots"]), "layout has no decoy_slots")
+    with open(viz_dir / "meta.json") as f:
+        meta = json.load(f)
+    check(
+        meta["episodes_written"] == [0],
+        f"meta episodes_written {meta['episodes_written']} != [0]",
+    )
+    with open(viz_dir / "episode_0.json") as f:
+        episode = json.load(f)
+    check(
+        len(episode["steps"]) == num_steps,
+        f"episode_0 has {len(episode['steps'])} frames, expected {num_steps}",
+    )
+    for frame in episode["steps"]:
+        check("red" in frame and "blue" in frame, "frame missing red/blue action record")
     return Outcome(
         Status.PASS,
-        f"1 episode x {num_steps} steps evaluated; action log has {len(rows)} rows",
+        f"1 episode x {num_steps} steps evaluated; action log has {len(rows)} rows; "
+        f"viz artifacts written ({node_count} layout nodes)",
         {"columns": list(rows[0])},
+    )
+
+
+def _smoke_viz_layout_deterministic() -> Outcome:
+    """compute_layout is deterministic and decoy slots are stable."""
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from cyberwheel.network.network_base import Network
+    from cyberwheel.visualization import compute_layout
+    from cyberwheel.visualization.layout import decoy_slot_position
+
+    layouts = []
+    for _ in range(2):
+        network = Network.create_network_from_yaml(CONFIG_ROOT / "network" / _NETWORK)
+        layouts.append(compute_layout(network))
+
+    def geometry(layout: dict) -> str:
+        # Host IPs come from a randomized DHCP draw (seeded only in real
+        # runs), so they are display metadata, not layout — strip them.
+        stripped = dict(layout, nodes=[
+            {k: v for k, v in node.items() if k != "ip"} for node in layout["nodes"]
+        ])
+        return json.dumps(stripped, sort_keys=True)
+
+    check(
+        geometry(layouts[0]) == geometry(layouts[1]),
+        "layout geometry differs across identical builds",
+    )
+
+    layout = layouts[0]
+    hosts = [n for n in layout["nodes"] if n["kind"] == "host"]
+    check(len(hosts) == 15, f"expected 15 host nodes, got {len(hosts)}")
+    subnet_name, slots = next(iter(layout["decoy_slots"].items()))
+    a = decoy_slot_position(slots, 0)
+    b = decoy_slot_position(slots, 0)
+    check(a == b, "decoy_slot_position is not stable")
+    check(
+        a != decoy_slot_position(slots, 1),
+        f"decoy slots 0 and 1 collide for subnet {subnet_name}",
+    )
+    return Outcome(
+        Status.PASS,
+        f"layout deterministic; {len(layout['nodes'])} nodes, "
+        f"{len(layout['edges'])} edges",
     )
 
 
@@ -250,6 +329,14 @@ def register(registry: Registry, ctx: Context) -> None:
             fn=(lambda: _smoke_evaluate(ctx.run_id)),
             timeout_s=600.0,
             depends_on="smoke:train_e2e",
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:viz_layout_deterministic",
+            suite=SUITE,
+            fn=_smoke_viz_layout_deterministic,
+            timeout_s=300.0,
         )
     )
     registry.add(

@@ -15,6 +15,7 @@ from tqdm import tqdm
 from cyberwheel.network.network_base import Network
 from cyberwheel.utils import RLPolicy, get_service_map
 from cyberwheel.runners.rl_trainer import RLTrainer
+from cyberwheel.visualization import VizWriter
 from cyberwheel.utils.set_seed import set_seed
 
 
@@ -113,8 +114,34 @@ class RLEvaluator(RLTrainer):
         if self.args.graph_name != None:
             self.now_str = self.args.graph_name
         else:
-            self.now_str = f"{self.args.experiment_name}_evaluate_{self.args.network_config.split('.')[0]}_{self.args.red_agent}_{self.args.reward_function}reward"
+            network_config = (
+                self.args.network_config
+                if isinstance(self.args.network_config, str)
+                else self.args.network_config[0]
+            )
+            # Modern eval configs define agents as a red/blue map; legacy ones
+            # use a flat red_agent key. Accept either for the fallback name.
+            red_agent = getattr(self.args, "red_agent", None) or getattr(
+                self.args, "agents", {}
+            ).get("red", "red")
+            self.now_str = f"{self.args.experiment_name}_evaluate_{network_config.split('.')[0]}_{red_agent.split('.')[0]}_{self.args.reward_function}reward"
         self.log_file = files("cyberwheel.data.action_logs").joinpath(f"{self.now_str}.csv")
+
+        self.viz = None
+        if getattr(self.args, "visualize", False):
+            self.viz = VizWriter(
+                self.env,
+                files("cyberwheel.data.graphs").joinpath(self.now_str),
+                meta={
+                    "experiment_name": self.args.experiment_name,
+                    "graph_name": self.now_str,
+                    "network_config": self.args.network_config,
+                    "agents": getattr(self.args, "agents", None),
+                    "num_episodes": self.args.num_episodes,
+                    "num_steps": self.args.num_steps,
+                    "seed": getattr(self.args, "seed", None),
+                },
+            )
 
         self.actions_df = pd.DataFrame()
         data = {
@@ -152,6 +179,8 @@ class RLEvaluator(RLTrainer):
         self.start_time = time.time()
         for episode in range(self.args.num_episodes):
             obs, _ = self.env.reset()
+            if self.viz:
+                self.viz.start_episode(episode)
             for step in range(self.args.num_steps):
                 action = None
                 actions = {}
@@ -165,6 +194,9 @@ class RLEvaluator(RLTrainer):
                     actions[agent] = action
 
                 obs, rew, done, _, info = self.env.step(actions)
+
+                if self.viz:
+                    self.viz.record_step(episode, step, info)
 
                 actions_df = {
                     "episode": episode,
@@ -181,7 +213,9 @@ class RLEvaluator(RLTrainer):
 
                 actions_df = pd.DataFrame(actions_df)
                 actions_df.to_csv(self.log_file, mode='a', header = os.path.getsize(self.log_file) == 0, index=False)
-                #return # TODO
+
+            if self.viz:
+                self.viz.end_episode()
 
 """
     def evaluate(self):
