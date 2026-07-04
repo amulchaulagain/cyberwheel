@@ -218,6 +218,34 @@ Another option is to run the cyberwheel environment without any RL components. T
 python3 -m cyberwheel run cyberwheel.yaml
 ```
 
+#### Experimentation web UI
+
+Instead of hand-editing YAML and watching stdout, you can drive everything from a browser:
+
+```sh
+python3 -m cyberwheel frontend 8080
+```
+
+then open `http://localhost:8080/`. The UI lets you:
+
+* **launch training runs** by picking every parameter from dropdowns populated from the configs
+  on disk (networks, agents, detectors, decoys, rewards, RL hyperparameters), with defaults
+  prefilled from a chosen base config;
+* **watch live and finished training progress** for all runs — status, throughput, episodic-return
+  and loss curves (read live from the TensorBoard event files), checkpoints, and streaming logs;
+* **launch evaluations** of any trained run (or a model trained from the CLI), with the scenario
+  prefilled from the source run and a checkpoint picker;
+* **replay the network / agent-behavior visualization** of an evaluation — a zoomable, scrubable
+  view of the network state at each step (compromise progression, decoys, isolation, the red
+  agent's position), which stays legible from 10 up to 10,000 hosts.
+
+Runs launch as normal `train` / `evaluate` subprocesses, so anything started in the UI behaves
+exactly like the CLI (and vice-versa — CLI-trained models show up in the UI as evaluable). The UI
+is served by a self-contained bundle, so no Node.js install is required to run it.
+
+To develop the frontend itself, work in `frontend/` (`npm install`, `npm run dev` against a
+`python3 -m cyberwheel frontend 8123` API), then `npm run build` to refresh the committed bundle.
+
 ### Demos
 
 #### Training and Evaluating your RL Agents
