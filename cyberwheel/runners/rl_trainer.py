@@ -172,14 +172,10 @@ class RLTrainer:
         self.run.define_metric("episodic_runtime", summary="mean")
 
     def configure_training(self):
-        self.writer = SummaryWriter(
-            files("cyberwheel.data.runs").joinpath(self.args.experiment_name)
-        )  # Logs data to tensorboard and W&B
-        self.writer.add_text(
-            "hyperparameters",
-            "|param|value|\n|-|-|\n%s"
-            % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
-        )
+        # NOTE: the SummaryWriter is created further down, AFTER the vector env
+        # is built. AsyncVectorEnv pickles each make_env closure (which captures
+        # `self`) to its worker processes; a SummaryWriter holds a _thread.lock
+        # and cannot be pickled, so creating it here would break async training.
         # Seeding
         if self.args.deterministic:
             set_seed(self.seed)
@@ -233,10 +229,31 @@ class RLTrainer:
 
         env_funcs = [self.make_env(i) for i in range(self.args.num_envs)]
 
+        # Populate per-agent obs/action-space dims in the MAIN process. For
+        # SyncVectorEnv each make_env init runs here anyway, but for
+        # AsyncVectorEnv the inits run in worker processes, so self.agents
+        # would otherwise stay unset in the main process and RLHandler (which
+        # reads it) would crash. Building one probe env flips self.define_vars
+        # off, so the subsequent sync/async inits skip the redundant work.
+        if self.args.async_env and self.define_vars:
+            probe_env = env_funcs[0]()
+            probe_env.close()
+
         self.envs = (
             gym.vector.AsyncVectorEnv(env_funcs)
             if self.args.async_env
             else gym.vector.SyncVectorEnv(env_funcs)
+        )
+
+        # Safe to create now: the env funcs have already been pickled to the
+        # async workers (if any), so the writer's lock is never serialized.
+        self.writer = SummaryWriter(
+            files("cyberwheel.data.runs").joinpath(self.args.experiment_name)
+        )  # Logs data to tensorboard and W&B
+        self.writer.add_text(
+            "hyperparameters",
+            "|param|value|\n|-|-|\n%s"
+            % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
         )
 
         assert isinstance(

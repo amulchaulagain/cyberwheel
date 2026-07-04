@@ -85,7 +85,10 @@ def _smoke_base_env_reset() -> Outcome:
     return Outcome(Status.PASS, "reset + 5 steps OK")
 
 
-def _smoke_train(run_id: str) -> Outcome:
+def _smoke_train(run_id: str, async_env: bool = False) -> Outcome:
+    # Async uses >1 env so AsyncVectorEnv actually spawns workers (the path
+    # that must pickle the make_env closures to subprocesses).
+    num_envs = "2" if async_env else "1"
     proc = run_cli(
         [
             "-m",
@@ -97,11 +100,11 @@ def _smoke_train(run_id: str) -> Outcome:
             "--network-config",
             _NETWORK,
             "--total-timesteps",
-            "16",
+            "32" if async_env else "16",
             "--num-steps",
             "8",
             "--num-envs",
-            "1",
+            num_envs,
             "--num-saves",
             "1",
             "--num-minibatches",
@@ -111,7 +114,7 @@ def _smoke_train(run_id: str) -> Outcome:
             "--eval-episodes",
             "1",
             "--async-env",
-            "false",
+            "true" if async_env else "false",
             "--track",
             "false",
             "--device",
@@ -134,7 +137,8 @@ def _smoke_train(run_id: str) -> Outcome:
     tfevents = list(runs_dir.glob("*tfevents*")) if runs_dir.is_dir() else []
     check(bool(tfevents), f"no tensorboard events written under {runs_dir}")
     check("SPS:" in proc.stdout, "training stdout did not report SPS")
-    return Outcome(Status.PASS, "2 PPO updates; both models saved; tfevents written")
+    mode = "async" if async_env else "sync"
+    return Outcome(Status.PASS, f"{mode} train OK; models saved; tfevents written")
 
 
 def _smoke_evaluate(run_id: str) -> Outcome:
@@ -319,6 +323,14 @@ def register(registry: Registry, ctx: Context) -> None:
             name="smoke:train_e2e",
             suite=SUITE,
             fn=(lambda: _smoke_train(ctx.run_id)),
+            timeout_s=900.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:train_async_e2e",
+            suite=SUITE,
+            fn=(lambda: _smoke_train(f"{ctx.run_id}_async", async_env=True)),
             timeout_s=900.0,
         )
     )
