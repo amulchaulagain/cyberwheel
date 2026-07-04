@@ -116,12 +116,6 @@ This project runs on, and has been tested with, Python 3.10. Once installed, poe
 
 Cyberwheel uses poetry to manage and install python packages. For instructions on how to install poetry, visit their [installation page](https://python-poetry.org/docs/#installation).
 
-* graphviz
-
-For the dash server visualization to function, you need graphviz, an open source graph visualization software, installed on your system.
-
-Instructions for installing graphviz can be found in their [documentation](https://graphviz.org/download/).
-
 ### Installation
 
 Once all dependencies are installed:
@@ -144,9 +138,6 @@ Once all dependencies are installed:
     source venv/bin/activate
     pip install -r requirements.txt
     ```
-
-*On newer MacOS systems running on Apple Silicon chips, there may be an error installing the `pygraphviz` package, with poetry not finding the graphviz configuration files. You can work around this by pip installing the pygraphviz package manually, explicitly passing graphviz config paths. [This link](https://stackoverflow.com/a/70439868) helped me work through this issue.*
-*Feel free to comment out this package in requirements.txt if you want to use cyberwheel without the visualizations and debug this package installation separately.*
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -181,7 +172,7 @@ or look at the config files in `cyberwheel/data/configs/environment`.
 
 ### Running Cyberwheel
 
-There are 5 modes for running cyberwheel: `train`, `evaluate`, `emulate`, `visualizer`, and `run`
+There are 4 modes for running cyberwheel: `train`, `evaluate`, `emulate`, and `run`
 
 #### Training
 
@@ -219,18 +210,6 @@ The command to run an emulation is essentially the same as the one to run an eva
 python3 -m cyberwheel emulate evaluate_rl_red_vs_rl_blue.yaml --experiment-name TrainRedBlueAgent
 ```
 
-#### Visualizer
-
-To view the visualizations of the evaluations that were run, you can run the visualization server with:
-```sh
-python3 -m cyberwheel visualizer [PORT_NUM]
-```
-This will run a dash server locally on the port number passed. You can then visit `http://localhost:PORT_NUM/` to access the frontend. From here, you can find the evaluation you ran in the list, and view the network state over the course of each episode with a step slider.
-
-![Visualizer GIF](images/visualizer.gif "Cyberwheel Visualizer")
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 #### Running
 
 Another option is to run the cyberwheel environment without any RL components. The two agents that are currently connected to this environment are inactive red/blue agents, meaning the environment is currently running through its steps without any actions being taken. This environment is not as in-depth or exhaustive, but provides a framework to tailor the Cyberwheel environment to your use case. 
@@ -241,7 +220,7 @@ python3 -m cyberwheel run cyberwheel.yaml
 
 ### Demos
 
-#### Training, Evaluating, and Visualizing your RL Agents
+#### Training and Evaluating your RL Agents
 ```sh
 python3 -m cyberwheel train train_rl_red_agent_vs_rl_blue_agent.yaml
 ```
@@ -250,13 +229,7 @@ This may run long depending on hardware. For demo purposes, you can ctrl-C after
 ```sh
 python3 -m cyberwheel evaluate evaluate_rl_red_vs_rl_blue.yaml
 ```
-This will evaluate the model under the current environment, and save the logs of the evaluation in `cyberwheel/data/action_logs/{graph_name}.csv` If the `visualize` parameter is set to true, this will also generate and store visualizations in `cyberwheel/data/graphs/{graph_name}/` to be viewed later. (Note: The visualization generation has a longer runtime than a basic evaluation, so if you only care about the CSV logs, you can set it to false to greatly speed up the evaluation.)
-
-Once these have run, you can run the server on http://localhost:8050 by running:
-```sh
-python3 -m cyberwheel visualizer 8050
-```
-and access the server on your browser to see a list of the available graphs. These are dependent on what is listed in the `cyberwheel/data/graphs/` directory.
+This will evaluate the model under the current environment, and save the logs of the evaluation in `cyberwheel/data/action_logs/{graph_name}.csv` If the `visualize` parameter is set to true, this will also generate and store visualizations in `cyberwheel/data/graphs/{graph_name}/` to be viewed later.
 
 
 ## Cyberwheel Design

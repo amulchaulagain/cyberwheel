@@ -7,17 +7,15 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 ## Stack & tooling
 - Python 3.10. Dependency manager: **Poetry** (`pyproject.toml`, `poetry.lock`).
 - RL: Gymnasium env + PyTorch, PPO-style trainer. Tracking: Weights &
-  Biases. Visualization: Dash / Plotly. Network graphs: `networkx`.
+  Biases. Network graphs: `networkx`. (graphviz/pygraphviz and Dash/Plotly are retired —
+  do not reintroduce them.)
 - Env note: this sandbox has no system Python 3.10 — it's provisioned via `uv python install 3.10`
-  and Poetry (`uv tool install poetry`; `poetry env use $(uv python find 3.10)`). Building
-  `pygraphviz` against the system graphviz 14.x needs `CFLAGS="-Wno-incompatible-pointer-types"`
-  during `poetry install` (GCC 14 hard-errors on graphviz's pointer-type mismatch otherwise).
+  and Poetry (`uv tool install poetry`; `poetry env use $(uv python find 3.10)`).
 
 ## How to run  — `python3 -m cyberwheel <mode> <config>.yaml`
 - `train`             — trains agent(s); saves to `cyberwheel/data/models/<experiment_name>/`; logs to W&B.
 - `evaluate`          — evaluates a trained run; writes `cyberwheel/data/action_logs/<name>.csv`;
                         if `visualize: true` in the config, also writes `cyberwheel/data/graphs/<name>/`.
-- `visualizer <port>` — Dash server to replay evaluations in the browser (e.g. `visualizer 8050`).
 - `emulate`           — like `evaluate`, but on the FIREWHEEL emulation backend.
 - `run`               — steps the env with inactive agents (no RL); scaffolding / sanity only.
 - CLI args override YAML values. Dispatch needs `<mode> <config>` (2+ argv); a bare `-h` prints
@@ -77,7 +75,7 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   plus network, services, host-types, decoys, detectors, and campaign definitions.
 - `cyberwheel/data/models/`, `.../action_logs/`, `.../graphs/` — run artifacts (git-ignored).
 - `cyberwheel/emulator/` — FIREWHEEL emulation setup + its own README.
-- `cyberwheel/__main__.py` — CLI entry point / mode dispatch (`train`/`evaluate`/`emulate`/`run`/`visualizer`).
+- `cyberwheel/__main__.py` — CLI entry point / mode dispatch (`train`/`evaluate`/`emulate`/`run`).
 - **Env / step loop:** `cyberwheel/cyberwheel_envs/` — `cyberwheel.py` (base env + per-step loop,
   `step()` returns Red/BlueAgentResult), `cyberwheel_rl.py` (Gymnasium RL wrapper; `step()` returns
   the gym `(obs, reward, term, trunc, info)` tuple), `cyberwheel_emulator.py` (FIREWHEEL backend).
@@ -104,7 +102,7 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   `step_detected_reward.py`, `step_accomplished.py`.
 - **RL trainer / runners:** `cyberwheel/runners/` — `rl_trainer.py` (trainer), `train_cyberwheel.py`,
   `evaluate_cyberwheel.py`, `rl_evaluator.py`, `rl_handler.py`, `baseline_runner.py`,
-  `run_baseline_cyberwheel.py`, `run_visualization_server.py`, `visualizer.py`.
+  `run_baseline_cyberwheel.py`.
 - **Utils:** `cyberwheel/utils/` — arg parsing (`parse_override_args.py`), `yaml_config.py`,
   `rl_policy.py`, `get_service_map.py`, `host_types.py`, `step_metrics.py`, `set_seed.py`.
 - `cyberwheel/legacy/` — old multiagent / pyattck / scripts; not part of the active path.

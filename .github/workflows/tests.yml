@@ -40,7 +40,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y graphviz graphviz-dev build-essential pkg-config
+          sudo apt-get install -y build-essential pkg-config
 
       - uses: actions/setup-python@v5
         with:
@@ -55,9 +55,7 @@ jobs:
           key: poetry-${{ runner.os }}-py3.10-${{ hashFiles('poetry.lock') }}
 
       - name: Install dependencies
-        # CFLAGS workaround: pygraphviz 1.13 fails to compile against
-        # graphviz >= 14 under GCC 14 without it; harmless when unneeded.
-        run: CFLAGS="-Wno-incompatible-pointer-types" poetry install --no-interaction
+        run: poetry install --no-interaction
 
       - name: Config suite
         run: poetry run python -m cyberwheel.tests --suite config --quick --json reports/config.json
@@ -83,7 +81,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y graphviz graphviz-dev build-essential pkg-config
+          sudo apt-get install -y build-essential pkg-config
 
       - uses: actions/setup-python@v5
         with:
@@ -98,7 +96,7 @@ jobs:
           key: poetry-${{ runner.os }}-py3.10-${{ hashFiles('poetry.lock') }}
 
       - name: Install dependencies
-        run: CFLAGS="-Wno-incompatible-pointer-types" poetry install --no-interaction
+        run: poetry install --no-interaction
 
       - name: Resolve parent revision
         id: parent

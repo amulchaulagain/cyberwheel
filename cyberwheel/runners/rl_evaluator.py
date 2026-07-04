@@ -14,7 +14,6 @@ from tqdm import tqdm
 
 from cyberwheel.network.network_base import Network
 from cyberwheel.utils import RLPolicy, get_service_map
-from cyberwheel.runners.visualizer import Visualizer
 from cyberwheel.runners.rl_trainer import RLTrainer
 from cyberwheel.utils.set_seed import set_seed
 
