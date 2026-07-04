@@ -3,11 +3,13 @@ import { useParams } from "react-router-dom";
 
 import {
   useActions,
+  useEvalSummary,
   useRun,
   useVizEpisode,
   useVizLayout,
   useVizMeta,
 } from "../api/hooks";
+import type { StatBlock } from "../api/types";
 import PageHeader from "../components/PageHeader";
 import ProgressBar from "../components/runs/ProgressBar";
 import StatusBadge from "../components/runs/StatusBadge";
@@ -17,6 +19,39 @@ import NodeDetails from "../components/viz/NodeDetails";
 import StepScrubber from "../components/viz/StepScrubber";
 import { EpisodePlayer, type RenderNode } from "../components/viz/frameState";
 import { formatNumber } from "../lib/format";
+
+const METRIC_LABELS: Record<string, string> = {
+  total_reward: "Total reward",
+  blue_reward: "Blue reward",
+  red_reward: "Red reward",
+};
+
+function SummaryTile({ label, stat }: { label: string; stat: StatBlock }) {
+  const half =
+    stat.ci95_hi !== null && stat.ci95_lo !== null
+      ? (stat.ci95_hi - stat.ci95_lo) / 2
+      : null;
+  return (
+    <div className="panel px-3 py-2">
+      <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+        {label}
+      </div>
+      <div className="font-mono text-lg text-slate-100">
+        {stat.mean === null ? (
+          "—"
+        ) : (
+          <>
+            {formatNumber(stat.mean, 1)}
+            {half !== null && half > 0 && (
+              <span className="text-sm text-slate-400"> ± {formatNumber(half, 1)}</span>
+            )}
+          </>
+        )}
+      </div>
+      <div className="text-[10px] text-slate-600">n={stat.n}</div>
+    </div>
+  );
+}
 
 function RewardTile({ label, value, tone }: { label: string; value: number; tone?: "up" | "down" }) {
   return (
@@ -40,6 +75,7 @@ export default function EvaluationRunPage() {
   const { data: run } = useRun(runId);
   const active = run?.status === "running" || run?.status === "queued";
   const { data: meta } = useVizMeta(runId, Boolean(active));
+  const { data: summary } = useEvalSummary(runId, Boolean(active));
   const hasViz = Boolean(meta?.episodes_written?.length);
 
   const [episode, setEpisode] = useState(0);
@@ -97,6 +133,68 @@ export default function EvaluationRunPage() {
           ) : undefined
         }
       />
+
+      {summary && (
+        <div className="space-y-2 px-4 pt-3">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
+              Batch summary
+            </span>
+            <span className="text-[11px] text-slate-600">
+              {summary.seeds.length} seed{summary.seeds.length === 1 ? "" : "s"} ·{" "}
+              {summary.num_episodes} episode{summary.num_episodes === 1 ? "" : "s"} each ·
+              95% CI (Student-t)
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {summary.metrics
+              .filter((metric) => metric in summary.overall)
+              .map((metric) => (
+                <SummaryTile
+                  key={metric}
+                  label={METRIC_LABELS[metric] ?? metric}
+                  stat={summary.overall[metric]}
+                />
+              ))}
+          </div>
+          {summary.seeds.length > 1 && (
+            <div className="panel overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-ink-700 text-left text-[10px] uppercase tracking-wider text-slate-500">
+                    <th className="px-3 py-2 font-medium">Seed</th>
+                    <th className="px-3 py-2 font-medium">Episodes</th>
+                    {summary.metrics.map((metric) => (
+                      <th key={metric} className="px-3 py-2 font-medium">
+                        {METRIC_LABELS[metric] ?? metric} (mean)
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.per_seed.map((block, index) => (
+                    <tr
+                      key={`${block.seed}-${index}`}
+                      className="border-b border-ink-800 font-mono text-slate-300 last:border-0"
+                    >
+                      <td className="px-3 py-1.5">{block.seed}</td>
+                      <td className="px-3 py-1.5">{block.episodes}</td>
+                      {summary.metrics.map((metric) => {
+                        const mean = block.metrics[metric]?.mean;
+                        return (
+                          <td key={metric} className="px-3 py-1.5">
+                            {mean === null || mean === undefined ? "—" : formatNumber(mean, 1)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {active && !hasViz ? (
         <div className="p-8">

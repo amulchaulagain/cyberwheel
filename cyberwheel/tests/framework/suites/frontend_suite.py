@@ -298,6 +298,13 @@ def _case_evaluate() -> Outcome:
     check(len(actions["rows"]) == num_steps, f"{len(actions['rows'])} action rows")
     check(actions["episodes"] == [0], f"episodes: {actions['episodes']}")
 
+    summary = server.api("GET", f"/api/runs/{run_id}/summary")
+    check(
+        len(summary["seeds"]) == 1 and summary["overall"]["total_reward"]["n"] == 1,
+        f"single-seed summary wrong: seeds {summary['seeds']}, "
+        f"overall {summary['overall'].get('total_reward')}",
+    )
+
     meta = server.api("GET", f"/api/runs/{run_id}/viz/meta")
     check(meta["episodes_written"] == [0], f"viz episodes_written: {meta}")
     layout = server.api("GET", f"/api/runs/{run_id}/viz/layout")
@@ -310,6 +317,88 @@ def _case_evaluate() -> Outcome:
             check(added["id"] >= node_count, "dynamic decoy id collides with static ids")
     server.api("GET", f"/api/runs/{run_id}/viz/episodes/99", expect=404)
     return Outcome(Status.PASS, f"evaluated via API; {node_count} layout nodes, viz + actions OK")
+
+
+def _case_evaluate_batch() -> Outcome:
+    server = _server()
+    num_steps = 10
+
+    # Validation: bad seeds params are rejected before anything launches.
+    base_body = {
+        "base_config": "evaluate_rl_red_vs_rl_blue.yaml",
+        "source": {"run_id": _STATE["train_id"]},
+        "checkpoint": "agent",
+    }
+    for label, bad_seeds in (
+        ("string", "1,2"),
+        ("duplicates", [1, 1]),
+        ("too many", list(range(21))),
+    ):
+        body = server.api(
+            "POST",
+            "/api/runs/evaluate",
+            {
+                **base_body,
+                "display_name": f"{PREFIX} bad batch {label}",
+                "params": {"seeds": bad_seeds},
+            },
+            expect=400,
+        )
+        check("seeds" in body["error"]["message"], f"unhelpful seeds error: {body}")
+    leftovers = list(
+        (CONFIG_ROOT / "environment" / "generated").glob(f"{PREFIX}-bad-batch*")
+    )
+    check(not leftovers, f"rejected batch launch left configs behind: {leftovers}")
+
+    created = server.api(
+        "POST",
+        "/api/runs/evaluate",
+        {
+            **base_body,
+            "display_name": f"{PREFIX} eval batch",
+            "params": {
+                "network_config": _NETWORK,
+                "num_episodes": 1,
+                "num_steps": num_steps,
+                "seeds": [1, 2],
+                "seed": 1,
+                "deterministic": False,
+            },
+        },
+        expect=201,
+    )
+    run_id = created["id"]
+    _STATE["eval_batch_id"] = run_id
+    # Summary is written only at the end of the run — a run created one HTTP
+    # roundtrip ago cannot have finished, so this exercises the 404 branch.
+    server.api("GET", f"/api/runs/{run_id}/summary", expect=404)
+
+    record = _poll_until_done(server, run_id, 600)
+    check(record["status"] == "succeeded", f"batch evaluate ended {record['status']}")
+    check(record["progress"] == 1.0, f"progress {record.get('progress')} != 1.0")
+
+    detail = server.api("GET", f"/api/runs/{run_id}")
+    check(detail["artifacts"].get("summary") is True, f"artifacts: {detail['artifacts']}")
+
+    summary = server.api("GET", f"/api/runs/{run_id}/summary")
+    check(summary["seeds"] == [1, 2], f"summary seeds: {summary['seeds']}")
+    check(
+        summary["overall"]["total_reward"]["n"] == 2,
+        f"overall n: {summary['overall']['total_reward']}",
+    )
+    check(len(summary["per_seed"]) == 2, f"per_seed: {summary['per_seed']}")
+
+    actions = server.api("GET", f"/api/runs/{run_id}/actions")
+    check(actions["episodes"] == [0, 1], f"episodes: {actions['episodes']}")
+    meta = server.api("GET", f"/api/runs/{run_id}/viz/meta")
+    check(meta["episodes_written"] == [0, 1], f"viz episodes_written: {meta}")
+
+    # Summaries exist only for evaluation runs.
+    server.api("GET", f"/api/runs/{_STATE['train_id']}/summary", expect=400)
+    return Outcome(
+        Status.PASS,
+        "2-seed batch via API: validation, progress, summary, actions, viz OK",
+    )
 
 
 def _case_stop_and_orphan() -> Outcome:
@@ -409,7 +498,7 @@ def _case_validation() -> Outcome:
 def _case_cleanup() -> Outcome:
     server = _server()
     deleted = []
-    for key in ("eval_id", "stop_id", "orphan_id", "train_id"):
+    for key in ("eval_id", "eval_batch_id", "stop_id", "orphan_id", "train_id"):
         run_id = _STATE.get(key)
         if not run_id:
             continue
@@ -421,6 +510,12 @@ def _case_cleanup() -> Outcome:
         check(
             not (DATA_ROOT / "models" / train_id).exists(),
             "DELETE ?artifacts=true left the models dir behind",
+        )
+    eval_batch_id = _STATE.get("eval_batch_id")
+    if eval_batch_id:
+        check(
+            not (DATA_ROOT / "action_logs" / f"{eval_batch_id}.summary.json").exists(),
+            "DELETE ?artifacts=true left the summary JSON behind",
         )
     remaining = [
         r["id"]
@@ -437,6 +532,7 @@ def register(registry: Registry, ctx: Context) -> None:
         ("frontend:static_serving", _case_static, 120.0, None),
         ("frontend:train_e2e_via_api", _case_train, 900.0, None),
         ("frontend:evaluate_e2e_via_api", _case_evaluate, 600.0, "frontend:train_e2e_via_api"),
+        ("frontend:evaluate_batch_via_api", _case_evaluate_batch, 600.0, "frontend:train_e2e_via_api"),
         ("frontend:job_stop_and_orphan", _case_stop_and_orphan, 300.0, None),
         ("frontend:launch_validation", _case_validation, 120.0, None),
         ("frontend:cleanup_via_api", _case_cleanup, 300.0, None),

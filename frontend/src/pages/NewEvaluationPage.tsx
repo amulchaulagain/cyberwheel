@@ -48,6 +48,8 @@ export default function NewEvaluationPage() {
   );
   const [checkpoint, setCheckpoint] = useState("agent");
   const [params, setParams] = useState<Record<string, unknown>>({});
+  // Kept outside `params`: the defaults effect below overwrites params wholesale.
+  const [seedsText, setSeedsText] = useState("");
 
   const evalConfigs = options?.env_configs.evaluate ?? [];
   useEffect(() => {
@@ -99,7 +101,17 @@ export default function NewEvaluationPage() {
       else if (typeof sourceNetworks === "string") merged.network_config = sourceNetworks;
     }
     setParams(merged);
+    setSeedsText(String(merged.seed ?? 1));
   }, [defaults, sourceRun?.id]);
+
+  const parsedSeeds = useMemo(() => {
+    const parts = seedsText.split(",").map((part) => part.trim()).filter(Boolean);
+    if (!parts.length || parts.length > 20) return null;
+    const seeds = parts.map(Number);
+    if (seeds.some((seed) => !Number.isInteger(seed))) return null;
+    if (new Set(seeds).size !== seeds.length) return null;
+    return seeds;
+  }, [seedsText]);
 
   useEffect(() => {
     const available = checkpointInfo?.checkpoints ?? [];
@@ -127,23 +139,34 @@ export default function NewEvaluationPage() {
   const agents = (params.agents ?? {}) as { red?: string; blue?: string };
 
   const canLaunch =
-    displayName.trim().length > 0 && baseConfig && sourceKey && !launch.isPending;
+    displayName.trim().length > 0 &&
+    baseConfig &&
+    sourceKey &&
+    parsedSeeds !== null &&
+    !launch.isPending;
 
   const onLaunch = async () => {
     const source = sourceKey.startsWith("external:")
       ? { experiment_name: sourceKey.slice("external:".length) }
       : { run_id: sourceKey };
+    const seeds = parsedSeeds ?? [1];
     const run = await launch.mutateAsync({
       display_name: displayName.trim(),
       base_config: baseConfig,
       source,
       checkpoint,
-      params: { ...params, visualize: bool("visualize", true) },
+      params: {
+        ...params,
+        visualize: bool("visualize", true),
+        // A single seed keeps the classic body; a list adds the batch param.
+        ...(seeds.length > 1 ? { seeds, seed: seeds[0] } : { seed: seeds[0] }),
+      },
     });
     navigate(`/runs/evaluate/${run.id}`);
   };
 
-  const totalSteps = num("num_episodes") * num("num_steps");
+  const totalSteps =
+    num("num_episodes") * num("num_steps") * (parsedSeeds?.length ?? 1);
 
   return (
     <div>
@@ -260,10 +283,22 @@ export default function NewEvaluationPage() {
           <Field label="Steps per episode" hint={`${formatNumber(totalSteps, 0)} total steps`}>
             <NumberField value={num("num_steps")} onChange={set("num_steps")} min={1} step={1} />
           </Field>
-          <Field label="Seed">
-            <NumberField value={num("seed")} onChange={set("seed")} step={1} />
+          <Field
+            label="Seeds"
+            hint={
+              parsedSeeds
+                ? parsedSeeds.length > 1
+                  ? `${parsedSeeds.length}-seed batch — each seed reseeds its block of episodes`
+                  : "single seed"
+                : "comma-separated integers, e.g. 1,2,3 (max 20, unique)"
+            }
+          >
+            <TextField value={seedsText} onChange={setSeedsText} placeholder="e.g. 1,2,3" mono />
           </Field>
-          <Field label="Deterministic">
+          <Field
+            label="Deterministic"
+            hint="governs single-seed runs; multi-seed batches always reseed per seed"
+          >
             <Toggle value={bool("deterministic")} onChange={set("deterministic")} />
           </Field>
           <Field

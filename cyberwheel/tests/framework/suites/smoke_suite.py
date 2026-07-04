@@ -183,10 +183,44 @@ def _smoke_evaluate(run_id: str) -> Outcome:
         len(rows) == num_steps,
         f"expected {num_steps} action-log rows, got {len(rows)}",
     )
-    for column in ("episode", "step"):
+    for column in ("episode", "step", "seed"):
         check(
             column in rows[0], f"action log missing column {column!r}: {list(rows[0])}"
         )
+    check(
+        all(row["seed"] == "1" for row in rows),
+        "seed column should be 1 on every row (--seed 1 --deterministic true)",
+    )
+
+    # Statistical summary artifact (written for every evaluate run).
+    summary_path = DATA_ROOT / "action_logs" / f"{graph_name}.summary.json"
+    check_file(summary_path)
+    with open(summary_path) as f:
+        summary = json.load(f)
+    check(summary["seeds"] == [1], f"summary seeds {summary['seeds']} != [1]")
+    check(summary["explicit_seeds"] is False, "single --seed run must not be explicit_seeds")
+    check(
+        len(summary["per_episode"]) == 1,
+        f"summary per_episode has {len(summary['per_episode'])} entries, expected 1",
+    )
+    stat = summary["overall"]["total_reward"]
+    check(stat["n"] == 1, f"overall total_reward n {stat['n']} != 1")
+    check(
+        stat["ci95_lo"] == stat["ci95_hi"] == stat["mean"],
+        f"n=1 CI must collapse to the mean: {stat}",
+    )
+    csv_total = round(sum(float(row["reward"]) for row in rows), 4)
+    check(
+        abs(summary["per_episode"][0]["total_reward"] - csv_total) < 1e-3,
+        f"summary episode total {summary['per_episode'][0]['total_reward']} "
+        f"!= CSV reward sum {csv_total}",
+    )
+    reward_columns = {c for c in rows[0] if c.endswith("_reward")}
+    check(
+        set(summary["overall"]) == {"total_reward", *reward_columns},
+        f"summary metrics {sorted(summary['overall'])} do not match CSV reward "
+        f"columns {sorted(reward_columns)}",
+    )
 
     # Visualization artifacts (evaluate ran with --visualize true).
     viz_dir = DATA_ROOT / "graphs" / graph_name
@@ -224,6 +258,175 @@ def _smoke_evaluate(run_id: str) -> Outcome:
         f"1 episode x {num_steps} steps evaluated; action log has {len(rows)} rows; "
         f"viz artifacts written ({node_count} layout nodes)",
         {"columns": list(rows[0])},
+    )
+
+
+def _smoke_summary_stats() -> Outcome:
+    """The summary statistics helpers (t-table, CI math, aggregation) are correct."""
+    import math
+
+    from cyberwheel.utils.step_metrics import (
+        build_evaluation_summary,
+        mean_std_ci95,
+        t_critical_95,
+    )
+
+    check(t_critical_95(1) == 12.706, f"t(df=1) {t_critical_95(1)} != 12.706")
+    check(t_critical_95(30) == 2.042, f"t(df=30) {t_critical_95(30)} != 2.042")
+    check(t_critical_95(31) == 1.96, f"t(df=31) {t_critical_95(31)} != 1.96")
+    check(t_critical_95(200) == 1.96, f"t(df=200) {t_critical_95(200)} != 1.96")
+
+    stat = mean_std_ci95([1.0, 2.0, 3.0])
+    check(stat["mean"] == 2.0 and stat["std"] == 1.0, f"mean/std wrong: {stat}")
+    half = 4.303 / math.sqrt(3)  # t(df=2) * std / sqrt(n)
+    check(
+        abs(stat["ci95_lo"] - (2.0 - half)) < 1e-3
+        and abs(stat["ci95_hi"] - (2.0 + half)) < 1e-3,
+        f"95% CI wrong: {stat}",
+    )
+    one = mean_std_ci95([5.0])
+    check(
+        one["std"] == 0.0 and one["ci95_lo"] == one["ci95_hi"] == one["mean"] == 5.0,
+        f"n=1 stat block wrong: {one}",
+    )
+    empty = mean_std_ci95([])
+    check(
+        empty["n"] == 0 and empty["mean"] is None,
+        f"n=0 stat block wrong: {empty}",
+    )
+
+    per_episode = [
+        {"episode": i, "seed": seed, "steps": 10, "total_reward": float(i)}
+        for i, seed in enumerate((7, 7, 9, 9))
+    ]
+    summary = build_evaluation_summary(
+        seeds=[7, 9],
+        explicit_seeds=True,
+        deterministic=False,
+        num_episodes=2,
+        num_steps=10,
+        per_episode=per_episode,
+        metric_names=["total_reward"],
+        graph_name="synthetic",
+        experiment_name="synthetic",
+    )
+    check(
+        len(summary["per_seed"]) == 2
+        and [b["seed"] for b in summary["per_seed"]] == [7, 9],
+        f"per_seed grouping wrong: {summary['per_seed']}",
+    )
+    check(
+        summary["per_seed"][0]["metrics"]["total_reward"]["mean"] == 0.5
+        and summary["per_seed"][1]["metrics"]["total_reward"]["mean"] == 2.5,
+        f"per_seed means wrong: {summary['per_seed']}",
+    )
+    check(
+        summary["overall"]["total_reward"]["n"] == 4
+        and summary["total_episodes"] == 4,
+        f"overall aggregation wrong: {summary['overall']}",
+    )
+    return Outcome(Status.PASS, "t-table, CI math, and summary aggregation OK")
+
+
+def _smoke_evaluate_batch(run_id: str) -> Outcome:
+    graph_name = f"{run_id}_eval_batch"
+    num_steps = 10
+    proc = run_cli(
+        [
+            "-m",
+            "cyberwheel",
+            "evaluate",
+            "evaluate_rl_red_vs_rl_blue.yaml",
+            "--experiment-name",
+            run_id,
+            "--network-config",
+            _NETWORK,
+            "--num-episodes",
+            "1",
+            "--num-steps",
+            str(num_steps),
+            "--graph-name",
+            graph_name,
+            "--download-model",
+            "false",
+            "--visualize",
+            "true",
+            "--seed",
+            "1",
+            # Explicit seeds must reseed per block even without --deterministic.
+            "--deterministic",
+            "false",
+            "--seeds",
+            "1,2",
+        ],
+        timeout=600,
+    )
+    check(
+        proc.returncode == 0,
+        f"batch evaluate exited {proc.returncode}; stderr tail: {proc.stderr[-800:]}",
+    )
+    csv_path = DATA_ROOT / "action_logs" / f"{graph_name}.csv"
+    check_file(csv_path)
+    with open(csv_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    check(
+        len(rows) == 2 * num_steps,
+        f"expected {2 * num_steps} action-log rows (2 seeds x 1 episode), got {len(rows)}",
+    )
+    check(
+        sorted({row["episode"] for row in rows}) == ["0", "1"],
+        "batch CSV must use a global episode index 0..1",
+    )
+    seeds_by_episode = {
+        episode: {row["seed"] for row in rows if row["episode"] == episode}
+        for episode in ("0", "1")
+    }
+    check(
+        seeds_by_episode == {"0": {"1"}, "1": {"2"}},
+        f"seed blocks wrong: {seeds_by_episode}",
+    )
+
+    summary_path = DATA_ROOT / "action_logs" / f"{graph_name}.summary.json"
+    check_file(summary_path)
+    with open(summary_path) as f:
+        summary = json.load(f)
+    check(summary["seeds"] == [1, 2], f"summary seeds {summary['seeds']} != [1, 2]")
+    check(summary["explicit_seeds"] is True, "--seeds run must set explicit_seeds")
+    check(
+        summary["total_episodes"] == 2,
+        f"total_episodes {summary['total_episodes']} != 2",
+    )
+    check(
+        [b["seed"] for b in summary["per_seed"]] == [1, 2]
+        and all(b["episodes"] == 1 for b in summary["per_seed"]),
+        f"per_seed blocks wrong: {summary['per_seed']}",
+    )
+    stat = summary["overall"]["total_reward"]
+    check(stat["n"] == 2, f"overall total_reward n {stat['n']} != 2")
+    check(
+        stat["min"] <= stat["mean"] <= stat["max"]
+        and stat["ci95_lo"] <= stat["mean"] <= stat["ci95_hi"],
+        f"overall stat block inconsistent: {stat}",
+    )
+
+    viz_dir = DATA_ROOT / "graphs" / graph_name
+    with open(viz_dir / "meta.json") as f:
+        meta = json.load(f)
+    check(
+        meta["episodes_written"] == [0, 1],
+        f"meta episodes_written {meta['episodes_written']} != [0, 1]",
+    )
+    check(meta.get("seeds") == [1, 2], f"meta seeds {meta.get('seeds')} != [1, 2]")
+    with open(viz_dir / "episode_1.json") as f:
+        episode = json.load(f)
+    check(
+        len(episode["steps"]) == num_steps,
+        f"episode_1 has {len(episode['steps'])} frames, expected {num_steps}",
+    )
+    return Outcome(
+        Status.PASS,
+        f"2-seed batch evaluated; {len(rows)} rows, global episodes [0, 1], "
+        "summary + viz artifacts consistent",
     )
 
 
@@ -339,6 +542,23 @@ def register(registry: Registry, ctx: Context) -> None:
             name="smoke:evaluate_e2e",
             suite=SUITE,
             fn=(lambda: _smoke_evaluate(ctx.run_id)),
+            timeout_s=600.0,
+            depends_on="smoke:train_e2e",
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:summary_stats_math",
+            suite=SUITE,
+            fn=_smoke_summary_stats,
+            timeout_s=60.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:evaluate_batch_e2e",
+            suite=SUITE,
+            fn=(lambda: _smoke_evaluate_batch(ctx.run_id)),
             timeout_s=600.0,
             depends_on="smoke:train_e2e",
         )

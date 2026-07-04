@@ -5,6 +5,20 @@ from distutils.util import strtobool
 
 from cyberwheel.utils import YAMLConfig
 
+
+def _seed_list(raw: str):
+    """argparse type for --seeds: comma-separated unique integers."""
+    try:
+        seeds = [int(p) for p in raw.split(",") if p.strip()]
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"seeds must be comma-separated integers, got {raw!r}")
+    if not seeds:
+        raise argparse.ArgumentTypeError("at least one seed is required")
+    if len(set(seeds)) != len(seeds):
+        raise argparse.ArgumentTypeError("seeds must be unique")
+    return seeds
+
+
 def parse(config, mode: str = 'train'):
     args = YAMLConfig(config)
     args.parse_config()
@@ -15,6 +29,10 @@ def parse(config, mode: str = 'train'):
     for arg in override_args_dict:
         if arg in args_dict and override_args_dict[arg] != None and override_args_dict[arg] != "":
             setattr(args, arg, override_args_dict[arg])
+
+    # 'seeds' is optional in eval YAMLs, so the presence-gated loop above misses it.
+    if mode == 'evaluate' and getattr(override_args, 'seeds', None):
+        args.seeds = override_args.seeds
 
     if args.deterministic:
         os.environ["CYBERWHEEL_DETERMINISTIC"] = 'true'
@@ -99,6 +117,7 @@ def parse_eval_override_args(print_help: bool = False):
     parser.add_argument("--train-blue", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="toggle if you want to train the blue agent")
     parser.add_argument("--campaign", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, uses ARTCampaign as red agent")
     parser.add_argument("--seed", type=int, help="seed of the experiment")
+    parser.add_argument("--seeds", type=_seed_list, help="comma-separated seeds for batch evaluation, e.g. 1,2,3; each seed reseeds the env for its block of episodes regardless of --deterministic")
     parser.add_argument("--deterministic", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, `torch.backends.cudnn.deterministic=True`")
 
 

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import type {
   ActionsResponse,
+  EvalSummary,
   MetricsSummary,
   Options,
   RunRecord,
@@ -101,6 +102,18 @@ export function useActions(runId: string | undefined, episode: number | undefine
         `/api/runs/${runId}/actions${episode !== undefined ? `?episode=${episode}` : ""}`,
       ),
     enabled: Boolean(runId),
+    retry: false,
+  });
+}
+
+export function useEvalSummary(runId: string | undefined, active: boolean) {
+  return useQuery<EvalSummary>({
+    // `active` in the key forces a fresh fetch when the run finishes — the
+    // summary file is written at the very end, after the last active poll.
+    queryKey: ["eval-summary", runId, active],
+    queryFn: () => api.get(`/api/runs/${runId}/summary`),
+    enabled: Boolean(runId),
+    refetchInterval: active ? 3000 : false,
     retry: false,
   });
 }

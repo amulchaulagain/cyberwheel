@@ -23,6 +23,11 @@ def get_actions(run_id: str, episode: int | None = None) -> dict:
     return actions_log.actions(_graph_name(run_id), episode)
 
 
+@router.get("/{run_id}/summary")
+def get_summary(run_id: str) -> dict:
+    return actions_log.summary(_graph_name(run_id))
+
+
 def _viz_file(run_id: str, filename: str) -> FileResponse:
     path = GRAPHS_DIR / _graph_name(run_id) / filename
     if not path.is_file():

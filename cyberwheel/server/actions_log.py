@@ -7,6 +7,7 @@ as live evaluation progress.
 from __future__ import annotations
 
 import csv
+import json
 
 from cyberwheel.server.paths import ACTION_LOGS_DIR
 from cyberwheel.server.validation import not_found
@@ -63,6 +64,18 @@ def actions(graph_name: str, episode: int | None = None) -> dict:
         "reward_totals": {str(k): v for k, v in totals.items()},
         "rows": rows,
     }
+
+
+def summary(graph_name: str) -> dict:
+    """The evaluator-written statistical summary (per-episode/per-seed/overall)."""
+    path = ACTION_LOGS_DIR / f"{graph_name}.summary.json"
+    if not path.is_file():
+        raise not_found(
+            f"no evaluation summary for {graph_name!r} — the run may still be "
+            "in progress, or predates batch summaries"
+        )
+    with open(path) as f:
+        return json.load(f)
 
 
 def _num(value) -> float:

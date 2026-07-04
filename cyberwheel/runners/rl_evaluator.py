@@ -17,6 +17,7 @@ from cyberwheel.utils import RLPolicy, get_service_map
 from cyberwheel.runners.rl_trainer import RLTrainer
 from cyberwheel.visualization import VizWriter
 from cyberwheel.utils.set_seed import set_seed
+from cyberwheel.utils.step_metrics import build_evaluation_summary, write_summary
 
 
 class RLEvaluator(RLTrainer):
@@ -30,11 +31,13 @@ class RLEvaluator(RLTrainer):
 
     def configure_evaluation(self):
         if self.args.deterministic:
-            set_seed(self.seed)
+            self.applied_seed = self.seed
             torch.backends.cudnn.deterministic = True
         else:
-            set_seed(random.randint(0, 999999999))
+            self.applied_seed = random.randint(0, 999999999)
             torch.backends.cudnn.deterministic = False
+        set_seed(self.applied_seed)
+        self.eval_seeds, self.explicit_seeds = self._resolve_seeds()
 
         self.device = torch.device("cpu")
         print(f"Using device {self.device}")
@@ -78,6 +81,21 @@ class RLEvaluator(RLTrainer):
 
         self.env = self.make_env(0, evaluation=True, net_name=list(self.networks.keys())[0])()
         self.policy = {}
+
+    def _resolve_seeds(self):
+        """Resolve the optional ``seeds`` config key to (seed list, explicit flag).
+
+        Absent/empty means single-seed with today's semantics; the recorded seed
+        is the one actually applied (a random draw when non-deterministic).
+        """
+        raw = getattr(self.args, "seeds", None)
+        if raw in (None, "", []):
+            return [self.applied_seed], False
+        if isinstance(raw, int):
+            return [raw], True
+        if isinstance(raw, str):
+            return [int(p) for p in raw.split(",") if p.strip()], True
+        return [int(s) for s in raw], True
 
     def load_models(self):
         for agent in self.agents:
@@ -126,6 +144,7 @@ class RLEvaluator(RLTrainer):
             ).get("red", "red")
             self.now_str = f"{self.args.experiment_name}_evaluate_{network_config.split('.')[0]}_{red_agent.split('.')[0]}_{self.args.reward_function}reward"
         self.log_file = files("cyberwheel.data.action_logs").joinpath(f"{self.now_str}.csv")
+        self.summary_file = files("cyberwheel.data.action_logs").joinpath(f"{self.now_str}.summary.json")
 
         self.viz = None
         if getattr(self.args, "visualize", False):
@@ -140,6 +159,7 @@ class RLEvaluator(RLTrainer):
                     "num_episodes": self.args.num_episodes,
                     "num_steps": self.args.num_steps,
                     "seed": getattr(self.args, "seed", None),
+                    "seeds": self.eval_seeds,
                 },
             )
 
@@ -176,46 +196,79 @@ class RLEvaluator(RLTrainer):
             self.action_mask[agent] = torch.zeros(self.agents[agent]["max_action_space_size"], dtype=torch.bool).to(self.device)
             self.rewards[agent] = [0] * self.args.num_episodes
 
+        metric_names = ["total_reward"] + [f"{agent}_reward" for agent in self.agents]
+        per_episode = []
+        global_episode = 0
+
         self.start_time = time.time()
-        for episode in range(self.args.num_episodes):
-            obs, _ = self.env.reset()
-            if self.viz:
-                self.viz.start_episode(episode)
-            for step in range(self.args.num_steps):
-                action = None
-                actions = {}
-                action_masks = self.env.action_mask
+        for seed in self.eval_seeds:
+            for episode in range(self.args.num_episodes):
+                # Explicit seeds reseed each block regardless of `deterministic`,
+                # making every seed's episodes reproducible on their own.
+                if self.explicit_seeds and episode == 0:
+                    obs, _ = self.env.reset(seed=seed)
+                else:
+                    obs, _ = self.env.reset()
+                if self.viz:
+                    self.viz.start_episode(global_episode)
+                episode_totals = {m: 0.0 for m in metric_names}
+                for step in range(self.args.num_steps):
+                    action = None
+                    actions = {}
+                    action_masks = self.env.action_mask
 
-                for agent in self.agents:
-                    agent_obs = torch.Tensor(obs[agent]).to(self.device)
-                    tmp_mask = action_masks[agent]
-                    self.action_mask[agent] = self.mask_actions(tmp_mask, self.action_mask[agent])
-                    action, _, _, _ = self.policy[agent].get_action_and_value(agent_obs, action_mask=self.action_mask[agent])
-                    actions[agent] = action
+                    for agent in self.agents:
+                        agent_obs = torch.Tensor(obs[agent]).to(self.device)
+                        tmp_mask = action_masks[agent]
+                        self.action_mask[agent] = self.mask_actions(tmp_mask, self.action_mask[agent])
+                        action, _, _, _ = self.policy[agent].get_action_and_value(agent_obs, action_mask=self.action_mask[agent])
+                        actions[agent] = action
 
-                obs, rew, done, _, info = self.env.step(actions)
+                    obs, rew, done, _, info = self.env.step(actions)
+
+                    if self.viz:
+                        self.viz.record_step(global_episode, step, info)
+
+                    actions_df = {
+                        "episode": global_episode,
+                        "step": step,
+                        "seed": seed,
+                        "reward": rew,
+                    }
+                    self.total_reward += rew
+                    episode_totals["total_reward"] += float(rew)
+                    for agent in self.agents:
+                        actions_df[f"{agent}_action_name"] = [info[f"{agent}_action"]]
+                        actions_df[f"{agent}_action_success"] = [info[f"{agent}_action_success"]]
+                        actions_df[f"{agent}_action_src"] = [info[f"{agent}_action_src"]]
+                        actions_df[f"{agent}_action_dest"] = [info[f"{agent}_action_dst"]]
+                        actions_df[f"{agent}_reward"] = [info[f"{agent}_reward"]]
+                        episode_totals[f"{agent}_reward"] += float(info[f"{agent}_reward"])
+
+                    actions_df = pd.DataFrame(actions_df)
+                    actions_df.to_csv(self.log_file, mode='a', header = os.path.getsize(self.log_file) == 0, index=False)
 
                 if self.viz:
-                    self.viz.record_step(episode, step, info)
+                    self.viz.end_episode()
+                per_episode.append({
+                    "episode": global_episode,
+                    "seed": seed,
+                    "steps": self.args.num_steps,
+                    **{m: round(v, 4) for m, v in episode_totals.items()},
+                })
+                global_episode += 1
 
-                actions_df = {
-                    "episode": episode,
-                    "step": step,
-                    "reward": rew,
-                }
-                self.total_reward += rew
-                for agent in self.agents:
-                    actions_df[f"{agent}_action_name"] = [info[f"{agent}_action"]]
-                    actions_df[f"{agent}_action_success"] = [info[f"{agent}_action_success"]]
-                    actions_df[f"{agent}_action_src"] = [info[f"{agent}_action_src"]]
-                    actions_df[f"{agent}_action_dest"] = [info[f"{agent}_action_dst"]]
-                    actions_df[f"{agent}_reward"] = [info[f"{agent}_reward"]]
-
-                actions_df = pd.DataFrame(actions_df)
-                actions_df.to_csv(self.log_file, mode='a', header = os.path.getsize(self.log_file) == 0, index=False)
-
-            if self.viz:
-                self.viz.end_episode()
+        write_summary(self.summary_file, build_evaluation_summary(
+            seeds=self.eval_seeds,
+            explicit_seeds=self.explicit_seeds,
+            deterministic=bool(self.args.deterministic),
+            num_episodes=self.args.num_episodes,
+            num_steps=self.args.num_steps,
+            per_episode=per_episode,
+            metric_names=metric_names,
+            graph_name=self.now_str,
+            experiment_name=self.args.experiment_name,
+        ))
 
 """
     def evaluate(self):

@@ -21,8 +21,13 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 
 ## How to run  — `python3 -m cyberwheel <mode> <config>.yaml`
 - `train`             — trains agent(s); saves to `cyberwheel/data/models/<experiment_name>/`; logs to W&B.
-- `evaluate`          — evaluates a trained run; writes `cyberwheel/data/action_logs/<name>.csv`;
-                        if `visualize: true` in the config, also writes `cyberwheel/data/graphs/<name>/`.
+- `evaluate`          — evaluates a trained run; writes `cyberwheel/data/action_logs/<name>.csv`
+                        plus `<name>.summary.json` (per-episode/per-seed/overall reward stats with
+                        95% Student-t CIs); if `visualize: true`, also writes `cyberwheel/data/graphs/<name>/`.
+                        Optional `seeds:` list (or `--seeds 1,2,3`) runs a multi-seed batch in one
+                        process — one CSV/viz dir with a global episode index + `seed` column; each
+                        seed reseeds its episode block regardless of `deterministic`. Served by
+                        `GET /api/runs/<id>/summary` and a summary panel in the UI.
 - `emulate`           — like `evaluate`, but on the FIREWHEEL emulation backend.
 - `run`               — steps the env with inactive agents (no RL); scaffolding / sanity only.
 - `frontend <port>`   — experimentation web UI + API (e.g. `frontend 8080`; binds 0.0.0.0).
@@ -37,9 +42,10 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 ## Testing — `python3 -m cyberwheel.tests`
 - Custom framework (no pytest) in `cyberwheel/tests/framework/`; suites: `config` (every YAML
   loads + references resolve), `smoke` (train/evaluate end-to-end at tiny scale via the real
-  CLI, incl. viz artifacts + layout determinism), `frontend` (boots the experimentation
-  server and drives it over HTTP: options, SPA, train/evaluate e2e via the API, stop/orphan,
-  validation, delete), `perf` (benchmarks gated against the parent commit's results).
+  CLI, incl. batch evaluate + summary stats, viz artifacts + layout determinism), `frontend`
+  (boots the experimentation server and drives it over HTTP: options, SPA, train/evaluate +
+  batch-evaluate e2e via the API, stop/orphan, validation, delete), `perf` (benchmarks gated
+  against the parent commit's results).
 - Common invocations: `--suite {config,smoke,perf,all}`, `--quick`, `--list`, `--json PATH`,
   `--record-baseline`, `--compare-rev REV` (same-machine dual measurement), `--tolerance F`.
   Exit codes: 0 ok · 1 config/smoke failure · 2 perf regression · 3 framework error.
@@ -129,7 +135,8 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   `paths.py`, `validation.py`; built SPA committed in `static/`. Endpoints take/return plain
   dicts — keep pydantic out of handler signatures (repo pins pydantic v1).
 - **Utils:** `cyberwheel/utils/` — arg parsing (`parse_override_args.py`), `yaml_config.py`,
-  `rl_policy.py`, `get_service_map.py`, `host_types.py`, `step_metrics.py`, `set_seed.py`.
+  `rl_policy.py`, `get_service_map.py`, `host_types.py`, `step_metrics.py` (evaluation summary
+  stats: t-table, mean/std/95% CI, summary builder+writer; stdlib-only), `set_seed.py`.
 - `cyberwheel/legacy/` — old multiagent / pyattck / scripts; not part of the active path.
 - **Tests:** `cyberwheel/tests/framework/` — `core.py` (registry/runner), `cli.py`,
   `baseline.py` (perf baseline + comparison), `gitio.py`, `artifacts.py`,

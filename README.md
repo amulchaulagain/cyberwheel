@@ -202,6 +202,18 @@ which will evaluate the trained red and blue models using the parameters defined
 python3 -m cyberwheel evaluate evaluate_rl_red_vs_rl_blue.yaml --experiment-name TrainRedBlueAgent
 ```
 
+Every evaluation writes a per-step action log (`cyberwheel/data/action_logs/{graph_name}.csv`) and a statistical summary (`{graph_name}.summary.json`) with per-episode, per-seed, and overall reward statistics (mean, std, min/max, and a 95% Student-t confidence interval).
+
+##### Batch evaluation over multiple seeds
+
+RL evaluation results can vary heavily with the random seed. To make statistically meaningful comparisons, you can evaluate over several seeds in one run with the `seeds` parameter (a YAML list, or `--seeds` on the command line):
+
+```sh
+python3 -m cyberwheel evaluate evaluate_rl_red_vs_rl_blue.yaml --experiment-name TrainRedBlueAgent --seeds 1,2,3
+```
+
+Each seed reseeds the environment for its own block of `num_episodes` episodes (reproducibly, regardless of the `deterministic` flag), and all episodes share one action log and visualization directory using a global episode index plus a `seed` column. The summary then aggregates rewards per seed and overall, so you can report `mean ± 95% CI` across seeds. The experimentation web UI exposes the same feature through the "Seeds" field on the evaluation form and a summary panel on the run page (`GET /api/runs/{id}/summary`).
+
 #### Emulating
 
 The command to run an emulation is essentially the same as the one to run an evaluation, just with the words switched around. You will need to have the emulation environment and FIREWHEEL set up first, the tutorial for which you can find in the emulator directory.

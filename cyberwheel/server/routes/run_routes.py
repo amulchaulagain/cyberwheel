@@ -31,7 +31,9 @@ def _decorate(record: dict) -> dict:
         elif record["status"] == "succeeded":
             out["progress"] = 1.0
     elif record["kind"] == "evaluate":
-        expected = (params.get("num_episodes") or 0) * (params.get("num_steps") or 0)
+        seeds = params.get("seeds")
+        seed_count = len(seeds) if isinstance(seeds, list) and seeds else 1
+        expected = seed_count * (params.get("num_episodes") or 0) * (params.get("num_steps") or 0)
         if record["status"] == "running":
             rows = actions_log.row_count(record["graph_name"]) or 0
             out["progress"] = min(1.0, rows / expected) if expected else None
@@ -103,6 +105,19 @@ def launch_evaluate(body: dict = Body(...)) -> dict:
     require(display_name.strip(), "display_name is required")
     require(base_config, "base_config is required")
 
+    seeds = params.get("seeds")
+    if seeds is not None:
+        require(isinstance(seeds, list), "seeds must be a list of integers")
+        if not seeds:
+            params.pop("seeds")  # empty == absent == single-seed
+        else:
+            require(
+                all(isinstance(s, int) and not isinstance(s, bool) for s in seeds),
+                "seeds must all be integers",
+            )
+            require(len(seeds) <= 20, f"at most 20 seeds per batch (got {len(seeds)})")
+            require(len(set(seeds)) == len(seeds), "seeds must be unique")
+
     source_run_id = source.get("run_id")
     if source_run_id:
         source_record = _get_record(source_run_id)
@@ -172,6 +187,7 @@ def get_run(run_id: str) -> dict:
         record["artifacts"] = {
             "actions": (ACTION_LOGS_DIR / f"{graph_name}.csv").is_file(),
             "viz": (GRAPHS_DIR / graph_name / "meta.json").is_file(),
+            "summary": (ACTION_LOGS_DIR / f"{graph_name}.summary.json").is_file(),
         }
     return record
 
@@ -191,7 +207,11 @@ def delete_run(run_id: str, artifacts: bool = False) -> dict:
             targets += [MODELS_DIR / run_id, RUNS_DIR / run_id]
         else:
             graph_name = record.get("graph_name", run_id)
-            targets += [ACTION_LOGS_DIR / f"{graph_name}.csv", GRAPHS_DIR / graph_name]
+            targets += [
+                ACTION_LOGS_DIR / f"{graph_name}.csv",
+                ACTION_LOGS_DIR / f"{graph_name}.summary.json",
+                GRAPHS_DIR / graph_name,
+            ]
         for target in targets:
             if target.is_dir():
                 shutil.rmtree(target, ignore_errors=True)

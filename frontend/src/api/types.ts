@@ -77,6 +77,38 @@ export interface ActionsResponse {
   rows: Record<string, string>[];
 }
 
+export interface StatBlock {
+  mean: number | null;
+  std: number | null;
+  min: number | null;
+  max: number | null;
+  ci95_lo: number | null;
+  ci95_hi: number | null;
+  n: number;
+}
+
+export interface EvalSeedSummary {
+  seed: number;
+  episodes: number;
+  metrics: Record<string, StatBlock>;
+}
+
+export interface EvalSummary {
+  format_version: number;
+  graph_name?: string;
+  experiment_name?: string;
+  seeds: number[];
+  explicit_seeds: boolean;
+  deterministic?: boolean;
+  num_episodes: number;
+  num_steps: number;
+  total_episodes: number;
+  metrics: string[];
+  per_episode: Record<string, number>[];
+  per_seed: EvalSeedSummary[];
+  overall: Record<string, StatBlock>;
+}
+
 export interface VizMeta {
   format_version: number;
   created_at: string;
@@ -89,6 +121,7 @@ export interface VizMeta {
   num_episodes?: number;
   num_steps?: number;
   seed?: number | null;
+  seeds?: number[];
 }
 
 export interface LayoutNode {
