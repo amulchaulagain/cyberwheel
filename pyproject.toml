@@ -24,6 +24,8 @@ bigtree = "^0.19.3"
 gymnasium = "^1.1.0"
 ray = "^2.43.0"
 stable-baselines3 = "^2.5.0"
+fastapi = ">=0.110,<0.116"
+uvicorn = ">=0.30,<1.0"
 
 
 [tool.poetry.group.dev.dependencies]

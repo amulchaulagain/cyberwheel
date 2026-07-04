@@ -14,6 +14,12 @@ if __name__ == "__main__":
     if len(sys.argv) > 2:
         mode = sys.argv.pop(1)
         config = sys.argv.pop(1)
+        if mode == 'frontend':
+            # Experimentation web UI + API; second arg is the port.
+            from cyberwheel.server import run_frontend_server
+            run_frontend_server(config)
+            sys.exit(0)
+
         args = parse(config, mode) if mode in ['train', 'evaluate', 'emulate', 'run'] else None
 
         if mode == 'train':

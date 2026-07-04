@@ -9,6 +9,8 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 - RL: Gymnasium env + PyTorch, PPO-style trainer. Tracking: Weights &
   Biases. Network graphs: `networkx`. (graphviz/pygraphviz and Dash/Plotly are retired —
   do not reintroduce them.)
+- Web UI: FastAPI + uvicorn (`cyberwheel/server/`) serving a JSON API and the built React
+  SPA from `cyberwheel/server/static/` (source in `frontend/`, Vite build).
 - Env note: this sandbox has no system Python 3.10 — it's provisioned via `uv python install 3.10`
   and Poetry (`uv tool install poetry`; `poetry env use $(uv python find 3.10)`).
 
@@ -18,13 +20,21 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
                         if `visualize: true` in the config, also writes `cyberwheel/data/graphs/<name>/`.
 - `emulate`           — like `evaluate`, but on the FIREWHEEL emulation backend.
 - `run`               — steps the env with inactive agents (no RL); scaffolding / sanity only.
+- `frontend <port>`   — experimentation web UI + API (e.g. `frontend 8080`; binds 0.0.0.0).
+  Launches train/evaluate runs as CLI subprocesses driven by generated env configs in
+  `data/configs/environment/generated/<run_id>.yaml` (never CLI overrides: `agents.*`,
+  per-optimizer LRs, reward selection, and the string `anneal_lr` are unreachable/corrupted
+  via flags). Run registry (config snapshot + status + stdout) lives in
+  `cyberwheel/data/frontend/runs/<run_id>/`; both locations are git-ignored.
 - CLI args override YAML values. Dispatch needs `<mode> <config>` (2+ argv); a bare `-h` prints
   nothing. To list all parameters use an unknown mode, e.g. `python3 -m cyberwheel help x`.
 
 ## Testing — `python3 -m cyberwheel.tests`
 - Custom framework (no pytest) in `cyberwheel/tests/framework/`; suites: `config` (every YAML
   loads + references resolve), `smoke` (train/evaluate end-to-end at tiny scale via the real
-  CLI), `perf` (benchmarks gated against the parent commit's results).
+  CLI, incl. viz artifacts + layout determinism), `frontend` (boots the experimentation
+  server and drives it over HTTP: options, SPA, train/evaluate e2e via the API, stop/orphan,
+  validation, delete), `perf` (benchmarks gated against the parent commit's results).
 - Common invocations: `--suite {config,smoke,perf,all}`, `--quick`, `--list`, `--json PATH`,
   `--record-baseline`, `--compare-rev REV` (same-machine dual measurement), `--tolerance F`.
   Exit codes: 0 ok · 1 config/smoke failure · 2 perf regression · 3 framework error.
@@ -103,6 +113,16 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 - **RL trainer / runners:** `cyberwheel/runners/` — `rl_trainer.py` (trainer), `train_cyberwheel.py`,
   `evaluate_cyberwheel.py`, `rl_evaluator.py`, `rl_handler.py`, `baseline_runner.py`,
   `run_baseline_cyberwheel.py`.
+- **Visualization artifacts:** `cyberwheel/visualization/` — `layout.py` (deterministic
+  radial-cluster layout, graphviz-free), `states.py` (killchain state codes), `writer.py`
+  (`VizWriter`: per-step JSON deltas written during evaluate when `visualize: true` →
+  `data/graphs/<graph_name>/{meta,layout,episode_<n>}.json`).
+- **Experimentation server:** `cyberwheel/server/` — `app.py`/`serve.py` (FastAPI factory +
+  uvicorn entry), `routes/` (options/runs/eval endpoints), `jobs.py` (subprocess launch/stop/
+  reap), `registry.py` (run.json store + orphan detection + external model dirs), `options.py`
+  (config enumeration), `metrics.py` (TensorBoard EventAccumulator reader), `actions_log.py`,
+  `paths.py`, `validation.py`; built SPA committed in `static/`. Endpoints take/return plain
+  dicts — keep pydantic out of handler signatures (repo pins pydantic v1).
 - **Utils:** `cyberwheel/utils/` — arg parsing (`parse_override_args.py`), `yaml_config.py`,
   `rl_policy.py`, `get_service_map.py`, `host_types.py`, `step_metrics.py`, `set_seed.py`.
 - `cyberwheel/legacy/` — old multiagent / pyattck / scripts; not part of the active path.

@@ -33,11 +33,17 @@ from cyberwheel.tests.framework.report import (
     print_summary,
     write_json_report,
 )
-from cyberwheel.tests.framework.suites import config_suite, perf_suite, smoke_suite
+from cyberwheel.tests.framework.suites import (
+    config_suite,
+    frontend_suite,
+    perf_suite,
+    smoke_suite,
+)
 
 _SUITE_MODULES = {
     "config": config_suite,
     "smoke": smoke_suite,
+    "frontend": frontend_suite,
     "perf": perf_suite,
 }
 
