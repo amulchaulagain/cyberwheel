@@ -1,10 +1,9 @@
 """Smoke suite: the environment, training, and evaluation work end-to-end.
 
-Training and evaluation run as subprocesses through the real CLI
+Training, evaluation, and run mode go through the real CLI
 (``python -m cyberwheel <mode> <config> --overrides``) at tiny scale, so the
 whole dispatch → config → runner path is exercised. The base environment is
-constructed in-process (the ``run`` CLI mode is a known pre-existing issue,
-covered by an xfail case).
+also constructed in-process to step/reset it directly.
 """
 
 from __future__ import annotations
@@ -74,10 +73,6 @@ def _smoke_base_env() -> Outcome:
 def _smoke_base_env_reset() -> Outcome:
     env = _build_base_env()
     env.step()
-    # Known pre-existing issue: InactiveRedAgent.reset() calls
-    # ARTAgent.reset() without its required (network, service_mapping) args
-    # (inactive_red_agent.py:31-32 vs art_agent.py:383), so the base env
-    # cannot reset. Success here means the bug got fixed (XPASS_WARN).
     env.reset()
     check(env.current_step == 0, f"current_step {env.current_step} != 0 after reset")
     for _ in range(5):
@@ -981,15 +976,16 @@ def _smoke_run_mode(run_id: str) -> Outcome:
         ],
         timeout=300,
     )
-    # Known pre-existing issue: baseline_runner sets a host-keyed
-    # service_mapping and never sets agent_config, which ARTAgent requires
-    # (baseline_runner.py:23 vs art_agent.py:101). A zero exit here means the
-    # bug got fixed; the runner will flag it as XPASS_WARN.
     check(
         proc.returncode == 0,
         f"run mode exited {proc.returncode}; stderr tail: {proc.stderr[-400:]}",
     )
-    return Outcome(Status.PASS, "run mode completed")
+    log_path = DATA_ROOT / "action_logs" / f"{run_id}_run.csv"
+    check_file(log_path)
+    with open(log_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    check(len(rows) == 5, f"action log should have 1x5 rows, got {len(rows)}")
+    return Outcome(Status.PASS, "run mode completed; action log has 5 rows")
 
 
 def register(registry: Registry, ctx: Context) -> None:
@@ -1003,14 +999,10 @@ def register(registry: Registry, ctx: Context) -> None:
     )
     registry.add(
         TestCase(
-            name="smoke:base_env_reset_known_issue",
+            name="smoke:base_env_reset",
             suite=SUITE,
             fn=_smoke_base_env_reset,
             timeout_s=300.0,
-            known_issue=(
-                "base env reset crashes: InactiveRedAgent.reset() calls "
-                "ARTAgent.reset() without its required arguments"
-            ),
         )
     )
     registry.add(
@@ -1129,13 +1121,9 @@ def register(registry: Registry, ctx: Context) -> None:
     )
     registry.add(
         TestCase(
-            name="smoke:run_mode_known_issue",
+            name="smoke:run_mode_e2e",
             suite=SUITE,
             fn=(lambda: _smoke_run_mode(ctx.run_id)),
             timeout_s=300.0,
-            known_issue=(
-                "run mode crashes: baseline_runner.py passes a host-keyed "
-                "service_mapping and no agent_config to ARTAgent"
-            ),
         )
     )

@@ -27,6 +27,3 @@ class InactiveRedAgent(ARTAgent):
 
     def get_reward_map(self) -> RewardMap:
         return {"nothing": (0, 0)}
-    
-    def reset(self):
-        super().reset()

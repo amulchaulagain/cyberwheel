@@ -60,8 +60,8 @@ class Cyberwheel:
     def reset(self) -> None:
         self.current_step = 0
         self.network.reset()
-        self.red_agent.reset()
-        self.blue_agent.reset()
+        self.red_agent.reset(self.network, self.service_mapping)
+        self.blue_agent.reset(self.network)
 
     def close(self) -> None:
         pass

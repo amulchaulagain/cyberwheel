@@ -1,5 +1,6 @@
 import pandas as pd
 import time
+import yaml
 
 from importlib.resources import files
 from tqdm import tqdm
@@ -15,12 +16,29 @@ class BaselineRunner:
 
 
     def configure(self):
+        # Run configs use a single network, but tolerate the trainer-style
+        # list form so shared env YAMLs work in this mode too.
+        network_name = self.args.network_config
+        if not isinstance(network_name, str):
+            network_name = network_name[0]
         network_config = files("cyberwheel.data.configs.network").joinpath(
-            self.args.network_config
+            network_name
         )
         network = Network.create_network_from_yaml(network_config)
 
-        self.args.service_mapping = get_service_map(network)
+        # Keyed by network name, matching what Cyberwheel/ARTAgent index into
+        # (same shape the trainer and evaluator build).
+        self.args.service_mapping = {network.name: get_service_map(network)}
+
+        # Run configs reference agents via flat red_agent/blue_agent keys.
+        self.args.agent_config = {}
+        for agent_type, agent_yaml in (
+            ("red", self.args.red_agent),
+            ("blue", self.args.blue_agent),
+        ):
+            agent_config = files(f"cyberwheel.data.configs.{agent_type}_agent").joinpath(agent_yaml)
+            with open(agent_config, "r") as yaml_file:
+                self.args.agent_config[agent_type] = yaml.safe_load(yaml_file)
 
         self.env = Cyberwheel(self.args, network)
 

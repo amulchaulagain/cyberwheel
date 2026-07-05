@@ -3,8 +3,8 @@ code-consumed references resolve.
 
 One test case is registered per discovered YAML file, so new configs are
 covered automatically. Only references the code actually consumes are hard
-failures; dangling decorative references (e.g. the baseline schema's
-``red_agent`` key, which the runners never read) are reported as INFO.
+failures; purely informational notes (e.g. load-only emulator configs) are
+reported as INFO.
 """
 
 from __future__ import annotations
@@ -137,6 +137,11 @@ def _check_environment(path: Path) -> Outcome:
         )
         refs.append(("red_agent", agents["red"]))
         refs.append(("blue_agent", agents["blue"]))
+    if kind == "baseline":
+        # baseline_runner loads these into agent_config for run mode.
+        for key, subdir in (("red_agent", "red_agent"), ("blue_agent", "blue_agent")):
+            if data.get(key):
+                refs.append((subdir, data[key]))
 
     unresolved = [
         f"{subdir}/{name}"
@@ -144,14 +149,6 @@ def _check_environment(path: Path) -> Outcome:
         if not (CONFIG_ROOT / subdir / name).is_file()
     ]
     check(not unresolved, f"unresolvable config references: {unresolved}")
-
-    if kind == "baseline":
-        # These keys exist in the YAML but no code path reads them
-        # (baseline_runner hardcodes the inactive agents).
-        for key, subdir in (("red_agent", "red_agent"), ("blue_agent", "blue_agent")):
-            value = data.get(key)
-            if value and not (CONFIG_ROOT / subdir / value).is_file():
-                infos.append(f"dangling unconsumed reference {key}: {value!r}")
 
     if kind == "rl-eval" and isinstance(network, list):
         infos.append(

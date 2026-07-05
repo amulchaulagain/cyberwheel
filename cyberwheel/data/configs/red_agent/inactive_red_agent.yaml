@@ -1,0 +1,12 @@
+name: inactive_red_agent
+class: InactiveRedAgent
+rl: false
+actions:
+  nothing: # InactiveRedAgent.act() always runs Nothing; listed so ARTAgent.from_yaml() can build its (unused) killchain
+    class: Nothing
+    reward:
+      immediate: 0.0
+      recurring: 0.0
+strategy: ServerDowntime # required by ARTAgent.from_yaml(); never consulted (select_next_target is a no-op)
+entry_host: random # optional; defaults to random user
+leader: random # optional; defaults to random server
