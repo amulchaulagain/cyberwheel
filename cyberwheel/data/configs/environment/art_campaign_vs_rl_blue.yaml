@@ -14,12 +14,8 @@ debug_mode: false
 # Environment Parameters
 environment: CyberwheelRL # Environment class to use
 network_config:
-  #- emulator_integration_config.yaml
-  #- emulator_example_config.yaml
-  #- emulator_10_host.yaml
-  - emulator_15_host.yaml
-  #- emulator_25_host.yaml
-#  - 15-host-network.yaml # Network configuration filename in config/network
+  # The campaign's entry_host/leader (host1/server4) must exist in the network.
+  - 15-host-network.yaml # Network configuration filename in config/network
 #  - 25-host-network.yaml
 #  - 50-host-network.yaml
 host_config: host_defs_services.yaml # Host configuration filename in config/host_definitions

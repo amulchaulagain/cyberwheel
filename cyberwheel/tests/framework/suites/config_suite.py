@@ -29,10 +29,7 @@ SUITE = "config"
 # Shipped configs that are genuinely broken today. They register as
 # known-issue cases: failing exactly as documented reports XFAIL (non-gating);
 # if someone fixes them the runner flags XPASS_WARN so the entry gets removed.
-KNOWN_BROKEN = {
-    "environment/art_campaign_vs_rl_blue.yaml": "references network/emulator_15_host.yaml, which does not exist",
-    "environment/rl_red_campaign_vs_rl_blue.yaml": "references network/emulator_15_host.yaml, which does not exist",
-}
+KNOWN_BROKEN: dict[str, str] = {}
 
 
 def _import_cyberwheel_utils() -> None:
