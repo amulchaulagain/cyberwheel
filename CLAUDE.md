@@ -153,7 +153,10 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   `data/graphs/<graph_name>/{meta,layout,episode_<n>}.json`).
 - **Experimentation server:** `cyberwheel/server/` — `app.py`/`serve.py` (FastAPI factory +
   uvicorn entry), `routes/` (options/runs/eval endpoints, plus `network_routes.py`:
-  `POST /api/networks/{generate,preview}` shelling out to the generator CLI), `jobs.py` (subprocess launch/stop/
+  `POST /api/networks/{generate,preview}` shelling out to the generator CLI, and `sweep_routes.py`:
+  `POST/GET/DELETE /api/sweeps` — parameter-grid sweeps launching one train run per cell with
+  bounded parallelism (`CYBERWHEEL_SWEEP_PARALLEL`, default 3; excess cells queue and drain via the
+  reaper), child runs tagged `sweep_id`; store in `sweeps.py`), `jobs.py` (subprocess launch/stop/
   reap), `registry.py` (run.json store + orphan detection + external model dirs), `options.py`
   (config enumeration), `metrics.py` (TensorBoard EventAccumulator reader), `actions_log.py`,
   `paths.py`, `validation.py`; built SPA committed in `static/`. Endpoints take/return plain

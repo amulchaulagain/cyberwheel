@@ -10,6 +10,8 @@ import type {
   RunRecord,
   RunsResponse,
   ScalarPoint,
+  SweepRecord,
+  SweepsResponse,
   VizEpisode,
   VizLayout,
   VizMeta,
@@ -221,6 +223,52 @@ export function useDeleteRun() {
     mutationFn: ({ runId, artifacts }: { runId: string; artifacts: boolean }) =>
       api.delete(`/api/runs/${runId}?artifacts=${artifacts}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["runs"] }),
+  });
+}
+
+export function useSweeps() {
+  return useQuery<SweepsResponse>({
+    queryKey: ["sweeps"],
+    queryFn: () => api.get("/api/sweeps"),
+    refetchInterval: (query) =>
+      query.state.data?.sweeps.some((s) => ACTIVE(s.status)) ? 3000 : 15_000,
+  });
+}
+
+export function useSweep(sweepId: string | undefined, active: boolean) {
+  return useQuery<SweepRecord>({
+    queryKey: ["sweep", sweepId],
+    queryFn: () => api.get(`/api/sweeps/${sweepId}`),
+    enabled: Boolean(sweepId),
+    refetchInterval: active ? 2500 : false,
+  });
+}
+
+export function useLaunchSweep() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      display_name: string;
+      base_config: string;
+      params: Record<string, unknown>;
+      grid: Record<string, (string | number)[]>;
+    }) => api.post<SweepRecord>("/api/sweeps", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sweeps"] });
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    },
+  });
+}
+
+export function useDeleteSweep() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sweepId, artifacts }: { sweepId: string; artifacts: boolean }) =>
+      api.delete(`/api/sweeps/${sweepId}?artifacts=${artifacts}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sweeps"] });
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    },
   });
 }
 

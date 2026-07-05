@@ -40,6 +40,11 @@ _procs: dict[str, subprocess.Popen] = {}
 _lock = threading.Lock()
 _reaper_started = False
 
+# Sweep cells launch with bounded parallelism (the rest queue and are drained
+# by the reaper as slots free), so a large grid never spawns all at once.
+SWEEP_PARALLEL = int(os.environ.get("CYBERWHEEL_SWEEP_PARALLEL", "3") or "3")
+_pending: list[tuple[dict, str, str]] = []
+
 
 def _owns(run_id: str) -> bool:
     with _lock:
@@ -77,13 +82,7 @@ def generate_config(run_id: str, base_config: str, params: dict) -> str:
     return f"generated/{run_id}.yaml"
 
 
-def launch(record: dict, mode: str, config_ref: str) -> dict:
-    limit = _max_concurrency()
-    if limit is not None:
-        active = sum(1 for r in registry.list_runs() if r.get("status") == "running")
-        if active >= limit:
-            raise ApiError(429, f"{active} runs already active (limit {limit})")
-
+def _spawn(record: dict, mode: str, config_ref: str) -> dict:
     directory = registry.run_dir(record["id"])
     directory.mkdir(parents=True, exist_ok=True)
     log_path = directory / "stdout.log"
@@ -105,6 +104,30 @@ def launch(record: dict, mode: str, config_ref: str) -> dict:
     registry.save_run(record)
     with _lock:
         _procs[record["id"]] = proc
+    _ensure_reaper()
+    return record
+
+
+def launch(record: dict, mode: str, config_ref: str) -> dict:
+    limit = _max_concurrency()
+    if limit is not None:
+        active = sum(1 for r in registry.list_runs() if r.get("status") == "running")
+        if active >= limit:
+            raise ApiError(429, f"{active} runs already active (limit {limit})")
+    return _spawn(record, mode, config_ref)
+
+
+def launch_or_queue(record: dict, mode: str, config_ref: str) -> dict:
+    """Launch immediately if under the sweep-parallelism cap, else queue the
+    cell (status 'queued') for the reaper to start when a slot frees."""
+    with _lock:
+        room = len(_procs) < SWEEP_PARALLEL
+    if room:
+        return _spawn(record, mode, config_ref)
+    record.update(status="queued", pid=None, started_at=None, exit_code=None)
+    registry.save_run(record)
+    with _lock:
+        _pending.append((record, mode, config_ref))
     _ensure_reaper()
     return record
 
@@ -186,3 +209,11 @@ def _reap_loop() -> None:
             record["exit_code"] = proc.returncode
             record["ended_at"] = registry.now_iso()
             registry.save_run(record)
+
+        # Drain queued sweep cells into the freed slots (Popen outside the lock).
+        while True:
+            with _lock:
+                if not _pending or len(_procs) >= SWEEP_PARALLEL:
+                    break
+                spec = _pending.pop(0)
+            _spawn(*spec)

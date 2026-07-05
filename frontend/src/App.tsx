@@ -7,7 +7,9 @@ import DashboardPage from "./pages/DashboardPage";
 import EvaluationRunPage from "./pages/EvaluationRunPage";
 import NewEvaluationPage from "./pages/NewEvaluationPage";
 import NewNetworkPage from "./pages/NewNetworkPage";
+import NewSweepPage from "./pages/NewSweepPage";
 import NewTrainingPage from "./pages/NewTrainingPage";
+import SweepPage from "./pages/SweepPage";
 import TrainingRunPage from "./pages/TrainingRunPage";
 
 function Logo() {
@@ -76,6 +78,7 @@ export default function App() {
           <NavItem to="/" label="Dashboard" end />
           <NavItem to="/networks/new" label="New network" />
           <NavItem to="/train/new" label="New training run" />
+          <NavItem to="/sweeps/new" label="New sweep" />
           <NavItem to="/evaluate/new" label="New evaluation" />
         </nav>
         <HealthDot />
@@ -86,6 +89,8 @@ export default function App() {
           <Route path="/train/new" element={<NewTrainingPage />} />
           <Route path="/evaluate/new" element={<NewEvaluationPage />} />
           <Route path="/networks/new" element={<NewNetworkPage />} />
+          <Route path="/sweeps/new" element={<NewSweepPage />} />
+          <Route path="/sweeps/:sweepId" element={<SweepPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/runs/train/:runId" element={<TrainingRunPage />} />
           <Route path="/runs/evaluate/:runId" element={<EvaluationRunPage />} />

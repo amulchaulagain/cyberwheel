@@ -252,7 +252,11 @@ then open `http://localhost:8080/`. The UI lets you:
   agent's position), which stays legible from 10 up to 10,000 hosts;
 * **compare runs side by side** — select up to six runs on the dashboard and open the compare
   view: training curves overlaid on shared axes, evaluation summaries as mean ± 95% CI, and a
-  configuration diff highlighting exactly which parameters differ between the runs.
+  configuration diff highlighting exactly which parameters differ between the runs;
+* **run parameter sweeps** — define a base training config and a grid of parameter values (e.g.
+  `learning_rate: 0.0003, 0.001`); the server launches one run per combination with bounded
+  parallelism, groups them, and shows a results table (varied params → final metric per cell) with
+  a one-click jump into the compare view.
 
 Runs launch as normal `train` / `evaluate` subprocesses, so anything started in the UI behaves
 exactly like the CLI (and vice-versa — CLI-trained models show up in the UI as evaluable). The UI

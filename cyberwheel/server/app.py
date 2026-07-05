@@ -32,12 +32,14 @@ def create_app() -> FastAPI:
         network_routes,
         options_routes,
         run_routes,
+        sweep_routes,
     )
 
     app.include_router(options_routes.router)
     app.include_router(run_routes.router)
     app.include_router(eval_routes.router)
     app.include_router(network_routes.router)
+    app.include_router(sweep_routes.router)
 
     @app.get("/api/health")
     def health() -> dict:

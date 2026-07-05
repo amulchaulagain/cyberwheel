@@ -77,6 +77,30 @@ export interface ActionsResponse {
   rows: Record<string, string>[];
 }
 
+export interface SweepCell {
+  run_id: string;
+  params: Record<string, string | number>;
+  status?: RunStatus | "missing";
+  progress?: number | null;
+  metrics?: Record<string, number | null>;
+}
+
+export interface SweepRecord {
+  id: string;
+  display_name: string;
+  base_config: string;
+  base_params?: Record<string, unknown>;
+  grid: Record<string, (string | number)[]>;
+  varied_keys: string[];
+  cells: SweepCell[];
+  created_at: string;
+  status?: RunStatus;
+}
+
+export interface SweepsResponse {
+  sweeps: SweepRecord[];
+}
+
 export interface GenerateNetworkParams {
   num_hosts: number;
   num_subnets: number;

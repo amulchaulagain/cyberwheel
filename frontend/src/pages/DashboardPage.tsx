@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { useDeleteRun, useRuns, useStopRun } from "../api/hooks";
+import { useDeleteRun, useRuns, useStopRun, useSweeps } from "../api/hooks";
 import type { RunRecord } from "../api/types";
 import PageHeader from "../components/PageHeader";
 import ProgressBar from "../components/runs/ProgressBar";
@@ -138,6 +138,7 @@ function RunRow({
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { data, isLoading, error } = useRuns();
+  const { data: sweepsData } = useSweeps();
   const [kind, setKind] = useState<KindFilter>("all");
   // 6 = the metric-chart series palette size.
   const MAX_COMPARE = 6;
@@ -273,6 +274,36 @@ export default function DashboardPage() {
             </table>
           )}
         </div>
+
+        {(sweepsData?.sweeps ?? []).length > 0 && (
+          <div className="panel">
+            <div className="flex items-center justify-between border-b border-ink-700 px-4 py-2.5">
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                Parameter sweeps
+              </span>
+              <Link to="/sweeps/new" className="btn-ghost !px-2 !py-1 !text-xs">
+                New sweep
+              </Link>
+            </div>
+            <div className="divide-y divide-ink-700/70">
+              {(sweepsData?.sweeps ?? []).map((sweep) => (
+                <Link
+                  key={sweep.id}
+                  to={`/sweeps/${sweep.id}`}
+                  className="flex items-center justify-between px-4 py-2.5 transition-colors hover:bg-ink-800/50"
+                >
+                  <div>
+                    <div className="text-sm text-slate-200">{sweep.display_name}</div>
+                    <div className="font-mono text-[11px] text-slate-500">
+                      {sweep.cells.length} runs · {sweep.varied_keys.join(", ")}
+                    </div>
+                  </div>
+                  {sweep.status && <StatusBadge status={sweep.status} />}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {external.length > 0 && (
           <div className="panel">

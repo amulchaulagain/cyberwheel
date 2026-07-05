@@ -23,6 +23,7 @@ ACTION_LOGS_DIR = DATA_ROOT / "action_logs"
 
 FRONTEND_STATE_DIR = DATA_ROOT / "frontend"
 REGISTRY_DIR = FRONTEND_STATE_DIR / "runs"
+SWEEPS_DIR = FRONTEND_STATE_DIR / "sweeps"
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -39,5 +40,5 @@ CONFIG_FIELD_DIRS = {
 
 
 def ensure_dirs() -> None:
-    for path in (GENERATED_CONFIG_DIR, REGISTRY_DIR, MODELS_DIR, RUNS_DIR, GRAPHS_DIR, ACTION_LOGS_DIR):
+    for path in (GENERATED_CONFIG_DIR, REGISTRY_DIR, SWEEPS_DIR, MODELS_DIR, RUNS_DIR, GRAPHS_DIR, ACTION_LOGS_DIR):
         path.mkdir(parents=True, exist_ok=True)

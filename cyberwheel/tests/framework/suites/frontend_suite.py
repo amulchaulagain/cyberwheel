@@ -137,10 +137,11 @@ def _server() -> _Server:
 def _fs_cleanup() -> None:
     """Backstop: remove suite runs directly from disk (normally the final
     case already deleted them through the API)."""
-    registry_dir = DATA_ROOT / "frontend" / "runs"
-    if registry_dir.is_dir():
-        for entry in registry_dir.glob(f"{PREFIX}-*"):
-            shutil.rmtree(entry, ignore_errors=True)
+    for state_sub in ("runs", "sweeps"):
+        state_dir = DATA_ROOT / "frontend" / state_sub
+        if state_dir.is_dir():
+            for entry in state_dir.glob(f"{PREFIX}-*"):
+                shutil.rmtree(entry, ignore_errors=True)
     for sub in ("models", "runs", "graphs"):
         base = DATA_ROOT / sub
         if base.is_dir():
@@ -491,6 +492,56 @@ def _case_network_generate() -> Outcome:
     return Outcome(Status.PASS, f"network generated + previewed via API ({name})")
 
 
+def _case_sweep() -> Outcome:
+    server = _server()
+    created = server.api(
+        "POST",
+        "/api/sweeps",
+        {
+            "display_name": f"{PREFIX} sweep",
+            "base_config": "train_rl_red_agent_vs_rl_blue.yaml",
+            "params": _TINY_TRAIN_PARAMS,
+            "grid": {"learning_rate": [0.0003, 0.001]},
+        },
+        expect=201,
+    )
+    sweep_id = created["id"]
+    _STATE["sweep_id"] = sweep_id
+    check(len(created["cells"]) == 2, f"2-value grid should yield 2 cells: {created['cells']}")
+
+    # Over-cap grid is rejected before anything launches.
+    server.api(
+        "POST",
+        "/api/sweeps",
+        {
+            "display_name": f"{PREFIX} sweep too big",
+            "base_config": "train_rl_red_agent_vs_rl_blue.yaml",
+            "params": _TINY_TRAIN_PARAMS,
+            "grid": {"learning_rate": list(range(17))},
+        },
+        expect=400,
+    )
+
+    deadline = time.time() + 900
+    while time.time() < deadline:
+        sweep = server.api("GET", f"/api/sweeps/{sweep_id}")
+        if sweep["status"] != "running":
+            break
+        time.sleep(1.0)
+    check(sweep["status"] == "succeeded", f"sweep ended {sweep['status']}")
+    for cell in sweep["cells"]:
+        check(cell["status"] == "succeeded", f"cell {cell['run_id']} ended {cell['status']}")
+        returns = [
+            v for k, v in (cell.get("metrics") or {}).items()
+            if k.endswith("_episodic_return") and v is not None
+        ]
+        check(bool(returns), f"cell {cell['run_id']} has no episodic-return metric")
+
+    listed = [s["id"] for s in server.api("GET", "/api/sweeps")["sweeps"]]
+    check(sweep_id in listed, "sweep not enumerated in the list endpoint")
+    return Outcome(Status.PASS, f"2-cell sweep launched, ran, and reported metrics ({sweep_id})")
+
+
 def _case_stop_and_orphan() -> Outcome:
     server = _server()
     created = server.api(
@@ -610,6 +661,14 @@ def _case_cleanup() -> Outcome:
     gen_network = _STATE.get("gen_network")
     if gen_network:
         (DATA_ROOT / "configs" / "network" / f"{gen_network}.yaml").unlink(missing_ok=True)
+    sweep_id = _STATE.get("sweep_id")
+    if sweep_id:
+        status, _, _ = server.request("DELETE", f"/api/sweeps/{sweep_id}?artifacts=true")
+        check(status in (200, 404), f"DELETE sweep {sweep_id} -> {status}")
+        check(
+            not (DATA_ROOT / "frontend" / "sweeps" / sweep_id).exists(),
+            "sweep dir survived deletion",
+        )
     remaining = [
         r["id"]
         for r in server.api("GET", "/api/runs")["runs"]
@@ -628,6 +687,7 @@ def register(registry: Registry, ctx: Context) -> None:
         ("frontend:evaluate_batch_via_api", _case_evaluate_batch, 600.0, "frontend:train_e2e_via_api"),
         ("frontend:compare_view_contract", _case_compare_contract, 120.0, "frontend:evaluate_batch_via_api"),
         ("frontend:network_generate", _case_network_generate, 180.0, None),
+        ("frontend:sweep_e2e", _case_sweep, 900.0, None),
         ("frontend:job_stop_and_orphan", _case_stop_and_orphan, 300.0, None),
         ("frontend:launch_validation", _case_validation, 120.0, None),
         ("frontend:cleanup_via_api", _case_cleanup, 300.0, None),

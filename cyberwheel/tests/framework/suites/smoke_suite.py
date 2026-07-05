@@ -890,6 +890,38 @@ def _smoke_correlation_window_e2e(run_id: str) -> Outcome:
     return Outcome(Status.PASS, "correlation-window detector survives train + 2-episode evaluate")
 
 
+def _smoke_sweep_grid_expansion() -> Outcome:
+    """Sweep grid expansion + status rollup (server-side, torch-free)."""
+    from cyberwheel.server.sweeps import MAX_CELLS, expand_grid, rollup_status
+
+    cells = expand_grid({"a": [1, 2], "b": [3, 4]})
+    check(len(cells) == 4, f"2x2 grid should expand to 4 cells, got {len(cells)}")
+    check({tuple(sorted(c.items())) for c in cells} == {
+        (("a", 1), ("b", 3)), (("a", 1), ("b", 4)),
+        (("a", 2), ("b", 3)), (("a", 2), ("b", 4)),
+    }, f"unexpected grid product: {cells}")
+
+    single = expand_grid({"lr": [0.1, 0.2, 0.3]})
+    check(len(single) == 3 and all(list(c) == ["lr"] for c in single), "1-D grid wrong")
+
+    for bad, why in (
+        ({}, "empty grid"),
+        ({"a": []}, "empty value list"),
+        ({"a": list(range(MAX_CELLS + 1))}, "over the cell cap"),
+    ):
+        raised = False
+        try:
+            expand_grid(bad)
+        except Exception:
+            raised = True
+        check(raised, f"{why} should be rejected")
+
+    check(rollup_status(["succeeded", "succeeded"]) == "succeeded", "all-succeeded rollup")
+    check(rollup_status(["succeeded", "running"]) == "running", "any-running rollup")
+    check(rollup_status(["succeeded", "failed"]) == "failed", "any-failed rollup")
+    return Outcome(Status.PASS, "grid expansion, cap, and status rollup OK")
+
+
 def _smoke_viz_layout_deterministic() -> Outcome:
     """compute_layout is deterministic and decoy slots are stable."""
     import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
@@ -1077,6 +1109,14 @@ def register(registry: Registry, ctx: Context) -> None:
             suite=SUITE,
             fn=(lambda: _smoke_correlation_window_e2e(ctx.run_id)),
             timeout_s=900.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:sweep_grid_expansion",
+            suite=SUITE,
+            fn=_smoke_sweep_grid_expansion,
+            timeout_s=60.0,
         )
     )
     registry.add(
