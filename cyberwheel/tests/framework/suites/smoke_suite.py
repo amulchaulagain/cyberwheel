@@ -453,6 +453,66 @@ def _build_rl_env(blue_yaml: str):
     return env, network, args
 
 
+def _smoke_recurring_reward_ledger() -> Outcome:
+    """Blue recurring costs are per-action-id; only the matching removal cancels."""
+    from types import SimpleNamespace
+
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    import cyberwheel.red_agents  # noqa: F401 -- must precede cyberwheel.reward
+    from cyberwheel.blue_agents.blue_agent import BlueAgentResult
+    from cyberwheel.reward.rl_reward import RLReward
+
+    red_agent = SimpleNamespace(
+        get_reward_map=lambda: {}, args=SimpleNamespace(num_steps=10)
+    )
+    blue_agent = SimpleNamespace(
+        get_reward_map=lambda: {
+            "quarantine_host": (-5.0, -2.0),
+            "restore_host": (-1.0, 0.0),
+            "remove_decoy": (-1.0, 0.0),
+        }
+    )
+    args = SimpleNamespace(
+        blue_reward_function="reward_red_delay",
+        red_reward_function="reward_decoy_hits",
+    )
+    network = SimpleNamespace(decoys={}, topology_version=None)
+    rewarder = RLReward(args, red_agent, blue_agent, ["srv1"], network)
+    red_fail = SimpleNamespace(
+        action=SimpleNamespace(get_name=lambda: "impact"),
+        target_host="invalid",
+        success=False,
+    )
+
+    def blue_step(name: str, id_: str, success: bool, recurring: int) -> float:
+        rewarder.calculate_reward(
+            blue_agent_result=BlueAgentResult(name, id_, success, recurring),
+            red_agent_result=red_fail,
+        )
+        return sum(rewarder.blue_recurring_reward.values())
+
+    check(blue_step("quarantine_host", "host_a", True, 1) == -2.0, "quarantine cost not pushed")
+    total = blue_step("quarantine_host", "host_b", True, 1)
+    check(total == -4.0, f"two quarantines should cost -4.0/step, got {total}")
+    check(
+        blue_step("remove_decoy", "decoy_x", True, -1) == -4.0,
+        "remove_decoy cancelled a quarantine cost",
+    )
+    check(
+        blue_step("remove_decoy", "", False, -1) == -4.0,
+        "a FAILED remove_decoy cancelled a quarantine cost",
+    )
+    remaining = blue_step("restore_host", "host_b", True, -1)
+    check(
+        remaining == -2.0 and "host_a" in rewarder.blue_recurring_reward,
+        f"restore(host_b) should leave only host_a's cost, got {remaining}",
+    )
+    check(blue_step("restore_host", "host_a", True, -1) == 0.0, "ledger not empty after both restores")
+    rewarder.reset()
+    check(rewarder.blue_recurring_reward == {}, "reset did not clear the ledger")
+    return Outcome(Status.PASS, "recurring costs keyed by action id; cross-cancellation blocked")
+
+
 def _smoke_multi_network_reward_sync() -> Outcome:
     """The reward calculator must track the env's network across multi-network resets."""
     import yaml
@@ -1103,6 +1163,14 @@ def register(registry: Registry, ctx: Context) -> None:
             fn=(lambda: _smoke_evaluate_batch(ctx.run_id)),
             timeout_s=600.0,
             depends_on="smoke:train_e2e",
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:recurring_reward_ledger",
+            suite=SUITE,
+            fn=_smoke_recurring_reward_ledger,
+            timeout_s=60.0,
         )
     )
     registry.add(

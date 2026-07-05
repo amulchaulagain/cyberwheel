@@ -20,7 +20,9 @@ class RLReward(Reward):
     ) -> None:
         super().__init__(red_agent.get_reward_map(), blue_agent.get_reward_map())
         self.args = args
-        self.blue_recurring_reward = []
+        # Per-step blue costs keyed by the originating action's id (e.g. the
+        # quarantined host's name) so a removal cancels exactly its own cost.
+        self.blue_recurring_reward: dict[str, float] = {}
         self.red_recurring_reward = []
 
         self.valid_targets = valid_targets
@@ -46,17 +48,20 @@ class RLReward(Reward):
         
         b, b_recurring = self.blue_reward_function(self, blue_agent_result=blue_agent_result, red_agent_result=red_agent_result, valid_target=valid_targets)
 
-        # Handle recurring rewards
-        self.blue_recurring_reward += [b_recurring] if b_recurring != 0 else []
+        # Handle recurring rewards. Blue costs are keyed by action id so that
+        # only the matching removal cancels them: remove_decoy can't cancel a
+        # live quarantine, and a failed action cancels nothing.
+        if b_recurring != 0:
+            self.blue_recurring_reward[blue_agent_result.id] = b_recurring
         self.red_recurring_reward += [r_recurring] if r_recurring != 0 else []
 
-        if blue_agent_result.recurring == -1 and len(self.blue_recurring_reward) > 0:
-            self.blue_recurring_reward.pop(0)
+        if blue_agent_result.recurring == -1 and blue_agent_result.success:
+            self.blue_recurring_reward.pop(blue_agent_result.id, None)
 
         # Step forward
         self.current_step += 1
 
-        return b + sum(self.blue_recurring_reward), r + sum(self.red_recurring_reward)
+        return b + sum(self.blue_recurring_reward.values()), r + sum(self.red_recurring_reward)
 
     
     def get_valid_targets(self) -> HybridSetList:
@@ -91,7 +96,7 @@ class RLReward(Reward):
         # target/decoy sets must be computed against the live one.
         if network is not None:
             self.network = network
-        self.blue_recurring_reward = []
+        self.blue_recurring_reward = {}
         self.red_recurring_reward = []
         self.current_step = 0
         self._valid_targets_cache = None

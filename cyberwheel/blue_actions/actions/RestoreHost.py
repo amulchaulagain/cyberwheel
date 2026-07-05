@@ -10,9 +10,8 @@ class RestoreHost(HostAction):
     Reimage a real host: undo a quarantine (reconnect it to its subnet) and
     clean any compromise. The red agent's foothold/killchain progress on the
     host is reset via network.pending_restores, drained by the red agent on
-    its next act. Returns recurring=-1 to remove one quarantine's per-step
-    collateral cost (the oldest recurring entry — equivalent while all
-    recurring costs come from equal-valued quarantines).
+    its next act. Returns recurring=-1 to remove this host's quarantine
+    per-step collateral cost (the reward ledger is keyed by host name).
     """
 
     def __init__(self, network: Network, configs: Dict[str, any], **kwargs) -> None:
