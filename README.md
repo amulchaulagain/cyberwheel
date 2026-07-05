@@ -50,6 +50,40 @@
 
 ## Updates
 
+### Experimentation Platform & Research Tooling
+
+Since the v2.0 release, Cyberwheel has grown a browser-based experimentation platform and a set of
+research-oriented features. Each is detailed in the sections linked below.
+
+- **Experimentation web UI** (`python3 -m cyberwheel frontend <port>`) — launch, monitor, and manage
+  training/evaluation runs from a browser: parameter dropdowns populated from the configs on disk,
+  live training curves and logs, and a zoomable, scrubbable replay of the network as the agents act
+  (a self-contained Canvas renderer; the older graphviz/Dash stack has been retired). See
+  [Experimentation web UI](#experimentation-web-ui).
+- **Multi-seed batch evaluation** — evaluate over several seeds in one run and get a summary with
+  mean ± 95% confidence intervals per metric, per seed and per episode. See
+  [Batch evaluation over multiple seeds](#batch-evaluation-over-multiple-seeds).
+- **Run comparison** — select runs on the dashboard to overlay their training curves, compare
+  evaluation summaries, and diff their configs side by side.
+- **Parameter sweeps** — define a base config plus a grid of values; the platform launches one run
+  per combination (bounded parallelism), groups them, and shows a results table with a jump into the
+  comparison view.
+- **Shareable HTML reports** — export a self-contained report of an evaluation (summary statistics,
+  per-seed/episode breakdown, per-action success rates) with one click.
+- **Parameterized network generator** — procedurally generate networks from security-posture knobs
+  (size, segmentation, crown-jewel ratio, vulnerability density), via CLI or a UI form with a live
+  preview. See [Generating networks](#generating-networks).
+- **Active-defense blue actions** — quarantine, restore (reimage), and patch real hosts, beyond the
+  decoy actions. See [RL Blue Agent Design](#rl-blue-agent-design).
+- **CVSS-weighted probabilistic exploits** — opt-in model where red exploit success is a probability
+  weighted by CVE severity. See [Atomic Red Team Agent Design](#atomic-red-team-agent-design).
+- **Stateful SIEM-style detector** — the `CorrelationWindowDetector` suppresses single-shot alerts
+  and escalates only on sustained activity within a sliding window. See
+  [Detectors and Alerts](#detectors-and-alerts).
+- **Testing & profiling** — a custom test framework (`python3 -m cyberwheel.tests`; config/smoke/
+  frontend/perf suites) and a reusable environment profiler (`python3 -m cyberwheel.profiler`) with
+  committed, CI-gated performance baselines.
+
 ### New Features! (Release v2.0)
 
 With the latest major update to cyberwheel, we've implemented various new features, namely Emulation and Multi-Agent support! The first iteration of our emulator environment is now live, with instructions on setup located in `cyberwheel/emulator/README.md`. Cyberwheel environments now also support the ability to train and evaluate multiple RL agents in tandem, allowing you to train an RL Red Agent against an RL Blue Agent, both learning simultaneously. A full list of all of the new features are listed in more detail below:
@@ -76,7 +110,7 @@ This allows the singular policy to train a fixed obs space and action space on m
 
 Looking forward, there are various other features we are planning to add to Cyberwheel, many of which are listed here, along with some QoL changes:
 
-- [ ] Unit Testing
+- [x] Automated testing (custom config/smoke/frontend/perf framework + CI gate)
 - [ ] More modular red agent killchains
 - [ ] Detailed documentation
 - [ ] Multi-Agent Support (> 2 RL agents at a time)
@@ -90,7 +124,7 @@ Motivations:
 * Extensibility - allowing for modifying and adding various defensive actions and offensive strategies without requiring structural changes to codebase.
 * Scalability - supporting training on large networks with minimal performance cost
 
-This environment allows for RL training and evaluations with a large set of configurable arguments to swap out networks, strategies, agents, RL parameters, and more. It also includes a visualization server using dash that allows for evaluations to be visualized in a readable graph display showing agent actions throughout the episodes.
+This environment allows for RL training and evaluations with a large set of configurable arguments to swap out networks, strategies, agents, RL parameters, and more. It also includes a web-based experimentation UI (FastAPI + React) for launching, monitoring, and comparing runs, with an interactive network visualization that replays agent actions throughout an episode. (The earlier graphviz/Dash visualization stack has been retired in favor of this self-contained renderer.)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -100,7 +134,8 @@ This environment allows for RL training and evaluations with a large set of conf
 * [![Poetry][poetry]][poetry-url]
 * [![Gym][gym]][gym-url]
 * [![W&B][wandb]][wandb-url]
-* [![Dash][plotly-dash]][plotly-dash-url]
+* [![FastAPI][fastapi]][fastapi-url]
+* [![React][react]][react-url]
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -412,8 +447,10 @@ Project Link: [https://github.com/ORNL/cyberwheel/](https://github.com/ORNL/cybe
 [license-shield]: https://img.shields.io/github/license/ORNL/cyberwheel.svg?style=for-the-badge
 [license-url]: https://github.com/ORNL/cyberwheel/blob/release/LICENSE
 
-[plotly-dash]: https://img.shields.io/badge/plotly-dash-000000?style=for-the-badge&logo=plotly&logoColor=white
-[plotly-dash-url]: https://dash.plotly.com/
+[fastapi]: https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white
+[fastapi-url]: https://fastapi.tiangolo.com/
+[react]: https://img.shields.io/badge/react-20232a?style=for-the-badge&logo=react&logoColor=61dafb
+[react-url]: https://react.dev/
 [python]: https://img.shields.io/badge/python-000000?style=for-the-badge&logo=python&logoColor=white
 [python-url]: https://www.python.org/
 [wandb]: https://img.shields.io/badge/W&B-000000?style=for-the-badge&logo=weightsandbiases&logoColor=white
