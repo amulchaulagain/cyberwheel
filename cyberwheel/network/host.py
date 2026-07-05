@@ -58,6 +58,9 @@ class Host(NetworkObject):
         self.isolated = False  # For isolate action
         self.interfaces = []
         self.restored = False
+        self.patched = False  # For patch action
+        # Original (shared) HostType stashed by PatchHost; restored on network.reset()
+        self._pre_patch_host_type = None
         # apply any HostType details
         if self.host_type:
             self._apply_host_type(self.host_type)

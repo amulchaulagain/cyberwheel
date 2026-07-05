@@ -66,13 +66,16 @@ class ARTPingSweep(ARTKillChainPhase):
 
         subnet_hosts = host.subnet.connected_hosts
         interfaces = []
-        
+
         for each_host in subnet_hosts:
             for h in each_host.interfaces:
                 interfaces.append(h)
         #for h in interfaces:
         #    self.action_results.add_metadata(h.name, {"ip_address": h})
-        sweeped_hosts = subnet_hosts + interfaces
+        # Quarantined hosts don't answer the sweep.
+        sweeped_hosts = [
+            h for h in subnet_hosts + interfaces if not getattr(h, "isolated", False)
+        ]
         self.action_results.add_metadata(
             host.subnet.name, {"subnet_scanned": host.subnet, "sweeped_hosts": sweeped_hosts}
         )

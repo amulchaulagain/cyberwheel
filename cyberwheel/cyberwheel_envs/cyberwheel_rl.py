@@ -65,7 +65,17 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         self.blue_agent = getattr(blue_agents, self.args.agent_config["blue"]["class"])(network=self.network, args=self.args)
         self.red_agent = getattr(red_agents, self.args.agent_config["red"]["class"])(network=self.network, args=self.args)
 
-        self.blue_max_action_space_size = self.args.max_num_subnets * self.blue_agent.action_space.num_actions if self.args.agent_config["blue"]["rl"] else None #self.blue_agent.action_space._action_space_size if self.args.agent_config["blue"]["rl"] else None
+        if self.args.agent_config["blue"]["rl"]:
+            # max() keeps configs without host-typed actions at their historical
+            # size, so previously trained policies still load; host-typed
+            # actions need the per-action padded bound to avoid mask overflow.
+            legacy_size = self.args.max_num_subnets * self.blue_agent.action_space.num_actions
+            padded_size = self.blue_agent.action_space.padded_action_space_size(
+                self.args.max_num_hosts, self.args.max_num_subnets
+            )
+            self.blue_max_action_space_size = max(legacy_size, padded_size)
+        else:
+            self.blue_max_action_space_size = None
         self.red_max_action_space_size = self.args.max_num_hosts * self.red_agent.action_space.num_actions * 2 if self.args.agent_config["red"]["rl"] else None
 
         self.max_blue_attr_value = self.args.max_decoys + 2 if self.args.agent_config["blue"]["rl"] else None # Max obs attribute is limited to when num_decoys_deployed exceeds max_decoys allowed

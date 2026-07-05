@@ -59,6 +59,12 @@ class Network:
         self.disconnected_nodes: list[Host] = []
         self.isolated_hosts: list[Host] = []
 
+        # Host names queued by blue RestoreHost/PatchHost actions; drained by
+        # the active red agent once per step (reset foothold / recompute
+        # technique validity). Cleared on reset().
+        self.pending_restores: set[str] = set()
+        self.pending_patches: set[str] = set()
+
         self.hosts : dict[str, Host] = {name:host for name, host in self if isinstance(host, Host)}
         self.subnets : dict[str, Subnet] = {name:subnet for name, subnet in self if isinstance(subnet, Subnet)}
         self.decoys : dict[str, Host] = {hn:host for hn, host in self.hosts if host.decoy}
@@ -179,6 +185,18 @@ class Network:
     def disconnect_nodes(self, node1, node2):
         self.graph.remove_edge(node1, node2)
         self.disconnected_nodes.append((node1, node2))
+
+    def reconnect_host(self, host: Host, subnet: Subnet):
+        """
+        Inverse of isolate_host: reattach the Host to its Subnet.
+        """
+        host.isolated = False
+        edge = (host.name, subnet.name)
+        if edge in self.disconnected_nodes:
+            self.disconnected_nodes.remove(edge)
+        if host in self.isolated_hosts:
+            self.isolated_hosts.remove(host)
+        self.connect_nodes(host.name, subnet.name)
 
     def is_subnet_reachable(self, subnet1, subnet2):
         return nx.has_path(self.graph, subnet1.name, subnet2.name)
@@ -685,12 +703,18 @@ class Network:
         self.disconnected_nodes = []
 
         self.isolated_hosts = []
+        self.pending_restores.clear()
+        self.pending_patches.clear()
 
         for _, host in self.hosts.items():
             host.command_history = []
             host.is_compromised = False
             host.isolated = False  # For isolate action
             host.restored = False
+            if getattr(host, "_pre_patch_host_type", None) is not None:
+                host.host_type = host._pre_patch_host_type
+                host._pre_patch_host_type = None
+            host.patched = False
 
     @staticmethod
     def create_host_type_from_yaml(name: str, config_file: PathLike, types) -> HostType:

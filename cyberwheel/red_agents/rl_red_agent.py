@@ -78,7 +78,17 @@ class RLARTAgent(ARTAgent):
         else:
             self.leader_host = self.network.hosts[self.leader]
 
+    def _red_reset_foothold(self, name, host) -> None:
+        """Undo red's killchain progress on a restored host (observation-based)."""
+        if name in self.observation.obs:
+            self.observation.update_host(name, escalated=False, impacted=False, on_host=False)
+        if self.current_host.name == name:
+            self.current_host = self._initial_host
+            if self._initial_host.name in self.observation.obs:
+                self.observation.update_host(self._initial_host.name, on_host=True)
+
     def act(self, action: int) -> RedAgentResult:
+        self.handle_host_state_changes()
         art_action, target_host_name = self.action_space.select_action(
             action
         )  # Selects ART Action, should include the action and target host

@@ -92,12 +92,16 @@ class ARTAgent(RedAgent):
         self.from_yaml()
 
         self.history: AgentHistory = AgentHistory(initial_host=self.current_host)
+        self._initial_host = self.current_host
         self.unimpacted_servers = HybridSetList()
         self.unimpacted_hosts = HybridSetList()
         self.unknowns = HybridSetList()
         self.campaign = args.campaign if hasattr(args, 'campaign') else False
 
-        self.service_mapping = args.service_mapping[self.network.name] if hasattr(args, 'service_mapping') else {}
+        # Shallow copy: per-host entries may be replaced mid-episode (decoys,
+        # patched hosts) and must not leak into the dict shared across
+        # envs/resets via args.service_mapping.
+        self.service_mapping = dict(args.service_mapping[self.network.name]) if hasattr(args, 'service_mapping') else {}
         self._seen_topology_version = None
 
         if self.service_mapping == {} and not self.campaign and map_services:
@@ -263,6 +267,45 @@ class ARTAgent(RedAgent):
             action,
         )
 
+    def handle_host_state_changes(self) -> None:
+        """
+        Drain blue active-defense signals queued on the network: reset red's
+        foothold on restored hosts, and recompute technique validity on
+        patched hosts (whose CVEs were removed).
+        """
+        net = self.network
+        if net.pending_restores:
+            for name in list(net.pending_restores):
+                host = net.hosts.get(name)
+                if host is not None:
+                    self._red_reset_foothold(name, host)
+                net.pending_restores.discard(name)
+        if net.pending_patches:
+            for name in list(net.pending_patches):
+                host = net.hosts.get(name)
+                if host is not None:
+                    self.service_mapping[name] = self.get_valid_techniques_by_host(
+                        host, self.all_kcps
+                    )
+                net.pending_patches.discard(name)
+
+    def _red_reset_foothold(self, name, host) -> None:
+        """Undo red's killchain progress on a restored host (history-based)."""
+        khi = self.history.hosts.get(name)
+        if khi is not None:
+            khi.last_step = -1
+            khi.escalated = False
+            khi.impacted = False
+            khi.on_host = False
+            self.unimpacted_hosts.add(name)
+            if khi.type == "Server":
+                self.unimpacted_servers.add(name)
+        if self.current_host.name == name:
+            self.current_host = self._initial_host
+            initial = self.history.hosts.get(self._initial_host.name)
+            if initial is not None:
+                initial.on_host = True
+
     def act(self, policy_action=None) -> RedAgentResult:
         """
         This defines the red agent's action at each step of the simulation.
@@ -274,6 +317,7 @@ class ARTAgent(RedAgent):
         """
         #print(f"Service Mapping: {list(self.service_mapping.keys())}")
         self.handle_network_change()
+        self.handle_host_state_changes()
 
         target_host = self.select_next_target()
         #while not target_host: # Attempting to attack a host that is not on the network.
@@ -372,9 +416,11 @@ class ARTAgent(RedAgent):
         Resets the red agent back to blank slate.
         """
         self.network = network
-        self.service_mapping = service_mapping
+        # Shallow copy so per-host patch updates stay local to this episode.
+        self.service_mapping = dict(service_mapping)
         self._seen_topology_version = None
         self.current_host : Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
+        self._initial_host = self.current_host
         self.history: AgentHistory = AgentHistory(initial_host=self.current_host)
         self.unimpacted_servers.reset()
         self.unimpacted_hosts.reset()

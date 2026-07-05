@@ -430,6 +430,185 @@ def _smoke_evaluate_batch(run_id: str) -> Outcome:
     )
 
 
+def _build_rl_env(blue_yaml: str):
+    """Build a CyberwheelRL env on the 15-host net with the given blue agent."""
+    import yaml
+
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from cyberwheel.cyberwheel_envs.cyberwheel_rl import CyberwheelRL
+    from cyberwheel.network.network_base import Network
+    from cyberwheel.utils import YAMLConfig, get_service_map
+    from cyberwheel.utils.set_seed import set_seed
+
+    set_seed(1)
+    args = YAMLConfig("train_rl_red_agent_vs_rl_blue.yaml")
+    args.parse_config()
+    args.network_config = _NETWORK
+    args.seed = 1
+    args.deterministic = True
+    args.agents = {"red": "rl_red_agent.yaml", "blue": blue_yaml}
+    network = Network.create_network_from_yaml(CONFIG_ROOT / "network" / _NETWORK)
+    args.service_mapping = {network.name: get_service_map(network)}
+    args.agent_config = {}
+    for agent_type in args.agents:
+        with open(CONFIG_ROOT / f"{agent_type}_agent" / args.agents[agent_type]) as f:
+            args.agent_config[agent_type] = yaml.safe_load(f)
+    env = CyberwheelRL(args, network=network, networks={network.name: network})
+    env.reset(seed=1)
+    return env, network, args
+
+
+def _smoke_active_defense_actions() -> Outcome:
+    """Quarantine/Restore/Patch mechanics + action-space size invariants."""
+    import yaml
+
+    from importlib.resources import files
+
+    from cyberwheel.red_actions.actions.art_killchain_phase import ARTKillChainPhase
+    from cyberwheel.red_agents.art_agent import ARTAgent
+
+    env, net, args = _build_rl_env("active_defense_blue_agent.yaml")
+
+    # Size invariants: new config uses the padded (host) size; the default
+    # config keeps its historical size so old models still load.
+    padded = env.blue_agent.action_space.padded_action_space_size(
+        args.max_num_hosts, args.max_num_subnets
+    )
+    check(padded == 321, f"padded size {padded} != 321")
+    check(env.blue_max_action_space_size == 321, f"new blue_max {env.blue_max_action_space_size} != 321")
+    env2, _, _ = _build_rl_env("rl_blue_agent.yaml")
+    check(
+        env2.blue_max_action_space_size == 30,
+        f"rl_blue_agent blue_max {env2.blue_max_action_space_size} != 30 (old models must still load)",
+    )
+
+    actions = {ac.name: ac.action for ac in env.blue_agent.action_space._action_checkers}
+    red = env.red_agent
+    real_hosts = [h for h in net.hosts.values() if not h.decoy]
+    target = real_hosts[0]
+
+    # Quarantine blocks red on that host.
+    r = actions["quarantine_host"].execute(target)
+    check(r.success and target.isolated, "quarantine did not isolate the host")
+    check((target.name, target.subnet.name) in net.disconnected_nodes, "no disconnected edge")
+    blocked = ARTKillChainPhase(red.current_host, target, valid_techniques=["Tx"]).sim_execute()
+    check(blocked.attack_success is False, "isolated host was still attackable")
+    check(actions["quarantine_host"].execute(target).success is False, "re-quarantine should fail")
+
+    # Restore reconnects, cleans, and resets the RL red foothold.
+    red.observation.add_host(target.name, escalated=1, impacted=1, on_host=1)
+    red.current_host = target
+    r = actions["restore_host"].execute(target)
+    check(
+        r.success and not target.isolated and not target.is_compromised and target.restored,
+        "restore did not clear host state",
+    )
+    check(target.name in net.pending_restores, "restore did not queue a pending_restore")
+    red.handle_host_state_changes()
+    check(red.observation.obs[target.name]["escalated"] == 0, "obs escalated not cleared")
+    check(red.observation.obs[target.name]["on_host"] == 0, "obs on_host not cleared")
+    check(red.current_host == red._initial_host, "red not relocated to its entry host")
+    check(not net.pending_restores, "pending_restores not drained")
+    real_tid = next(t for lst in red.service_mapping[target.name].values() if lst for t in [lst[0]])
+    healed = ARTKillChainPhase(red.current_host, target, valid_techniques=[real_tid]).sim_execute()
+    check(healed.attack_success is True, "restored host should be attackable again")
+    check(actions["restore_host"].execute(real_hosts[1]).success is False, "restore on clean host should fail")
+
+    # ARTAgent (evaluate path) history-based foothold reset.
+    args.agent_config["red"] = yaml.safe_load(
+        open(files("cyberwheel.data.configs.red_agent").joinpath("art_agent.yaml"))
+    )
+    net.reset()
+    art = ARTAgent(net, args)
+    art_target = [h for h in net.hosts.values() if not h.decoy][2]
+    khi_cls = type(next(iter(art.history.hosts.values())))
+    khi = khi_cls(ip_address=art_target.ip_address)
+    khi.escalated = True
+    khi.impacted = True
+    khi.on_host = True
+    khi.last_step = 3
+    khi.type = "Server"
+    art.history.hosts[art_target.name] = khi
+    art.current_host = art_target
+    net.pending_restores.add(art_target.name)
+    art.handle_host_state_changes()
+    check(khi.escalated is False and khi.impacted is False and khi.last_step == -1, "ART khi not reset")
+    check(art_target.name in art.unimpacted_hosts.data_set, "ART host not re-added to unimpacted")
+    check(art_target.name in art.unimpacted_servers.data_set, "ART server not re-added")
+    check(art.current_host == art._initial_host, "ART red not relocated")
+
+    # Patch empties validity for one host without touching same-type siblings
+    # or the shared service_mapping dict; reset restores the CVEs.
+    from collections import defaultdict
+
+    by_type = defaultdict(list)
+    for host in real_hosts:
+        if host.host_type and host.host_type.cve_list:
+            by_type[host.host_type.name].append(host)
+    pair = next(v for v in by_type.values() if len(v) >= 2)
+    h0, h1 = pair[0], pair[1]
+    orig = frozenset(h0.host_type.cve_list)
+    r = actions["patch_host"].execute(h0)
+    check(r.success and h0.patched and h0._pre_patch_host_type is not None, "patch did not apply")
+    red.handle_host_state_changes()
+    check(
+        all(len(v) == 0 for v in red.service_mapping[h0.name].values()),
+        "patched host still has valid techniques",
+    )
+    check(frozenset(h1.host_type.cve_list) == orig, "sibling CVEs changed (shared HostType leaked)")
+    check(bool(args.service_mapping[net.name][h0.name]), "shared service_mapping dict was mutated")
+    check(actions["patch_host"].execute(h0).success is False, "double patch should fail")
+    net.reset()
+    check(frozenset(h0.host_type.cve_list) == orig, "reset did not restore CVEs")
+    check(h0.patched is False and h0._pre_patch_host_type is None, "reset did not clear patch state")
+
+    return Outcome(Status.PASS, "quarantine/restore/patch mechanics + size invariants OK")
+
+
+def _smoke_active_defense_e2e(run_id: str) -> Outcome:
+    """Train + evaluate through the CLI with the active-defense blue agent."""
+    exp = f"{run_id}_ad"
+    train = run_cli(
+        [
+            "-m", "cyberwheel", "train", "train_rl_red_agent_vs_rl_blue.yaml",
+            "--experiment-name", exp, "--network-config", _NETWORK,
+            "--blue-agent", "active_defense_blue_agent.yaml",
+            "--total-timesteps", "16", "--num-steps", "8", "--num-envs", "1",
+            "--num-saves", "1", "--num-minibatches", "2", "--update-epochs", "2",
+            "--eval-episodes", "1", "--track", "false", "--device", "cpu",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=900,
+    )
+    check(train.returncode == 0, f"train exited {train.returncode}; stderr: {train.stderr[-800:]}")
+    model_dir = DATA_ROOT / "models" / exp
+    check_file(model_dir / "blue_agent.pt", min_size=1024)
+    check_file(model_dir / "red_agent.pt", min_size=1024)
+
+    graph_name = f"{exp}_eval"
+    eval_proc = run_cli(
+        [
+            "-m", "cyberwheel", "evaluate", "evaluate_rl_red_vs_rl_blue.yaml",
+            "--experiment-name", exp, "--network-config", _NETWORK,
+            "--blue-agent", "active_defense_blue_agent.yaml",
+            "--num-episodes", "1", "--num-steps", "10", "--graph-name", graph_name,
+            "--download-model", "false", "--visualize", "true",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=600,
+    )
+    check(eval_proc.returncode == 0, f"evaluate exited {eval_proc.returncode}; stderr: {eval_proc.stderr[-800:]}")
+    csv_path = DATA_ROOT / "action_logs" / f"{graph_name}.csv"
+    check_file(csv_path)
+    with open(csv_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    check(len(rows) == 10, f"expected 10 action-log rows, got {len(rows)}")
+    check("blue_action_success" in rows[0], f"missing blue_action_success column: {list(rows[0])}")
+    check_file(DATA_ROOT / "action_logs" / f"{graph_name}.summary.json")
+    check_file(DATA_ROOT / "graphs" / graph_name / "meta.json")
+    return Outcome(Status.PASS, "active-defense train + evaluate e2e OK (RL train, ART evaluate)")
+
+
 def _smoke_viz_layout_deterministic() -> Outcome:
     """compute_layout is deterministic and decoy slots are stable."""
     import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
@@ -561,6 +740,22 @@ def register(registry: Registry, ctx: Context) -> None:
             fn=(lambda: _smoke_evaluate_batch(ctx.run_id)),
             timeout_s=600.0,
             depends_on="smoke:train_e2e",
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:active_defense_actions",
+            suite=SUITE,
+            fn=_smoke_active_defense_actions,
+            timeout_s=300.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:active_defense_e2e",
+            suite=SUITE,
+            fn=(lambda: _smoke_active_defense_e2e(ctx.run_id)),
+            timeout_s=900.0,
         )
     )
     registry.add(

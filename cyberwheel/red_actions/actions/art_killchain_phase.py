@@ -246,6 +246,10 @@ class ARTKillChainPhase(ARTAction):
         host_os = host.os
         self.action_results.modify_alert(dst=host)
 
+        # A quarantined host is unreachable; the attack fails outright.
+        if getattr(host, "isolated", False):
+            return self.action_results
+
         if len(self.valid_techniques) > 0:
             self.action_results.add_successful_action()
             mitre_id = random.choice(

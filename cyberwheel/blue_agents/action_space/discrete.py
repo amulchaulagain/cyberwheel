@@ -51,7 +51,9 @@ class DiscreteActionSpace(ActionSpace):
                 return ASReturn(name, ac.action)
             elif ac.type == "host":
                 index = (action - ac.lower_bound) % self.num_hosts
-                return ASReturn(name, ac.action, args=[self.hosts[index]])
+                # self.hosts holds the fixed initial real-host names, so host
+                # actions can never target decoys added mid-episode.
+                return ASReturn(name, ac.action, args=[self.network.hosts[self.hosts[index]]])
             elif ac.type == "subnet":
                 index = (action - ac.lower_bound) % self.num_subnets
                 return ASReturn(name, ac.action, args=[self.network.subnets[self.subnets[index]]])
@@ -88,6 +90,23 @@ class DiscreteActionSpace(ActionSpace):
 
     def get_shape(self) -> tuple[int, ...]:
         return (self._action_space_size,)
+
+    def padded_action_space_size(self, max_num_hosts: int, max_num_subnets: int) -> int:
+        """
+        Upper bound of the action-space size across all compatible network
+        sizes: each registered action padded to its worst-case span.
+        """
+        total = 0
+        for ac in self._action_checkers:
+            if ac.type == "standalone":
+                total += 1
+            elif ac.type == "host":
+                total += max_num_hosts
+            elif ac.type == "subnet":
+                total += max_num_subnets
+            else:  # range: span is fixed regardless of network size
+                total += ac.upper_bound - ac.lower_bound
+        return total
 
     def get_action_mask(self):
         mask = [False] * self.max_size

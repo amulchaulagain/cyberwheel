@@ -115,8 +115,12 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   privilege escalation, lateral movement, impact, `art_killchain_phase.py`, `nothing.py`).
 - **Blue agent:** `cyberwheel/blue_agents/` — `blue_agent.py`, `rl_blue_agent.py`,
   `random_blue_agent.py`, `inactive_blue_agent.py`; `action_space/` (`action_space.py`, `discrete.py`).
-- **Blue actions:** `cyberwheel/blue_actions/` — `blue_action.py` base; `actions/` (DeployDecoyHost,
-  RemoveDecoyHost, IsolateDecoy, Nothing); `shared_data/`.
+- **Blue actions:** `cyberwheel/blue_actions/` — `blue_action.py` base (Standalone/Host/Subnet/Range);
+  `actions/` (DeployDecoyHost, RemoveDecoyHost, IsolateDecoy, Nothing; active-defense on real hosts:
+  QuarantineHost, RestoreHost, PatchHost); `shared_data/`. Active-defense actions ship in the
+  `active_defense_blue_agent.yaml` config (default `rl_blue_agent.yaml` unchanged so old models load);
+  quarantine is enforced red-side via `host.isolated` at the killchain chokepoint, restore/patch signal
+  red through `network.pending_restores`/`pending_patches` (drained each red step).
 - **Detectors / alerts:** `cyberwheel/detectors/` — `detector_base.py`, `alert.py`, `handler.py`;
   `detectors/` (`probability_detector.py`, `isolate_detector.py`, `example_detectors.py`).
 - **Observation:** `cyberwheel/observation/` — `observation.py`, `blue_observation.py`,

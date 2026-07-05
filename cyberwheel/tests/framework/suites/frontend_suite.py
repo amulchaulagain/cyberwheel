@@ -203,6 +203,10 @@ def _case_options() -> Outcome:
     check(network_15["hosts"] == 15, f"15-host network reports {network_15['hosts']} hosts")
     check("reward_red_delay" in options["blue_reward_functions"], "blue reward fns missing")
     check("reward_decoy_hits" in options["red_reward_functions"], "red reward fns missing")
+    check(
+        "active_defense_blue_agent.yaml" in options["blue_agents"],
+        "active-defense blue agent not enumerated",
+    )
 
     defaults = server.api(
         "GET", "/api/options/env-config/train_rl_red_agent_vs_rl_blue.yaml"

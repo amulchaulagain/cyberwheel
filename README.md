@@ -289,6 +289,14 @@ Networks in Cyberwheel are comprised of routers, subnets, and hosts represented 
 
 The RL blue agent is largely focused on deploying Decoys to slow and/or stop red agent attacks throughout the network. The blue agent's actions and logic be configured and defined in a YAML file, allowing for greater modularity. Different configurations of blue agents are defined in `cyberwheel/data/configs/blue_agent/`. Its observation space is defined by the entire network, and alerts that are flagged by detectors it has set up.
 
+Beyond decoys, an **active-defense** configuration (`active_defense_blue_agent.yaml`) adds three host-targeted actions that operate on real hosts, opening a containment-vs-restoration-vs-hardening research axis:
+
+  - **Quarantine** network-isolates a suspected host (cutting its subnet link so red killchain actions against it fail — and trapping red if it currently sits there), at a persistent per-step collateral cost while the host stays offline.
+  - **Restore** reimages a host: it reverses a quarantine and clears any compromise, and resets the red agent's foothold/killchain progress on that host (relocating red to its entry host if it was there).
+  - **Patch** removes a host's vulnerabilities so red techniques stop being valid against it (each patched host gets its own copy of its host type, so same-type hosts are unaffected).
+
+Select it with `--blue-agent active_defense_blue_agent.yaml`. The default `rl_blue_agent.yaml` is unchanged, so previously trained models still load.
+
 ### RL Red Agent Design
 
 The RL red agent is built around the Atomic Red Team techniques, with goals that you configure. Different configurations can be found in `cyberwheel/data/configs/red_agent/`. Its observation space is defined by its (initially limited) view of the network as it explores. As it performs certain correct actions, this view can expand up to the size of the network.
