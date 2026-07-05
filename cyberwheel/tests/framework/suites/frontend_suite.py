@@ -311,6 +311,18 @@ def _case_evaluate() -> Outcome:
         f"overall {summary['overall'].get('total_reward')}",
     )
 
+    # Self-contained HTML report (raw HTML, not JSON).
+    status, _, raw = server.request("GET", f"/api/runs/{run_id}/report")
+    body = raw.decode("utf-8", "replace")
+    check(status == 200, f"report -> {status}")
+    check("<!doctype html" in body.lower(), "report is not an HTML document")
+    check(run_id in body and "Overall" in body, "report missing run id / summary section")
+    check(server.request("GET", "/api/runs/no-such-run/report")[0] == 404, "unknown run report should 404")
+    check(
+        server.request("GET", f"/api/runs/{_STATE['train_id']}/report")[0] == 400,
+        "train run report should 400 (not an evaluation)",
+    )
+
     meta = server.api("GET", f"/api/runs/{run_id}/viz/meta")
     check(meta["episodes_written"] == [0], f"viz episodes_written: {meta}")
     layout = server.api("GET", f"/api/runs/{run_id}/viz/layout")

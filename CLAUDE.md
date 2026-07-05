@@ -159,7 +159,9 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   reaper), child runs tagged `sweep_id`; store in `sweeps.py`), `jobs.py` (subprocess launch/stop/
   reap), `registry.py` (run.json store + orphan detection + external model dirs), `options.py`
   (config enumeration), `metrics.py` (TensorBoard EventAccumulator reader), `actions_log.py`,
-  `paths.py`, `validation.py`; built SPA committed in `static/`. Endpoints take/return plain
+  `report.py` (`GET /api/runs/<id>/report` — self-contained inline-styled HTML report of an
+  evaluation: summary stats, per-seed/per-episode tables, action highlights), `paths.py`,
+  `validation.py`; built SPA committed in `static/`. Endpoints take/return plain
   dicts — keep pydantic out of handler signatures (repo pins pydantic v1).
 - **Utils:** `cyberwheel/utils/` — arg parsing (`parse_override_args.py`), `yaml_config.py`,
   `rl_policy.py`, `get_service_map.py`, `host_types.py`, `step_metrics.py` (evaluation summary

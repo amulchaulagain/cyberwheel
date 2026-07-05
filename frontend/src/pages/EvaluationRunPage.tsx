@@ -132,6 +132,18 @@ export default function EvaluationRunPage() {
             </span>
           ) : undefined
         }
+        actions={
+          summary ? (
+            <a
+              className="btn-ghost"
+              href={`/api/runs/${runId}/report`}
+              target="_blank"
+              rel="noopener"
+            >
+              Export report
+            </a>
+          ) : undefined
+        }
       />
 
       {summary && (

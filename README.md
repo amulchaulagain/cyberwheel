@@ -256,7 +256,10 @@ then open `http://localhost:8080/`. The UI lets you:
 * **run parameter sweeps** — define a base training config and a grid of parameter values (e.g.
   `learning_rate: 0.0003, 0.001`); the server launches one run per combination with bounded
   parallelism, groups them, and shows a results table (varied params → final metric per cell) with
-  a one-click jump into the compare view.
+  a one-click jump into the compare view;
+* **export a shareable report** — one click on an evaluation run produces a self-contained HTML
+  report (summary statistics with confidence intervals, per-seed/per-episode breakdown, and
+  per-action counts and success rates) you can save or email as a single file.
 
 Runs launch as normal `train` / `evaluate` subprocesses, so anything started in the UI behaves
 exactly like the CLI (and vice-versa — CLI-trained models show up in the UI as evaluable). The UI
