@@ -34,6 +34,14 @@ def parse(config, mode: str = 'train'):
     if mode == 'evaluate' and getattr(override_args, 'seeds', None):
         args.seeds = override_args.seeds
 
+    # Probabilistic-exploit keys are optional (absent from base YAMLs), so the
+    # presence-gated loop above skips them; apply them explicitly when set.
+    for key in ("probabilistic_exploits", "exploit_success_floor",
+                "exploit_success_ceiling", "exploit_severity_config"):
+        value = getattr(override_args, key, None)
+        if value is not None:
+            setattr(args, key, value)
+
     if args.deterministic:
         os.environ["CYBERWHEEL_DETERMINISTIC"] = 'true'
     else:
@@ -80,6 +88,10 @@ def parse_override_args(print_help: bool = False):
     env_group.add_argument("--host-config", help="Input the host config filename", type=str)
     env_group.add_argument("--reward-function", help="Which reward function to use. Current option: 'RLReward'", type=str)
     env_group.add_argument("--detector-config", help="Location of detector config file.", type=str)
+    env_group.add_argument("--probabilistic-exploits", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, red exploit success is a probability weighted by CVE severity instead of always succeeding on a valid technique")
+    env_group.add_argument("--exploit-success-floor", type=float, help="minimum exploit success probability when probabilistic-exploits is on (default 0.1)")
+    env_group.add_argument("--exploit-success-ceiling", type=float, help="maximum exploit success probability when probabilistic-exploits is on (default 0.95)")
+    env_group.add_argument("--exploit-severity-config", type=str, help="optional YAML in cyberwheel/data/configs/exploit_severity mapping CVE id -> normalized CVSS score [0,1]")
 
     # RL Algorithm Parameters
     rl_group.add_argument("--env-id", type=str, help="the id of the environment")
@@ -132,6 +144,10 @@ def parse_eval_override_args(print_help: bool = False):
     parser.add_argument("--host-config", help="Input the host config filename", type=str)
     parser.add_argument("--detector-config", help="Path to detector config file", type=str)
     parser.add_argument("--reward-function", help="Which reward function to use. Current option: 'RLReward' (default)", type=str)
+    parser.add_argument("--probabilistic-exploits", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="if toggled, red exploit success is a probability weighted by CVE severity instead of always succeeding on a valid technique")
+    parser.add_argument("--exploit-success-floor", type=float, help="minimum exploit success probability when probabilistic-exploits is on (default 0.1)")
+    parser.add_argument("--exploit-success-ceiling", type=float, help="maximum exploit success probability when probabilistic-exploits is on (default 0.95)")
+    parser.add_argument("--exploit-severity-config", type=str, help="optional YAML in cyberwheel/data/configs/exploit_severity mapping CVE id -> normalized CVSS score [0,1]")
     parser.add_argument("--num-steps", help="Number of steps per episode for evaluation", type=int)
     parser.add_argument("--num-episodes", help="Number of episodes to evaluate", type=int)
     parser.add_argument("--wandb-entity", help="Username where W&B model is stored. Required when downloading model from W&B", type=str)

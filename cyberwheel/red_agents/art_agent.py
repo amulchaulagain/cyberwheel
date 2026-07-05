@@ -25,6 +25,7 @@ from cyberwheel.red_agents.red_agent_base import (
     RedAgentResult
 )
 from cyberwheel.utils import HybridSetList, get_valid_techniques_by_host
+from cyberwheel.utils.exploit_model import build_exploit_model
 
 
 class ARTAgent(RedAgent):
@@ -103,6 +104,7 @@ class ARTAgent(RedAgent):
         # envs/resets via args.service_mapping.
         self.service_mapping = dict(args.service_mapping[self.network.name]) if hasattr(args, 'service_mapping') else {}
         self._seen_topology_version = None
+        ARTKillChainPhase.exploit_model = build_exploit_model(args)
 
         if self.service_mapping == {} and not self.campaign and map_services:
             self.tracked_hosts = HybridSetList()
@@ -419,6 +421,7 @@ class ARTAgent(RedAgent):
         # Shallow copy so per-host patch updates stay local to this episode.
         self.service_mapping = dict(service_mapping)
         self._seen_topology_version = None
+        ARTKillChainPhase.exploit_model = build_exploit_model(self.args)
         self.current_host : Host = self.network.hosts[self.entry_host] if self.entry_host.lower() != "random" else self.network.get_random_user_host()
         self._initial_host = self.current_host
         self.history: AgentHistory = AgentHistory(initial_host=self.current_host)

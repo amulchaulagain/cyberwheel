@@ -30,6 +30,10 @@ class ARTKillChainPhase(ARTAction):
     Base for defining a KillChainPhase. Any new Killchain Phase (probably not needed) should inherit from this class.
     """
 
+    # Set by the red agent from env config. None => binary (always-succeed)
+    # exploits; an ExploitModel => CVSS-weighted probabilistic success.
+    exploit_model = None
+
     validity_mapping = {
         "windows": {
             "discovery": [
@@ -251,10 +255,19 @@ class ARTKillChainPhase(ARTAction):
             return self.action_results
 
         if len(self.valid_techniques) > 0:
+            em = ARTKillChainPhase.exploit_model
+            if em is not None and em.enabled:
+                # Opt-in: pick the technique, then roll success against the
+                # severity of the CVE it exploits on this host.
+                mitre_id = random.choice(self.valid_techniques)
+                if random.random() >= em.success_probability(host, mitre_id):
+                    return self.action_results  # exploit attempted but failed
+            else:
+                # Legacy binary path: identical RNG usage to before.
+                mitre_id = random.choice(
+                    self.valid_techniques
+                )  # Change to look for depending on service
             self.action_results.add_successful_action()
-            mitre_id = random.choice(
-                self.valid_techniques
-            )  # Change to look for depending on service
             art_technique = art_techniques.technique_mapping[mitre_id]
 
             processes = []

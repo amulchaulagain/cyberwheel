@@ -609,6 +609,118 @@ def _smoke_active_defense_e2e(run_id: str) -> Outcome:
     return Outcome(Status.PASS, "active-defense train + evaluate e2e OK (RL train, ART evaluate)")
 
 
+def _smoke_probabilistic_exploits() -> Outcome:
+    """CVSS-weighted exploit gate: severity math + probability extremes."""
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from cyberwheel.red_actions.actions.art_killchain_phase import ARTKillChainPhase
+    from cyberwheel.utils.exploit_model import (
+        ExploitModel,
+        build_exploit_model,
+        cve_severity,
+    )
+
+    # Deterministic per-CVE severity in [0, 1]; overrides win.
+    s1 = cve_severity("CVE-2021-44228")
+    check(s1 == cve_severity("CVE-2021-44228"), "cve_severity is not deterministic")
+    check(0.0 <= s1 <= 1.0, f"cve_severity {s1} outside [0, 1]")
+    check(cve_severity("CVE-2021-44228", {"CVE-2021-44228": 0.3}) == 0.3, "override ignored")
+
+    # build_exploit_model gating: None unless the flag is on.
+    class _Args:
+        pass
+
+    args = _Args()
+    check(build_exploit_model(args) is None, "model should be None when flag absent")
+    args.probabilistic_exploits = False
+    check(build_exploit_model(args) is None, "model should be None when flag False")
+    args.probabilistic_exploits = True
+    model = build_exploit_model(args)
+    check(model is not None and model.enabled, "model should be enabled when flag True")
+    args.exploit_severity_config = "cvss_example.yaml"
+    check(
+        build_exploit_model(args).overrides.get("CVE-2021-44228") == 1.0,
+        "severity override config did not load",
+    )
+
+    env, net, _ = _build_rl_env("rl_blue_agent.yaml")
+    smap = env.red_agent.service_mapping
+    target = tid = valid = None
+    for host_name, phases in smap.items():
+        for kcp, ids in phases.items():
+            if ids and getattr(kcp, "__name__", "") not in ("ARTPingSweep", "ARTPortScan"):
+                target, tid, valid = net.hosts[host_name], ids[0], ids
+                break
+        if target is not None:
+            break
+    check(target is not None, "no host with a valid killchain technique found")
+
+    try:
+        # Probability 0 fails even with valid techniques; probability 1 succeeds.
+        ARTKillChainPhase.exploit_model = ExploitModel(True, 0.0, 0.0)
+        r0 = ARTKillChainPhase(target, target, valid_techniques=valid).sim_execute()
+        check(r0.attack_success is False, "p=0 exploit should fail")
+        ARTKillChainPhase.exploit_model = ExploitModel(True, 1.0, 1.0)
+        r1 = ARTKillChainPhase(target, target, valid_techniques=valid).sim_execute()
+        check(r1.attack_success is True, "p=1 exploit should succeed")
+        # Disabled model => the legacy binary path (always succeeds).
+        ARTKillChainPhase.exploit_model = None
+        rb = ARTKillChainPhase(target, target, valid_techniques=valid).sim_execute()
+        check(rb.attack_success is True, "binary path should succeed on a valid technique")
+
+        # Higher CVE severity => higher success probability.
+        hi = ExploitModel(True, 0.0, 1.0, {c: 1.0 for c in target.host_type.cve_list})
+        lo = ExploitModel(True, 0.0, 1.0, {c: 0.0 for c in target.host_type.cve_list})
+        check(
+            hi.success_probability(target, tid) > lo.success_probability(target, tid),
+            "success probability is not monotonic in CVE severity",
+        )
+    finally:
+        ARTKillChainPhase.exploit_model = None
+
+    return Outcome(Status.PASS, "severity math, gating, and probability extremes OK")
+
+
+def _smoke_probabilistic_exploits_e2e(run_id: str) -> Outcome:
+    """Train + evaluate with probabilistic exploits enabled via CLI flag."""
+    exp = f"{run_id}_pe"
+    train = run_cli(
+        [
+            "-m", "cyberwheel", "train", "train_rl_red_agent_vs_rl_blue.yaml",
+            "--experiment-name", exp, "--network-config", _NETWORK,
+            "--probabilistic-exploits", "true",
+            "--exploit-severity-config", "cvss_example.yaml",
+            "--total-timesteps", "16", "--num-steps", "8", "--num-envs", "1",
+            "--num-saves", "1", "--num-minibatches", "2", "--update-epochs", "2",
+            "--eval-episodes", "1", "--track", "false", "--device", "cpu",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=900,
+    )
+    check(train.returncode == 0, f"train exited {train.returncode}; stderr: {train.stderr[-800:]}")
+    check_file(DATA_ROOT / "models" / exp / "blue_agent.pt", min_size=1024)
+
+    graph_name = f"{exp}_eval"
+    eval_proc = run_cli(
+        [
+            "-m", "cyberwheel", "evaluate", "evaluate_rl_red_vs_rl_blue.yaml",
+            "--experiment-name", exp, "--network-config", _NETWORK,
+            "--probabilistic-exploits", "true",
+            "--num-episodes", "1", "--num-steps", "10", "--graph-name", graph_name,
+            "--download-model", "false", "--visualize", "true",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=600,
+    )
+    check(eval_proc.returncode == 0, f"evaluate exited {eval_proc.returncode}; stderr: {eval_proc.stderr[-800:]}")
+    csv_path = DATA_ROOT / "action_logs" / f"{graph_name}.csv"
+    check_file(csv_path)
+    with open(csv_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    check(len(rows) == 10, f"expected 10 action-log rows, got {len(rows)}")
+    check_file(DATA_ROOT / "action_logs" / f"{graph_name}.summary.json")
+    return Outcome(Status.PASS, "probabilistic-exploit train + evaluate e2e OK")
+
+
 def _smoke_viz_layout_deterministic() -> Outcome:
     """compute_layout is deterministic and decoy slots are stable."""
     import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
@@ -755,6 +867,22 @@ def register(registry: Registry, ctx: Context) -> None:
             name="smoke:active_defense_e2e",
             suite=SUITE,
             fn=(lambda: _smoke_active_defense_e2e(ctx.run_id)),
+            timeout_s=900.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:probabilistic_exploits",
+            suite=SUITE,
+            fn=_smoke_probabilistic_exploits,
+            timeout_s=300.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:probabilistic_exploits_e2e",
+            suite=SUITE,
+            fn=(lambda: _smoke_probabilistic_exploits_e2e(ctx.run_id)),
             timeout_s=900.0,
         )
     )

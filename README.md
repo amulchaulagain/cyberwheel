@@ -311,6 +311,8 @@ The Atomic Red Team (ART) agent is a heuristic agent that has a set of defined r
 If all of these conditions are met, the agent can successfully run the killchain attack on the host. These ART Techniques include Atomic Tests, which give tangible commands to run in order to execute the given attack. With this methodology, the simulator is able to transform a general killchain phase into a valid set of commands that could be run in
 the real world.
 
+**Probabilistic exploit success (opt-in).** By default a matching CVE means the attack succeeds outright. Enabling `--probabilistic-exploits true` (or `probabilistic_exploits: true` in an env config) makes success a *probability weighted by CVE severity*: higher-severity vulnerabilities are more reliably exploitable, so red attacks can now fail and retry, and blue patching of high-severity CVEs matters more. The probability is `floor + (ceiling - floor) × severity` (tune with `--exploit-success-floor` / `--exploit-success-ceiling`). No real CVSS data ships in the repo, so per-CVE severity defaults to a deterministic pseudo-score; pass `--exploit-severity-config cvss_example.yaml` to pin real normalized CVSS scores (see `cyberwheel/data/configs/exploit_severity/`). The feature is default-off and RNG-neutral when disabled, so existing runs and trained models are unchanged.
+
 <ins> Example <ins>
 
 1. ART Agent runs `Privilege Escalation` on Host.

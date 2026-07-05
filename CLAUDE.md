@@ -113,6 +113,10 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 - **Red actions:** `cyberwheel/red_actions/` — `red_base.py`, `technique.py`, `art_techniques.py`,
   `atomic_test.py`; concrete killchain phases in `actions/` (discovery, port scan, ping sweep,
   privilege escalation, lateral movement, impact, `art_killchain_phase.py`, `nothing.py`).
+  Exploit success is binary by default; opt-in CVSS-weighted probabilistic success (env flag
+  `probabilistic_exploits` / `--probabilistic-exploits`, floor/ceiling knobs, optional
+  `exploit_severity_config` CVE→[0,1] map in `data/configs/exploit_severity/`) lives in
+  `utils/exploit_model.py` and gates `ARTKillChainPhase.sim_execute` — RNG-neutral when off.
 - **Blue agent:** `cyberwheel/blue_agents/` — `blue_agent.py`, `rl_blue_agent.py`,
   `random_blue_agent.py`, `inactive_blue_agent.py`; `action_space/` (`action_space.py`, `discrete.py`).
 - **Blue actions:** `cyberwheel/blue_actions/` — `blue_action.py` base (Standalone/Host/Subnet/Range);

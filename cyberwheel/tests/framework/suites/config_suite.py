@@ -301,6 +301,17 @@ def _check_detector(path: Path) -> Outcome:
     )
 
 
+def _check_exploit_severity(path: Path) -> Outcome:
+    data = _load(path)
+    check(isinstance(data, dict), "expected a mapping of CVE id -> severity")
+    for cve, score in data.items():
+        check(
+            isinstance(score, (int, float)) and 0.0 <= float(score) <= 1.0,
+            f"CVE {cve!r}: severity {score!r} not a number in [0, 1]",
+        )
+    return Outcome(Status.PASS, f"CVE severity map OK ({len(data)} entries)")
+
+
 def _check_red_agent(path: Path) -> Outcome:
     data = _load(path)
     check(isinstance(data, dict), "expected a mapping")
@@ -413,6 +424,7 @@ def register(registry: Registry, ctx: Context) -> None:
         "detector": _check_detector,
         "red_agent": _check_red_agent_shape,
         "blue_agent": _check_blue_agent,
+        "exploit_severity": _check_exploit_severity,
     }
     for subdir, fn in checks.items():
         for path in sorted((CONFIG_ROOT / subdir).glob("*.yaml")):
