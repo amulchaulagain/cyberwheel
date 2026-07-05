@@ -81,6 +81,17 @@ class DetectorHandler:
         for _, data in self.DG.nodes(data=True):
             data["detector_output"] = []
 
+    def reset_detectors(self) -> None:
+        """Clear each detector's per-episode state. Called once per episode
+        (distinct from ``reset()``, which clears node buffers every step)."""
+        seen = set()
+        for edge in self.DG.edges:
+            attr = self.DG.get_edge_data(*edge).get("attr", {})
+            detector = attr.get("detector")
+            if detector is not None and id(detector) not in seen:
+                seen.add(id(detector))
+                detector.reset()
+
     def draw(self, filename="detector.png"):
         """
         Draws the detector graph.

@@ -1,0 +1,15 @@
+# SIEM-style correlation detector: suppresses single-shot alerts and only
+# emits once a source host triggers `threshold` alerts within a sliding
+# `window` of recent steps. Select with `--detector-config correlation_window_detector.yaml`.
+adjacency_list:
+- - start
+  - d1
+- - d1
+  - end
+init_info:
+  d1:
+    class: CorrelationWindowDetector
+    module: correlation_window_detector
+    config:
+      window: 5
+      threshold: 3

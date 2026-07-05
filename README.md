@@ -347,6 +347,8 @@ The ART Campaign is very similar to the ART Agent, but its actions are much more
 
 Red actions produce Alerts which contain information such as the action's source host, target host, exploited services, and techniques. The blue agent has a detector layer set up with Alerts that detect any red agent action on the network. These detectors can filter out Alerts, add noise, or even create false-positive Alerts. You can use multiple detectors together to capture various red agent behavior. These alerts are then converted into the observation space which the RL agent uses to train.
 
+Detectors can also be **stateful**. The `CorrelationWindowDetector` (select it with `--detector-config correlation_window_detector.yaml`) models a SIEM correlation rule: it suppresses single-shot alerts and only surfaces an alert once the same source host triggers a configurable number of alerts (`threshold`) within a sliding `window` of recent steps. This forces the red agent to trade stealth against progress and rewards blue observation strategies that wait for corroborating signal. Its per-host window is cleared at each episode boundary.
+
 ### Configurations
 
 All configurations are stored in the `cyberwheel/data/configs` directory. You can use config to define the environment, red agents, campaigns, blue agents, decoy types, detectors, host types, networks, and services.

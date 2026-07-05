@@ -793,6 +793,103 @@ def _smoke_network_generator() -> Outcome:
     return Outcome(Status.PASS, "generated network valid, deterministic, and posture-controlled")
 
 
+def _smoke_correlation_window_detector() -> Outcome:
+    """SIEM correlation-window detector: window/threshold logic + episode reset."""
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from importlib.resources import files
+
+    from cyberwheel.detectors.alert import Alert
+    from cyberwheel.detectors.detectors.correlation_window_detector import (
+        CorrelationWindowDetector,
+    )
+    from cyberwheel.detectors.handler import DetectorHandler
+    from cyberwheel.network.network_base import Network
+
+    network = Network.create_network_from_yaml(CONFIG_ROOT / "network" / _NETWORK)
+    host_a, host_b = list(network.hosts.values())[:2]
+
+    det = CorrelationWindowDetector({"window": 3, "threshold": 2})
+    alert_a = Alert(src_host=host_a)
+    check(len(list(det.obs([alert_a]))) == 0, "first alert should be suppressed (below threshold)")
+    check(len(list(det.obs([alert_a]))) == 1, "second alert within window should fire")
+    check(
+        len(list(det.obs([Alert(src_host=host_b)]))) == 0,
+        "a different host's first alert must be suppressed independently",
+    )
+    det.reset()
+    check(len(list(det.obs([alert_a]))) == 0, "reset should restart the count")
+    check(len(list(det.obs([alert_a]))) == 1, "count should rebuild after reset")
+
+    # Window pruning: hits spaced beyond the window never accumulate to threshold.
+    pruned = CorrelationWindowDetector({"window": 2, "threshold": 2})
+    pruned.obs([alert_a])                    # step 1: host_a
+    pruned.obs([Alert(src_host=host_b)])     # step 2
+    pruned.obs([Alert(src_host=host_b)])     # step 3 (host_a's step-1 hit now out of window)
+    check(len(list(pruned.obs([alert_a]))) == 0, "hits outside the window must not accumulate")
+    check(
+        len(list(pruned.obs([Alert(src_host=None)]))) == 1,
+        "an alert without a src_host should pass through",
+    )
+
+    # Handler wiring: reset_detectors() clears the window at the episode boundary.
+    handler = DetectorHandler(
+        files("cyberwheel.data.configs.detector").joinpath("correlation_window_detector.yaml")
+    )
+    fired = []
+    for _ in range(3):  # config is window 5 / threshold 3
+        handler.reset()
+        fired = list(handler.obs([alert_a]))
+    check(len(fired) == 1, "handler should emit once the threshold is met")
+    handler.reset_detectors()
+    handler.reset()
+    check(
+        len(list(handler.obs([alert_a]))) == 0,
+        "reset_detectors() must clear the window across episodes",
+    )
+    return Outcome(Status.PASS, "window/threshold, pruning, per-host keying, and episode reset OK")
+
+
+def _smoke_correlation_window_e2e(run_id: str) -> Outcome:
+    """Train + evaluate through the CLI with the correlation-window detector."""
+    exp = f"{run_id}_cwd"
+    train = run_cli(
+        [
+            "-m", "cyberwheel", "train", "train_rl_red_agent_vs_rl_blue.yaml",
+            "--experiment-name", exp, "--network-config", _NETWORK,
+            "--detector-config", "correlation_window_detector.yaml",
+            "--total-timesteps", "16", "--num-steps", "8", "--num-envs", "1",
+            "--num-saves", "1", "--num-minibatches", "2", "--update-epochs", "2",
+            "--eval-episodes", "1", "--track", "false", "--device", "cpu",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=900,
+    )
+    check(train.returncode == 0, f"train exited {train.returncode}; stderr: {train.stderr[-800:]}")
+    check_file(DATA_ROOT / "models" / exp / "blue_agent.pt", min_size=1024)
+
+    graph_name = f"{exp}_eval"
+    eval_proc = run_cli(
+        [
+            "-m", "cyberwheel", "evaluate", "evaluate_rl_red_vs_rl_blue.yaml",
+            "--experiment-name", exp, "--network-config", _NETWORK,
+            "--detector-config", "correlation_window_detector.yaml",
+            # 2 episodes so the per-episode window reset is exercised.
+            "--num-episodes", "2", "--num-steps", "10", "--graph-name", graph_name,
+            "--download-model", "false", "--visualize", "true",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=600,
+    )
+    check(eval_proc.returncode == 0, f"evaluate exited {eval_proc.returncode}; stderr: {eval_proc.stderr[-800:]}")
+    csv_path = DATA_ROOT / "action_logs" / f"{graph_name}.csv"
+    check_file(csv_path)
+    with open(csv_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    check(len(rows) == 20, f"expected 20 action-log rows (2 episodes x 10 steps), got {len(rows)}")
+    check_file(DATA_ROOT / "action_logs" / f"{graph_name}.summary.json")
+    return Outcome(Status.PASS, "correlation-window detector survives train + 2-episode evaluate")
+
+
 def _smoke_viz_layout_deterministic() -> Outcome:
     """compute_layout is deterministic and decoy slots are stable."""
     import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
@@ -964,6 +1061,22 @@ def register(registry: Registry, ctx: Context) -> None:
             suite=SUITE,
             fn=_smoke_network_generator,
             timeout_s=300.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:correlation_window_detector",
+            suite=SUITE,
+            fn=_smoke_correlation_window_detector,
+            timeout_s=300.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:correlation_window_e2e",
+            suite=SUITE,
+            fn=(lambda: _smoke_correlation_window_e2e(ctx.run_id)),
+            timeout_s=900.0,
         )
     )
     registry.add(

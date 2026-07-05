@@ -62,4 +62,8 @@ class BlueObservation(Observation):
         self.network = network
         self._init_vars()
         self.detector.reset()
+        # Episode boundary: also clear any stateful detectors' internal state
+        # (e.g. correlation windows), which the per-step reset() leaves intact.
+        if hasattr(self.detector, "reset_detectors"):
+            self.detector.reset_detectors()
         return self.obs_vec

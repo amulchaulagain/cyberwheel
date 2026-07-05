@@ -133,7 +133,12 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   quarantine is enforced red-side via `host.isolated` at the killchain chokepoint, restore/patch signal
   red through `network.pending_restores`/`pending_patches` (drained each red step).
 - **Detectors / alerts:** `cyberwheel/detectors/` — `detector_base.py`, `alert.py`, `handler.py`;
-  `detectors/` (`probability_detector.py`, `isolate_detector.py`, `example_detectors.py`).
+  `detectors/` (`probability_detector.py`, `isolate_detector.py`, `example_detectors.py`,
+  `correlation_window_detector.py` — first stateful detector: SIEM-style, emits only after a source
+  host triggers `threshold` alerts within a sliding `window` of steps). Stateful detectors clear
+  per-episode state via `Detector.reset()` + `DetectorHandler.reset_detectors()` (episode-only;
+  distinct from `handler.reset()`, which clears node buffers every step). Selected by the env
+  `detector_config` key (a handler-graph YAML with `adjacency_list` + `init_info`).
 - **Observation:** `cyberwheel/observation/` — `observation.py`, `blue_observation.py`,
   `red_observation.py`, `observation_attributes.py`.
 - **Reward:** `cyberwheel/reward/` — `reward_base.py`, `rl_reward.py`, `rl_split_reward.py`,

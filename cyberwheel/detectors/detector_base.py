@@ -16,3 +16,9 @@ class Detector:
     @abstractmethod
     def obs(self, perfect_alerts: Iterable[Alert]) -> Iterable[Alert]:
         raise NotImplementedError
+
+    def reset(self) -> None:
+        """Clear any per-episode state. No-op for stateless detectors; stateful
+        detectors (e.g. a sliding correlation window) override this. Called once
+        per episode via ``DetectorHandler.reset_detectors()`` — NOT per step."""
+        pass
