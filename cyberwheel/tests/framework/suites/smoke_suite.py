@@ -903,6 +903,49 @@ def _smoke_network_generator() -> Outcome:
         raised = True
     check(raised, "num_hosts over the small-tier cap should raise")
 
+    # Subnet index > 255 must still yield valid /24 ranges (two-octet encoding).
+    import ipaddress
+
+    big = generate_network_dict(
+        {**params, "num_hosts": 300, "num_subnets": 300, "size_tier": "large"}
+    )
+    ranges = [s["ip_range"] for s in big["subnets"].values()]
+    check(len(ranges) == 300, f"expected 300 subnets, got {len(ranges)}")
+    check(len(set(ranges)) == 300, "subnet ip ranges must be unique")
+    for r in ranges:
+        ipaddress.ip_network(r)  # raises on any invalid octet
+
+    # More hosts than a /24 can hold in one subnet must be rejected upfront
+    # (the build would otherwise exhaust the IP pool and IndexError).
+    raised = False
+    try:
+        validate_params({"num_hosts": 300, "num_subnets": 1, "size_tier": "medium"})
+    except ValueError:
+        raised = True
+    check(raised, "300 hosts in one /24 subnet should be rejected")
+
+    # CLI hardening: traversal names are rejected; overwrite needs --force.
+    bad = run_cli(
+        ["-m", "cyberwheel.network.network_generation", "--name", "../evil", "--stdout"],
+        timeout=120,
+    )
+    check(bad.returncode != 0, "CLI accepted a path-traversal --name")
+    gen_out = DATA_ROOT / "configs" / "network" / "TEST_gen_cli.yaml"
+    try:
+        argv = [
+            "-m", "cyberwheel.network.network_generation",
+            "--name", "TEST_gen_cli", "--num-hosts", "10",
+            "--output", str(gen_out),
+        ]
+        first = run_cli(argv, timeout=120)
+        check(first.returncode == 0, f"CLI generate failed: {first.stderr[-300:]}")
+        dup = run_cli(argv, timeout=120)
+        check(dup.returncode != 0, "CLI overwrote an existing file without --force")
+        forced = run_cli(argv + ["--force"], timeout=120)
+        check(forced.returncode == 0, f"--force overwrite failed: {forced.stderr[-300:]}")
+    finally:
+        gen_out.unlink(missing_ok=True)
+
     return Outcome(Status.PASS, "generated network valid, deterministic, and posture-controlled")
 
 

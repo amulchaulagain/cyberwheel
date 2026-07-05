@@ -10,8 +10,13 @@ canvas layout JSON (the web-UI preview seam) without writing a file.
 
 import argparse
 import json
+import os
+import re
 import sys
 from importlib.resources import files
+
+# Same charset the server's /api/networks/generate enforces.
+_NAME_RE = re.compile(r"[A-Za-z0-9_-]+")
 
 import yaml
 
@@ -54,7 +59,13 @@ def _parse_args(argv):
     p.add_argument("--output", default=None, help="output path; default cyberwheel/data/configs/network/<name>.yaml")
     p.add_argument("--stdout", action="store_true", help="print the YAML to stdout instead of writing a file")
     p.add_argument("--layout-only", action="store_true", help="print the canvas layout JSON (no file written)")
-    return p.parse_args(argv)
+    p.add_argument("--force", action="store_true", help="overwrite an existing output file")
+    args = p.parse_args(argv)
+    if not _NAME_RE.fullmatch(args.name):
+        # The name doubles as the default filename inside the package config
+        # dir — reject separators/traversal outright.
+        p.error(f"--name must be letters, digits, '-' or '_', got {args.name!r}")
+    return args
 
 
 def main(argv=None) -> int:
@@ -86,6 +97,9 @@ def main(argv=None) -> int:
         path = args.output
     else:
         path = str(files("cyberwheel.data.configs.network").joinpath(f"{params['name']}.yaml"))
+    if os.path.exists(path) and not args.force:
+        print(f"error: {path} already exists (use --force to overwrite)", file=sys.stderr)
+        return EXIT_ERROR
     with open(path, "w") as f:
         yaml.safe_dump(data, f)
     print(f"wrote {params['num_hosts']}-host network to {path}")

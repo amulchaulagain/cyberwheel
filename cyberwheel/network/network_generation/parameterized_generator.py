@@ -26,6 +26,25 @@ DEFAULT_SERVER_TYPES = [
 WORKSTATION_TYPE = "workstation"      # vulnerable user host (full CVE surface)
 HARDENED_TYPE = "generated_hardened"  # non-vulnerable user host (empty CVE surface)
 
+# Each subnet is a /24: 254 host addresses minus the router interface.
+MAX_HOSTS_PER_SUBNET = 253
+
+
+def _subnet_split(p: dict) -> tuple[int, int]:
+    """(server-subnet count, user-subnet count) for the given params.
+
+    Mirrors the partition generate_network_dict() applies, so validation can
+    reason about per-subnet host load before anything is built."""
+    num_hosts, num_subnets = p["num_hosts"], p["num_subnets"]
+    num_servers = round(num_hosts * float(p["server_ratio"]))
+    if p["dedicated_server_subnets"] and num_servers > 0:
+        n_server = max(1, round(num_subnets * (num_servers / num_hosts)))
+        n_server = min(n_server, num_subnets - 1) if num_subnets > 1 else num_subnets
+        n_server = max(1, n_server)
+    else:
+        n_server = 0
+    return n_server, num_subnets - n_server
+
 
 def _defaults(params: dict) -> dict:
     p = dict(params)
@@ -65,6 +84,23 @@ def validate_params(params: dict) -> dict:
     if not p["server_types"]:
         raise ValueError("server_types must be non-empty")
     p["num_hosts"], p["num_subnets"] = num_hosts, num_subnets
+
+    # Every subnet is a /24; reject layouts whose round-robin assignment
+    # would exhaust a subnet's IP pool (the build would IndexError later).
+    num_servers = round(num_hosts * float(p["server_ratio"]))
+    n_server, n_user = _subnet_split(p)
+    server_groups = n_server or num_subnets  # fallbacks mirror the generator
+    user_groups = n_user or num_subnets
+    num_users = num_hosts - num_servers
+    servers_per = -(-num_servers // server_groups) if num_servers else 0
+    users_per = -(-num_users // user_groups) if num_users else 0
+    # With no dedicated split, both groups share the same subnets.
+    worst = servers_per + users_per if (n_server == 0 or n_user == 0) else max(servers_per, users_per)
+    if worst > MAX_HOSTS_PER_SUBNET:
+        raise ValueError(
+            f"up to {worst} hosts would land in one /24 subnet "
+            f"(max {MAX_HOSTS_PER_SUBNET}); increase num_subnets"
+        )
     return p
 
 
@@ -79,19 +115,20 @@ def generate_network_dict(params: dict) -> dict:
     gen.router("core_router")
 
     # Partition subnets into server vs user segments when segmentation is on.
-    if p["dedicated_server_subnets"] and num_servers > 0:
-        n_server_subnets = max(1, round(num_subnets * (num_servers / num_hosts)))
-        n_server_subnets = min(n_server_subnets, num_subnets - 1) if num_subnets > 1 else num_subnets
-        n_server_subnets = max(1, n_server_subnets)
-    else:
-        n_server_subnets = 0
+    n_server_subnets, _ = _subnet_split(p)
 
     subnet_names = []
     for i in range(num_subnets):
         is_server_subnet = i < n_server_subnets
         prefix = "server_subnet" if is_server_subnet else "user_subnet"
         name = f"{prefix}{i}"
-        gen.subnet(name, router_name="core_router", ip_range=f"10.{i}.0.0/24")
+        # Two-octet encoding: a single octet breaks past subnet index 255
+        # (tier caps allow up to 1000 subnets).
+        gen.subnet(
+            name,
+            router_name="core_router",
+            ip_range=f"10.{i // 256}.{i % 256}.0/24",
+        )
         subnet_names.append((name, is_server_subnet))
 
     server_subnets = [n for n, s in subnet_names if s]
