@@ -285,6 +285,17 @@ Networks in Cyberwheel are comprised of routers, subnets, and hosts represented 
 * Hosts are machines/devices that belong to a subnet​, and they contain a list of running services with ports, CVEs, and other attributes.
  ​Cyberwheel builds networks from a config YAML file.
 
+#### Generating networks
+
+Beyond the hand-written `N-host-network.yaml` files, a knob-driven generator produces network configs deterministically from security-posture parameters:
+
+```sh
+python3 -m cyberwheel.network.network_generation --name segmented_dmz --num-hosts 60 \
+  --num-subnets 6 --server-ratio 0.25 --vuln-density 0.6 --seed 1
+```
+
+Knobs: `--num-hosts` (size), `--num-subnets` (segmentation), `--server-ratio` (fraction of hosts that are crown-jewel servers), `--vuln-density` (fraction of user hosts that are exploitable vs. hardened — the rest use a `generated_hardened` host type with no CVEs), `--dedicated-server-subnets/--no-dedicated-server-subnets` (whether servers get their own segments), `--size-tier`, and `--seed`. The output lands in `cyberwheel/data/configs/network/` and immediately appears in the training/evaluation dropdowns. The web UI exposes the same knobs on the **New network** page with a live topology preview before you commit.
+
 ### RL Blue Agent Design
 
 The RL blue agent is largely focused on deploying Decoys to slow and/or stop red agent attacks throughout the network. The blue agent's actions and logic be configured and defined in a YAML file, allowing for greater modularity. Different configurations of blue agents are defined in `cyberwheel/data/configs/blue_agent/`. Its observation space is defined by the entire network, and alerts that are flagged by detectors it has set up.

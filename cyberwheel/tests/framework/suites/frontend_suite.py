@@ -149,6 +149,7 @@ def _fs_cleanup() -> None:
     for pattern in (
         DATA_ROOT.glob(f"action_logs/{PREFIX}-*.csv"),
         (CONFIG_ROOT / "environment" / "generated").glob(f"{PREFIX}-*.yaml"),
+        (CONFIG_ROOT / "network").glob("tfs_gen_*.yaml"),
     ):
         for entry in pattern:
             entry.unlink(missing_ok=True)
@@ -452,6 +453,44 @@ def _case_compare_contract() -> Outcome:
     )
 
 
+def _case_network_generate() -> Outcome:
+    server = _server()
+    name = f"tfs_gen_{os.getpid()}"
+    _STATE["gen_network"] = name
+    params = {
+        "num_hosts": 24,
+        "num_subnets": 3,
+        "server_ratio": 0.25,
+        "vuln_density": 0.5,
+        "dedicated_server_subnets": True,
+        "seed": 1,
+        "size_tier": "small",
+    }
+
+    # Preview returns a renderable layout without writing a file.
+    preview = server.api("POST", "/api/networks/preview", {"params": params})
+    layout = preview["layout"]
+    check(len(layout["nodes"]) > 0 and len(layout["edges"]) > 0, "preview layout is empty")
+
+    # Generate writes the config; it then shows up in the options dropdown.
+    created = server.api(
+        "POST", "/api/networks/generate", {"name": name, "params": params}, expect=201
+    )
+    check(created["hosts"] == 24 and created["subnets"] == 3, f"unexpected entry: {created}")
+    listed = [n["file"] for n in server.api("GET", "/api/options")["network_configs"]]
+    check(f"{name}.yaml" in listed, f"generated network not enumerated: {listed[:5]}…")
+
+    # Duplicate name -> 409; over-tier params -> 400.
+    server.api("POST", "/api/networks/generate", {"name": name, "params": params}, expect=409)
+    server.api(
+        "POST",
+        "/api/networks/generate",
+        {"name": f"{name}_big", "params": {**params, "num_hosts": 5000}},
+        expect=400,
+    )
+    return Outcome(Status.PASS, f"network generated + previewed via API ({name})")
+
+
 def _case_stop_and_orphan() -> Outcome:
     server = _server()
     created = server.api(
@@ -568,6 +607,9 @@ def _case_cleanup() -> Outcome:
             not (DATA_ROOT / "action_logs" / f"{eval_batch_id}.summary.json").exists(),
             "DELETE ?artifacts=true left the summary JSON behind",
         )
+    gen_network = _STATE.get("gen_network")
+    if gen_network:
+        (DATA_ROOT / "configs" / "network" / f"{gen_network}.yaml").unlink(missing_ok=True)
     remaining = [
         r["id"]
         for r in server.api("GET", "/api/runs")["runs"]
@@ -585,6 +627,7 @@ def register(registry: Registry, ctx: Context) -> None:
         ("frontend:evaluate_e2e_via_api", _case_evaluate, 600.0, "frontend:train_e2e_via_api"),
         ("frontend:evaluate_batch_via_api", _case_evaluate_batch, 600.0, "frontend:train_e2e_via_api"),
         ("frontend:compare_view_contract", _case_compare_contract, 120.0, "frontend:evaluate_batch_via_api"),
+        ("frontend:network_generate", _case_network_generate, 180.0, None),
         ("frontend:job_stop_and_orphan", _case_stop_and_orphan, 300.0, None),
         ("frontend:launch_validation", _case_validation, 120.0, None),
         ("frontend:cleanup_via_api", _case_cleanup, 300.0, None),

@@ -27,6 +27,36 @@ export interface RenderState {
   step: number;
 }
 
+/** A static, all-safe render state for previewing a topology with no episode. */
+export function neutralState(layout: VizLayout): RenderState {
+  const nodes = new Map<number, RenderNode>();
+  layout.nodes.forEach((node, id) => {
+    nodes.set(id, {
+      id,
+      name: node.name,
+      kind: node.kind,
+      x: node.x,
+      y: node.y,
+      r: node.r,
+      subnet: node.subnet,
+      type: node.type,
+      ip: node.ip,
+      decoy: false,
+      state: 0,
+      compromised: false,
+      isolated: false,
+      restored: false,
+    });
+  });
+  return {
+    nodes,
+    edges: layout.edges.map((edge) => [...edge] as [number, number]),
+    isolatedEdges: [],
+    redPosition: -1,
+    step: -1,
+  };
+}
+
 const KEYFRAME_INTERVAL = 25;
 
 /**

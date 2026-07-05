@@ -4,6 +4,7 @@ import { api } from "./client";
 import type {
   ActionsResponse,
   EvalSummary,
+  GenerateNetworkParams,
   MetricsSummary,
   Options,
   RunRecord,
@@ -220,6 +221,25 @@ export function useDeleteRun() {
     mutationFn: ({ runId, artifacts }: { runId: string; artifacts: boolean }) =>
       api.delete(`/api/runs/${runId}?artifacts=${artifacts}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["runs"] }),
+  });
+}
+
+export function usePreviewNetwork() {
+  return useMutation({
+    mutationFn: (params: GenerateNetworkParams) =>
+      api.post<{ layout: VizLayout }>("/api/networks/preview", { params }),
+  });
+}
+
+export function useGenerateNetwork() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, params }: { name: string; params: GenerateNetworkParams }) =>
+      api.post<{ file: string; hosts: number; subnets: number }>("/api/networks/generate", {
+        name,
+        params,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["options"] }),
   });
 }
 

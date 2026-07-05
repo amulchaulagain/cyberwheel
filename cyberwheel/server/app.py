@@ -27,11 +27,17 @@ def create_app() -> FastAPI:
             content={"error": {"code": exc.code, "message": exc.message}},
         )
 
-    from cyberwheel.server.routes import eval_routes, options_routes, run_routes
+    from cyberwheel.server.routes import (
+        eval_routes,
+        network_routes,
+        options_routes,
+        run_routes,
+    )
 
     app.include_router(options_routes.router)
     app.include_router(run_routes.router)
     app.include_router(eval_routes.router)
+    app.include_router(network_routes.router)
 
     @app.get("/api/health")
     def health() -> dict:

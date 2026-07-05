@@ -721,6 +721,78 @@ def _smoke_probabilistic_exploits_e2e(run_id: str) -> Outcome:
     return Outcome(Status.PASS, "probabilistic-exploit train + evaluate e2e OK")
 
 
+def _smoke_network_generator() -> Outcome:
+    """The parameterized generator emits valid, deterministic, posture-controlled networks."""
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from cyberwheel.network.network_base import Network
+    from cyberwheel.network.network_generation.parameterized_generator import (
+        generate_network_dict,
+        validate_params,
+        write_network_yaml,
+    )
+    from cyberwheel.utils import get_service_map
+
+    params = {
+        "name": f"{DATA_ROOT.name}_TEST_gen",
+        "num_hosts": 30,
+        "num_subnets": 4,
+        "server_ratio": 0.2,
+        "vuln_density": 0.5,
+        "seed": 1,
+    }
+    out_path = DATA_ROOT / "configs" / "network" / "TEST_generated_smoke.yaml"
+    try:
+        write_network_yaml(params, str(out_path))
+        network = Network.create_network_from_yaml(str(out_path))
+        check(len(network.hosts) == 30, f"expected 30 hosts, got {len(network.hosts)}")
+        check(len(network.subnets) == 4, f"expected 4 subnets, got {len(network.subnets)}")
+        check(
+            len(network.server_hosts.data_set) == round(30 * 0.2),
+            f"expected {round(30 * 0.2)} servers, got {len(network.server_hosts.data_set)}",
+        )
+        hardened = [
+            h for h in network.hosts.values()
+            if h.host_type and h.host_type.name == "generated_hardened"
+        ]
+        vulnerable = [
+            h for h in network.hosts.values()
+            if h.host_type and h.host_type.name == "workstation"
+        ]
+        check(bool(hardened), "generator produced no hardened hosts at vuln_density 0.5")
+        check(
+            all(len(h.host_type.cve_list) == 0 for h in hardened),
+            "hardened hosts should have an empty CVE surface",
+        )
+        check(
+            all(len(h.host_type.cve_list) > 0 for h in vulnerable),
+            "vulnerable workstations should carry CVEs",
+        )
+        service_map = get_service_map(network)
+        check(
+            set(service_map.keys()) == set(network.hosts.keys()),
+            "service map does not cover every generated host",
+        )
+    finally:
+        out_path.unlink(missing_ok=True)
+
+    # Determinism: same seed => identical config; different seed => different.
+    d1 = generate_network_dict(params)
+    d2 = generate_network_dict(params)
+    check(d1 == d2, "generation is not deterministic for a fixed seed")
+    d3 = generate_network_dict({**params, "seed": 2})
+    check(d1 != d3, "changing the seed did not change the generated network")
+
+    # Tier validation.
+    raised = False
+    try:
+        validate_params({"num_hosts": 200, "size_tier": "small"})
+    except ValueError:
+        raised = True
+    check(raised, "num_hosts over the small-tier cap should raise")
+
+    return Outcome(Status.PASS, "generated network valid, deterministic, and posture-controlled")
+
+
 def _smoke_viz_layout_deterministic() -> Outcome:
     """compute_layout is deterministic and decoy slots are stable."""
     import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
@@ -884,6 +956,14 @@ def register(registry: Registry, ctx: Context) -> None:
             suite=SUITE,
             fn=(lambda: _smoke_probabilistic_exploits_e2e(ctx.run_id)),
             timeout_s=900.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:network_generator",
+            suite=SUITE,
+            fn=_smoke_network_generator,
+            timeout_s=300.0,
         )
     )
     registry.add(

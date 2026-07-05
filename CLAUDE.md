@@ -105,7 +105,14 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   the gym `(obs, reward, term, trunc, info)` tuple), `cyberwheel_emulator.py` (FIREWHEEL backend).
 - **Network:** `cyberwheel/network/` — `network_base.py` (the `networkx` graph), plus
   `router.py`, `subnet.py`, `host.py`, `service.py`, `process.py`, `command.py`, `network_object.py`;
-  generation in `network/network_generation/` (`network_generator.py`, `example.py`).
+  generation in `network/network_generation/` (`network_generator.py` low-level YAML builder;
+  `parameterized_generator.py` + `cli.py`/`__main__.py` — knob-driven procedural generator:
+  `python -m cyberwheel.network.network_generation --name X --num-hosts N --num-subnets M
+  --server-ratio R --vuln-density D [--no-dedicated-server-subnets] --seed S`, deterministic,
+  writes into `data/configs/network/` so it auto-appears in the UI. Vuln density mixes vulnerable
+  types with the `generated_hardened` host type (empty CVEs); crown jewels are `*_server` types.
+  Server endpoints `POST /api/networks/{generate,preview}` shell out to this CLI; UI page
+  `/networks/new` with a live canvas preview).
 - **Red agents:** `cyberwheel/red_agents/` — `red_agent_base.py`, `rl_red_agent.py` (RL red),
   `art_agent.py` (heuristic ART), `art_campaign.py` (fixed killchain), `rl_red_campaign.py`,
   `emulator_rl_red_campaign.py`, `inactive_red_agent.py`; `action_space/red_discrete.py`;
@@ -140,7 +147,8 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   (`VizWriter`: per-step JSON deltas written during evaluate when `visualize: true` →
   `data/graphs/<graph_name>/{meta,layout,episode_<n>}.json`).
 - **Experimentation server:** `cyberwheel/server/` — `app.py`/`serve.py` (FastAPI factory +
-  uvicorn entry), `routes/` (options/runs/eval endpoints), `jobs.py` (subprocess launch/stop/
+  uvicorn entry), `routes/` (options/runs/eval endpoints, plus `network_routes.py`:
+  `POST /api/networks/{generate,preview}` shelling out to the generator CLI), `jobs.py` (subprocess launch/stop/
   reap), `registry.py` (run.json store + orphan detection + external model dirs), `options.py`
   (config enumeration), `metrics.py` (TensorBoard EventAccumulator reader), `actions_log.py`,
   `paths.py`, `validation.py`; built SPA committed in `static/`. Endpoints take/return plain

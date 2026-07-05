@@ -71,3 +71,10 @@ host_types:
       - WindowsImpactExploitableService
     decoy: true
     os: windows
+  # A hardened user host with no exploitable services (empty CVE surface).
+  # Used by the parameterized network generator to model non-vulnerable hosts.
+  generated_hardened:
+    type: USER
+    services: []
+    decoy: false
+    os: windows

@@ -77,6 +77,16 @@ export interface ActionsResponse {
   rows: Record<string, string>[];
 }
 
+export interface GenerateNetworkParams {
+  num_hosts: number;
+  num_subnets: number;
+  server_ratio: number;
+  vuln_density: number;
+  dedicated_server_subnets: boolean;
+  seed: number;
+  size_tier: "small" | "medium" | "large";
+}
+
 export interface StatBlock {
   mean: number | null;
   std: number | null;
