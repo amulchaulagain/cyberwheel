@@ -170,7 +170,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
         self.red_agent.reset(self.network, self.args.service_mapping[self.network.name])
         self.blue_agent.reset(self.network)
-        self.reward_calculator.reset()
+        self.reward_calculator.reset(self.network)
         return {
             "blue": self.blue_agent.observation.obs_vec if self.args.agent_config["blue"]["rl"] else None, 
             "red": self.red_agent.observation.obs_vec if self.args.agent_config["red"]["rl"] else None,

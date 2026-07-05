@@ -453,6 +453,50 @@ def _build_rl_env(blue_yaml: str):
     return env, network, args
 
 
+def _smoke_multi_network_reward_sync() -> Outcome:
+    """The reward calculator must track the env's network across multi-network resets."""
+    import yaml
+
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from cyberwheel.cyberwheel_envs.cyberwheel_rl import CyberwheelRL
+    from cyberwheel.network.network_base import Network
+    from cyberwheel.utils import YAMLConfig, get_service_map
+    from cyberwheel.utils.set_seed import set_seed
+
+    set_seed(1)
+    args = YAMLConfig("train_rl_red_agent_vs_rl_blue.yaml")
+    args.parse_config()
+    args.network_config = [_NETWORK, "25-host-network.yaml"]
+    args.seed = 1
+    args.deterministic = True
+    args.agents = {"red": "rl_red_agent.yaml", "blue": "rl_blue_agent.yaml"}
+    networks = {}
+    args.service_mapping = {}
+    for name in args.network_config:
+        network = Network.create_network_from_yaml(CONFIG_ROOT / "network" / name)
+        networks[network.name] = network
+        args.service_mapping[network.name] = get_service_map(network)
+    args.agent_config = {}
+    for agent_type in args.agents:
+        with open(CONFIG_ROOT / f"{agent_type}_agent" / args.agents[agent_type]) as f:
+            args.agent_config[agent_type] = yaml.safe_load(f)
+
+    env = CyberwheelRL(args, network=next(iter(networks.values())), networks=networks)
+    seen = set()
+    for i in range(12):
+        env.reset()
+        check(
+            env.reward_calculator.network is env.network,
+            f"reward network detached from env network after reset {i}",
+        )
+        seen.add(env.network.name)
+    check(len(seen) > 1, "resets never swapped networks; test is vacuous")
+    return Outcome(
+        Status.PASS,
+        f"reward network tracked env network across {len(seen)} networks / 12 resets",
+    )
+
+
 def _smoke_active_defense_actions() -> Outcome:
     """Quarantine/Restore/Patch mechanics + action-space size invariants."""
     import yaml
@@ -1045,6 +1089,14 @@ def register(registry: Registry, ctx: Context) -> None:
             fn=(lambda: _smoke_evaluate_batch(ctx.run_id)),
             timeout_s=600.0,
             depends_on="smoke:train_e2e",
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:multi_network_reward_sync",
+            suite=SUITE,
+            fn=_smoke_multi_network_reward_sync,
+            timeout_s=300.0,
         )
     )
     registry.add(

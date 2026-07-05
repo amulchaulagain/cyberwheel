@@ -86,7 +86,11 @@ class RLReward(Reward):
         self._valid_targets_key = key
         return result
 
-    def reset(self) -> None:
+    def reset(self, network: Network | None = None) -> None:
+        # Multi-network training swaps the env's network each episode; the
+        # target/decoy sets must be computed against the live one.
+        if network is not None:
+            self.network = network
         self.blue_recurring_reward = []
         self.red_recurring_reward = []
         self.current_step = 0
