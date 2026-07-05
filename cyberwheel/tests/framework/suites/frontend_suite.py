@@ -501,6 +501,15 @@ def _case_network_generate() -> Outcome:
         {"name": f"{name}_big", "params": {**params, "num_hosts": 5000}},
         expect=400,
     )
+    # Non-numeric / malformed params -> clean 400s, never a 500.
+    for bad in (
+        {**params, "num_hosts": "abc"},
+        {**params, "server_ratio": {}},
+        {**params, "seed": "not-a-seed"},
+        {**params, "num_hosts": 10_000_000},
+        {**params, "server_types": "not-a-list"},
+    ):
+        server.api("POST", "/api/networks/preview", {"params": bad}, expect=400)
     return Outcome(Status.PASS, f"network generated + previewed via API ({name})")
 
 

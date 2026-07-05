@@ -22,36 +22,67 @@ router = APIRouter(prefix="/api/networks", tags=["networks"])
 
 _NAME_RE = re.compile(r"[a-zA-Z0-9_-]+")
 _GEN_MODULE = "cyberwheel.network.network_generation"
+# Matches the largest supported obs-size tier; bigger networks are unusable.
+_MAX_HOSTS = 10_000
+
+
+def _number(params: dict, key: str, cast, required: bool = False):
+    """Fetch and convert a numeric param, turning bad input into a 400."""
+    value = params.get(key)
+    if value is None:
+        require(not required, f"{key} is required")
+        return None
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        require(False, f"{key} must be a {cast.__name__}, got {value!r}")
 
 
 def _params_to_argv(params: dict) -> list[str]:
     argv: list[str] = []
-    if params.get("seed") is not None:
-        argv += ["--seed", str(int(params["seed"]))]
-    require(params.get("num_hosts") is not None, "num_hosts is required")
-    argv += ["--num-hosts", str(int(params["num_hosts"]))]
-    if params.get("num_subnets") is not None:
-        argv += ["--num-subnets", str(int(params["num_subnets"]))]
-    if params.get("server_ratio") is not None:
-        argv += ["--server-ratio", str(float(params["server_ratio"]))]
-    if params.get("vuln_density") is not None:
-        argv += ["--vuln-density", str(float(params["vuln_density"]))]
+    seed = _number(params, "seed", int)
+    if seed is not None:
+        argv += ["--seed", str(seed)]
+    num_hosts = _number(params, "num_hosts", int, required=True)
+    require(
+        1 <= num_hosts <= _MAX_HOSTS,
+        f"num_hosts must be between 1 and {_MAX_HOSTS}",
+    )
+    argv += ["--num-hosts", str(num_hosts)]
+    num_subnets = _number(params, "num_subnets", int)
+    if num_subnets is not None:
+        argv += ["--num-subnets", str(num_subnets)]
+    server_ratio = _number(params, "server_ratio", float)
+    if server_ratio is not None:
+        argv += ["--server-ratio", str(server_ratio)]
+    vuln_density = _number(params, "vuln_density", float)
+    if vuln_density is not None:
+        argv += ["--vuln-density", str(vuln_density)]
     if params.get("dedicated_server_subnets") is False:
         argv += ["--no-dedicated-server-subnets"]
-    if params.get("server_types"):
-        argv += ["--server-types", ",".join(params["server_types"])]
+    server_types = params.get("server_types")
+    if server_types:
+        require(
+            isinstance(server_types, list)
+            and all(isinstance(t, str) for t in server_types),
+            "server_types must be a list of strings",
+        )
+        argv += ["--server-types", ",".join(server_types)]
     if params.get("size_tier"):
         argv += ["--size-tier", str(params["size_tier"])]
     return argv
 
 
 def _run_generator(argv: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        [sys.executable, "-m", _GEN_MODULE, *argv],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    try:
+        return subprocess.run(
+            [sys.executable, "-m", _GEN_MODULE, *argv],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        require(False, "network generation timed out after 120s")
 
 
 @router.post("/generate", status_code=201)
