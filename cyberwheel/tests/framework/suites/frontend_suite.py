@@ -65,13 +65,14 @@ _STATE: dict = {}
 
 
 class _Server:
-    def __init__(self) -> None:
+    def __init__(self, extra_env: dict | None = None) -> None:
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             self.port = probe.getsockname()[1]
         env = dict(os.environ)
         env.update(SAFE_ENV)
-        self.log_path = DATA_ROOT / "frontend" / f"{PREFIX}-server.log"
+        env.update(extra_env or {})
+        self.log_path = DATA_ROOT / "frontend" / f"{PREFIX}-server-{self.port}.log"
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._log = open(self.log_path, "wb")
         self.proc = subprocess.Popen(
@@ -563,6 +564,83 @@ def _case_sweep() -> Outcome:
     return Outcome(Status.PASS, f"2-cell sweep launched, ran, and reported metrics ({sweep_id})")
 
 
+def _case_sweep_queue_lifecycle() -> Outcome:
+    """Queued sweep cells can be stopped/deleted without resurrection, the
+    parallelism cap holds, and a bad cell rejects the sweep before launch."""
+    server = _Server(extra_env={"CYBERWHEEL_SWEEP_PARALLEL": "1"})
+    try:
+        created = server.api(
+            "POST",
+            "/api/sweeps",
+            {
+                "display_name": f"{PREFIX} qsweep",
+                "base_config": "train_rl_red_agent_vs_rl_blue.yaml",
+                "params": {
+                    **_TINY_TRAIN_PARAMS,
+                    "total_timesteps": 1_000_000,
+                    "num_steps": 32,
+                    "num_saves": 2,
+                },
+                "grid": {"learning_rate": [0.0003, 0.001]},
+            },
+            expect=201,
+        )
+        sweep_id = created["id"]
+        statuses = {c["run_id"]: c["status"] for c in created["cells"]}
+        queued = [rid for rid, s in statuses.items() if s == "queued"]
+        running = [rid for rid, s in statuses.items() if s == "running"]
+        check(
+            len(running) == 1 and len(queued) == 1,
+            f"SWEEP_PARALLEL=1 should run 1 cell and queue 1, got {statuses}",
+        )
+
+        # Stopping a queued cell must stick — the drain may not launch it.
+        stopped = server.api("POST", f"/api/runs/{queued[0]}/stop")
+        check(stopped["status"] == "stopped", f"stop(queued) -> {stopped['status']}")
+        server.api("POST", f"/api/runs/{running[0]}/stop")
+        time.sleep(3.0)  # a few reaper ticks with a free slot
+        after = server.api("GET", f"/api/runs/{queued[0]}")
+        check(after["status"] == "stopped", f"stopped queued cell resurrected: {after['status']}")
+
+        # A bad cell anywhere in the grid rejects the sweep before anything
+        # launches — no stray child runs, no unlisted sweep.
+        server.api(
+            "POST",
+            "/api/sweeps",
+            {
+                "display_name": f"{PREFIX} badsweep",
+                "base_config": "train_rl_red_agent_vs_rl_blue.yaml",
+                "params": dict(_TINY_TRAIN_PARAMS),
+                "grid": {
+                    "network_config": [
+                        ["15-host-network.yaml"],
+                        ["no-such-network.yaml"],
+                    ]
+                },
+            },
+            expect=400,
+        )
+        stray = [
+            r["id"]
+            for r in server.api("GET", "/api/runs")["runs"]
+            if "badsweep" in r["id"]
+        ]
+        check(not stray, f"rejected sweep left orphan child runs: {stray}")
+
+        # Delete the sweep + artifacts; nothing may come back afterwards.
+        server.api("DELETE", f"/api/sweeps/{sweep_id}?artifacts=true")
+        time.sleep(2.5)
+        status, _, _ = server.request("GET", f"/api/runs/{queued[0]}")
+        check(status == 404, f"deleted queued cell resurrected (status {status})")
+        listed = [s["id"] for s in server.api("GET", "/api/sweeps")["sweeps"]]
+        check(sweep_id not in listed, "sweep still listed after delete")
+        return Outcome(
+            Status.PASS, "queued cells stop/delete cleanly under SWEEP_PARALLEL=1"
+        )
+    finally:
+        server.shutdown()
+
+
 def _case_stop_and_orphan() -> Outcome:
     server = _server()
     created = server.api(
@@ -709,6 +787,7 @@ def register(registry: Registry, ctx: Context) -> None:
         ("frontend:compare_view_contract", _case_compare_contract, 120.0, "frontend:evaluate_batch_via_api"),
         ("frontend:network_generate", _case_network_generate, 180.0, None),
         ("frontend:sweep_e2e", _case_sweep, 900.0, None),
+        ("frontend:sweep_queue_lifecycle", _case_sweep_queue_lifecycle, 300.0, None),
         ("frontend:job_stop_and_orphan", _case_stop_and_orphan, 300.0, None),
         ("frontend:launch_validation", _case_validation, 120.0, None),
         ("frontend:cleanup_via_api", _case_cleanup, 300.0, None),

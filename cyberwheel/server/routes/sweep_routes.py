@@ -69,16 +69,24 @@ def create_sweep(body: dict = Body(...)) -> dict:
 
     cells = sweeps.expand_grid(grid)
     sweep_id = jobs.make_run_id(display_name)
+    # make_run_id only checks the run registry; a sweep id itself never gets a
+    # run.json, so guard against a same-second double submit separately.
+    require(sweeps.load_sweep(sweep_id) is None, f"sweep {sweep_id} already exists", 409)
 
+    # Pass 1: validate every cell before anything is written or launched, so
+    # a bad cell can't leave earlier cells running under a sweep that was
+    # never saved (invisible to and undeletable through the sweep APIs), nor
+    # leave stray generated configs behind.
+    staged = []
     cell_records = []
     for index, cell in enumerate(cells):
         run_id = f"{sweep_id}-c{index}"
+        require(registry.load_run(run_id) is None, f"run {run_id} already exists", 409)
         params = {**base_params, **cell, "experiment_name": run_id}
         params.setdefault("track", False)
         merged = {**env_config_params(base_config), **params}
         require("total_timesteps" in merged, f"{base_config} is not a training config")
         validate_config_refs(merged)
-        config_ref = jobs.generate_config(run_id, base_config, params)
         record = {
             "id": run_id,
             "kind": "train",
@@ -90,15 +98,17 @@ def create_sweep(body: dict = Body(...)) -> dict:
             "started_at": None,
             "ended_at": None,
             "base_config": base_config,
-            "generated_config": config_ref,
+            "generated_config": None,
             "params": merged,
             "experiment_name": run_id,
             "sweep_id": sweep_id,
             "sweep_cell": cell,
         }
-        jobs.launch_or_queue(record, "train", config_ref)
+        staged.append((record, params))
         cell_records.append({"run_id": run_id, "params": cell})
 
+    # Persist the sweep before rendering/launching so every child is
+    # reachable from the sweep APIs from the moment it exists.
     sweep = {
         "id": sweep_id,
         "display_name": display_name,
@@ -110,6 +120,12 @@ def create_sweep(body: dict = Body(...)) -> dict:
         "created_at": registry.now_iso(),
     }
     sweeps.save_sweep(sweep)
+
+    # Pass 2: render each validated cell's config and launch (or queue) it.
+    for record, params in staged:
+        config_ref = jobs.generate_config(record["id"], base_config, params)
+        record["generated_config"] = config_ref
+        jobs.launch_or_queue(record, "train", config_ref)
     return _decorate(sweep)
 
 
@@ -144,6 +160,10 @@ def delete_sweep(sweep_id: str, artifacts: bool = False) -> dict:
             f"stop child run {run_id} before deleting the sweep",
             409,
         )
+    # Drop queued cells from the launch queue first, so the reaper can't
+    # spawn (and thereby resurrect) a cell while its files are being removed.
+    for cell in sweep["cells"]:
+        jobs.cancel_queued(cell["run_id"])
     for cell in sweep["cells"]:
         run_id = cell["run_id"]
         if artifacts:

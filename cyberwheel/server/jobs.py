@@ -43,8 +43,24 @@ _reaper_started = False
 
 # Sweep cells launch with bounded parallelism (the rest queue and are drained
 # by the reaper as slots free), so a large grid never spawns all at once.
-SWEEP_PARALLEL = int(os.environ.get("CYBERWHEEL_SWEEP_PARALLEL", "3") or "3")
+def _parse_sweep_parallel(raw: str | None) -> int:
+    try:
+        value = int(raw) if raw else 3
+    except (TypeError, ValueError):
+        value = 3
+    # 0 or negative would deadlock the queue (cells queue, drain never fires).
+    return max(1, value)
+
+
+SWEEP_PARALLEL = _parse_sweep_parallel(os.environ.get("CYBERWHEEL_SWEEP_PARALLEL"))
 _pending: list[tuple[dict, str, str]] = []
+_cancelled: set[str] = set()
+
+
+def _sweep_slots() -> int:
+    """Sweep parallelism also respects the global run-concurrency cap."""
+    limit = _max_concurrency()
+    return min(SWEEP_PARALLEL, limit) if limit is not None else SWEEP_PARALLEL
 
 
 def _owns(run_id: str) -> bool:
@@ -122,20 +138,52 @@ def launch_or_queue(record: dict, mode: str, config_ref: str) -> dict:
     """Launch immediately if under the sweep-parallelism cap, else queue the
     cell (status 'queued') for the reaper to start when a slot frees."""
     with _lock:
-        room = len(_procs) < SWEEP_PARALLEL
+        room = len(_procs) < _sweep_slots()
     if room:
         return _spawn(record, mode, config_ref)
     record.update(status="queued", pid=None, started_at=None, exit_code=None)
     registry.save_run(record)
     with _lock:
+        _cancelled.discard(record["id"])
         _pending.append((record, mode, config_ref))
     _ensure_reaper()
     return record
 
 
+def cancel_queued(run_id: str) -> bool:
+    """Drop a queued run from the pending launch queue (stop/delete paths).
+
+    Also tombstones the id so a drain that already popped the entry won't
+    spawn it. Returns True if a pending entry was actually removed."""
+    with _lock:
+        before = len(_pending)
+        _pending[:] = [spec for spec in _pending if spec[0]["id"] != run_id]
+        _cancelled.add(run_id)
+        return len(_pending) != before
+
+
+def orphan_stale_queued() -> None:
+    """Called once at server boot: 'queued' records left by a previous
+    process can never launch (the pending queue lives in process memory), so
+    surface them as orphaned instead of leaving their sweeps 'running'
+    forever with unstoppable children."""
+    for record in registry.list_runs():
+        if record.get("status") == "queued":
+            record["status"] = "orphaned"
+            record["ended_at"] = record.get("ended_at") or registry.now_iso()
+            registry.save_run(record)
+
+
 def stop(run_id: str) -> dict:
     record = registry.load_run(run_id)
     require(record is not None, f"run {run_id} not found", 404)
+    if record["status"] == "queued":
+        # Not launched yet: drop it from the queue instead of signalling.
+        cancel_queued(run_id)
+        record["status"] = "stopped"
+        record["ended_at"] = registry.now_iso()
+        registry.save_run(record)
+        return record
     if record["status"] != "running":
         return record
     pid = record.get("pid")
@@ -225,7 +273,15 @@ def _reap_once() -> None:
     # Drain queued sweep cells into the freed slots (Popen outside the lock).
     while True:
         with _lock:
-            if not _pending or len(_procs) >= SWEEP_PARALLEL:
+            if not _pending or len(_procs) >= _sweep_slots():
                 break
             spec = _pending.pop(0)
+            skip = spec[0]["id"] in _cancelled
+        if skip:
+            continue
+        # The record can be stopped or deleted while queued — never launch
+        # (and thereby resurrect) a run whose record is gone or non-queued.
+        record = registry.load_run(spec[0]["id"])
+        if record is None or record.get("status") != "queued":
+            continue
         _spawn(*spec)

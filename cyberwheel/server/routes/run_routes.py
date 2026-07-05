@@ -201,6 +201,9 @@ def stop_run(run_id: str) -> dict:
 def delete_run(run_id: str, artifacts: bool = False) -> dict:
     record = _get_record(run_id)
     require(record["status"] != "running", "stop the run before deleting it", 409)
+    # A queued sweep cell must leave the launch queue too, or the reaper
+    # would respawn it (recreating run.json) once a slot frees.
+    jobs.cancel_queued(run_id)
     if artifacts:
         targets = [GENERATED_CONFIG_DIR / f"{run_id}.yaml"]
         if record["kind"] == "train":

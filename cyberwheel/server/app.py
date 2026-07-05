@@ -6,13 +6,17 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-from cyberwheel.server import registry
+from cyberwheel.server import jobs, registry
 from cyberwheel.server.paths import STATIC_DIR, ensure_dirs
 from cyberwheel.server.validation import ApiError
 
 
 def create_app() -> FastAPI:
     ensure_dirs()
+    # Queued records from a previous server process can never launch (the
+    # pending queue lives in process memory); orphan them at boot so their
+    # sweeps don't report 'running' forever.
+    jobs.orphan_stale_queued()
     app = FastAPI(
         title="Cyberwheel Experimentation",
         docs_url="/api/docs",
