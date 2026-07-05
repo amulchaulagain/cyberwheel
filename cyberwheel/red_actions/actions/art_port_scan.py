@@ -28,8 +28,8 @@ class ARTPortScan(ARTKillChainPhase):
         host = self.target_host
         self.action_results.modify_alert(dst=host)
 
-        # A quarantined host is unreachable; the scan fails outright.
-        if getattr(host, "isolated", False):
+        # Unreachable target or quarantined source: the scan fails outright.
+        if self.quarantine_blocked():
             return self.action_results
 
         host_os = host.os

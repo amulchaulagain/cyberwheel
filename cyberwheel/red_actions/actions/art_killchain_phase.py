@@ -244,14 +244,20 @@ class ARTKillChainPhase(ARTAction):
         super().__init__(src_host, target_host)
         self.valid_techniques = valid_techniques
 
+    def quarantine_blocked(self) -> bool:
+        """Quarantine blocks red traffic in both directions: an isolated
+        target is unreachable, and an isolated source can't originate."""
+        return getattr(self.src_host, "isolated", False) or getattr(
+            self.target_host, "isolated", False
+        )
+
     def sim_execute(self):
         self.action_results.detector_alert.add_src_host(self.src_host)
         host = self.target_host
         host_os = host.os
         self.action_results.modify_alert(dst=host)
 
-        # A quarantined host is unreachable; the attack fails outright.
-        if getattr(host, "isolated", False):
+        if self.quarantine_blocked():
             return self.action_results
 
         if len(self.valid_techniques) > 0:

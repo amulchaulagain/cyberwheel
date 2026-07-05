@@ -37,6 +37,11 @@ class ARTPingSweep(ARTKillChainPhase):
         host = self.target_host
         self.action_results.modify_alert(dst=host)
 
+        # A quarantined source can't sweep the subnet at all (quarantined
+        # peers merely not answering is handled below).
+        if getattr(self.src_host, "isolated", False):
+            return self.action_results
+
         host_os = host.os
         action_type = self.name
         art_technique = art_techniques.technique_mapping["T1018"]

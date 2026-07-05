@@ -503,6 +503,7 @@ def _smoke_active_defense_actions() -> Outcome:
 
     from importlib.resources import files
 
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
     from cyberwheel.red_actions.actions.art_killchain_phase import ARTKillChainPhase
     from cyberwheel.red_agents.art_agent import ARTAgent
 
@@ -533,6 +534,19 @@ def _smoke_active_defense_actions() -> Outcome:
     blocked = ARTKillChainPhase(red.current_host, target, valid_techniques=["Tx"]).sim_execute()
     check(blocked.attack_success is False, "isolated host was still attackable")
     check(actions["quarantine_host"].execute(target).success is False, "re-quarantine should fail")
+
+    # ...and traps red sitting on it: nothing (killchain step, sweep, scan —
+    # lateral movement shares the killchain chokepoint) can originate there.
+    from cyberwheel.red_actions.actions import ARTPingSweep, ARTPortScan
+
+    victim = real_hosts[1]
+    v_tid = next(t for lst in red.service_mapping[victim.name].values() if lst for t in [lst[0]])
+    out = ARTKillChainPhase(target, victim, valid_techniques=[v_tid]).sim_execute()
+    check(out.attack_success is False, "killchain action escaped a quarantined source host")
+    check(ARTPingSweep(target, victim).sim_execute().attack_success is False,
+          "pingsweep escaped a quarantined source host")
+    check(ARTPortScan(target, victim).sim_execute().attack_success is False,
+          "portscan escaped a quarantined source host")
 
     # Restore reconnects, cleans, and resets the RL red foothold.
     red.observation.add_host(target.name, escalated=1, impacted=1, on_host=1)
