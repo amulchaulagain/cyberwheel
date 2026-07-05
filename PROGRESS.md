@@ -207,12 +207,102 @@ visualization. Retired graphviz/pygraphviz.
 - Committed `static/` must be rebuilt (`cd frontend && npm run build`) in the same commit as any
   `frontend/src` change; the static-serving test guards this.
 
+## Bug-fix session — 2026-07-05 (done)
+
+**Status:** complete. A dedicated bug hunt (three parallel review passes over the recent
+features + verification of every candidate flagged in earlier entries), then fixes, one
+commit per issue. All suites green (config 49 pass / 0 xfail, smoke 19, frontend 12, perf 4)
+and profiler `--check` clean after every commit; no baseline re-record needed (no
+intentional perf change).
+
+### Fixed (commit per line)
+1. `fix: repair run mode and base-env reset` — the two oldest known issues. baseline_runner
+   now mirrors the trainer/evaluator setup (network-name-keyed service_mapping, agent_config
+   built from the run schema's `red_agent`/`blue_agent` keys, list-tolerant network_config);
+   created the previously-dangling `red_agent/inactive_red_agent.yaml`; base
+   `Cyberwheel.reset()` passes `(network, service_mapping)` down; deleted InactiveRedAgent's
+   broken no-arg `reset()` override. Both smoke xfails promoted to gating cases
+   (`smoke:run_mode_e2e`, `smoke:base_env_reset`).
+2. `fix: point campaign env configs at an existing network` — art_campaign/rl_red_campaign
+   vs_rl_blue referenced the nonexistent `emulator_15_host.yaml`; now `15-host-network.yaml`
+   (which contains the campaign's `host1`/`server4`). Verified with tiny end-to-end trains;
+   config-suite KNOWN_BROKEN list is now empty.
+3. `fix: sync RLReward's network on multi-network reset` — reward was computed against the
+   construction-time network after every mid-training network swap (wrong server/decoy sets).
+   `CyberwheelRL.reset()` now passes the live network through `RLReward.reset()`.
+   Regression: `smoke:multi_network_reward_sync`.
+4. `fix: quarantine blocks red actions originating from the isolated host` — red sitting on a
+   quarantined host could pingsweep/portscan/lateral-move OUT (only the target side was
+   checked), defeating containment. New `quarantine_blocked()` chokepoint checks both
+   endpoints. Regression checks added to `smoke:active_defense_actions`.
+5. `fix: key blue recurring rewards by action id` — the recurring-cost ledger was a
+   type-blind FIFO: any `recurring=-1` action (e.g. `remove_decoy`, even a FAILED one)
+   popped the oldest entry, silently cancelling a live quarantine's per-step cost. Now a
+   dict keyed by `BlueActionReturn.id` with success-gated removal. Regression:
+   `smoke:recurring_reward_ledger`.
+6. `fix: run-status race that stamped succeeded runs 'orphaned' forever` — root cause of the
+   flaky `frontend:sweep_e2e`: the reaper released `_procs` ownership before saving the
+   terminal status; a concurrent poll's `_reconcile` saw a dead pid on a "running" record
+   and its 'orphaned' save clobbered 'succeeded' permanently (repro: 1-in-2 tight-poll
+   trials pre-fix, 6/6 clean post-fix). Reaper now saves-then-pops; `_reconcile` re-reads
+   before persisting; reap loop is exception-guarded; atomic writes use unique tmp names.
+7. `fix: sweep queue lifecycle` — queued cells were unstoppable/undeletable and got
+   resurrected by the drain after delete; create_sweep launched earlier cells before later
+   cells validated (running orphans under a never-saved sweep + stray generated configs);
+   restart stranded queued records forever; same-second duplicate sweep ids silently
+   overwrote records; `CYBERWHEEL_SWEEP_PARALLEL` crashed on non-numeric / deadlocked on 0
+   and bypassed `CYBERWHEEL_FRONTEND_MAX_CONCURRENCY`. All fixed (`jobs.cancel_queued` +
+   tombstones + drain re-check, validate-then-save-then-launch, boot-time orphaning of
+   stale queued records, 409 on id collision, defensive knob parsing + min() with the
+   global cap). New e2e: `frontend:sweep_queue_lifecycle` (dedicated server,
+   SWEEP_PARALLEL=1).
+8. `fix: network generate/preview 400s` — non-numeric params / dicts / generator timeouts
+   500'd; now clean 400s, `num_hosts` bounded to 10000, `server_types` shape-checked.
+9. `fix: network generator edge cases` — subnet index >255 produced invalid `10.299.0.0/24`
+   (large tier allows 1000 subnets) → two-octet encoding (changes generated output per seed
+   vs earlier versions — still deterministic; existing YAMLs untouched); >253 hosts/subnet
+   now rejected in validate_params (was a build-time IndexError on an exhausted /24 pool);
+   generator CLI validates `--name` (path traversal via the default package-dir filename)
+   and refuses overwrite without `--force`.
+
+## Known issues (current)
+
+Deliberate non-fixes and accepted limitations, with rationale. Nothing here is a live,
+gating defect; re-examine an entry if its assumption changes.
+
+- **pytest is not installed** — by design; the repo uses the custom framework
+  (`python3 -m cyberwheel.tests`). Not a bug.
+- **Eval/trainer agents run orthogonal init before `load_state_dict`** — pure wasted work,
+  no correctness impact (strict load overwrites every param). Left alone deliberately: the
+  init consumes torch RNG, so removing it would shift sampled eval actions and invalidate
+  seed-for-seed comparability with existing runs.
+- **`ARTKillChainPhase.exploit_model` is a class attribute** — set per red-agent
+  construction/reset; with multiple envs in one process the last reset wins for all.
+  Harmless while every env in a process shares one exploit config (the only supported
+  setup); revisit if per-env exploit configs are ever needed.
+- **Multi-agent eval viz is single-red** — the VizWriter's red-position/knowledge tracking
+  assumes one red agent; both agents' actions still render. Extend if multi-red lands.
+- **`rl-eval` list-valued `network_config` is load-only** — rl_evaluator assumes a string
+  (`.split('.')`); the config suite reports this as INFO. Single-network evaluation is the
+  supported path.
+- **Sweep delete has a residual ~ms TOCTOU window** — if the drain has already popped a
+  queued cell and re-loaded its record in the instant before DELETE cancels it, one cell
+  can still spawn. Bounded by one reaper tick, requires a running delete to race an exact
+  slot-free moment; the drain's record re-check closes every wider window.
+- **`launch_or_queue` room check is check-then-act** — two concurrent creates can
+  transiently exceed the sweep-parallel cap by the number of in-flight requests. Benign
+  (bound is advisory, excess just runs), not worth a lock around Popen.
+- **`rollup_status` maps stopped/missing/orphaned children to a 'failed' sweep** — a
+  semantic choice (anything not running/succeeded is a failed experiment), not an accident.
+- **`bench_sim_step` still measures stepping without resets** — the reset bug that forced
+  that shape is fixed, but the metric definition is kept so baselines stay comparable.
+- **In-memory `build_network()` IP leases use the global RNG** — in-memory IP addresses
+  aren't seed-reproducible; irrelevant to determinism of persisted YAML (IPs aren't
+  written) and to the UI preview (layout doesn't use IPs).
+- **Evaluation report omits "± 0.00" when a CI half-width is exactly zero** — cosmetic
+  truthiness artifact in `report.py`; harmless.
+
 ## Next
-- Awaiting next numbered feature. Candidates surfaced by feature 1: fix run mode, fix
-  base-env reset, fix/retire the two broken campaign env configs. Surfaced by feature 2:
-  trainer-side wins (batch policy forwards are dominated by per-call torch overhead at
-  num_envs=1; eval agents re-run orthogonal init before load_state_dict), and
-  `RLReward.network` is never updated on multi-network reset (pre-existing; reward computed
-  against the initial network's decoys). Surfaced by feature 3: multi-agent (RL red vs RL blue)
-  eval viz shows both agents' actions but the writer's red-position/knowledge is single-red-agent;
-  extend if multi-red is added.
+- Awaiting next numbered feature. Remaining candidate from feature 2: trainer-side wins
+  (batch policy forwards are dominated by per-call torch overhead at num_envs=1). From
+  feature 3: extend the viz writer if multi-red is added (see Known issues).

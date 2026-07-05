@@ -56,9 +56,10 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   (`--record-baseline`) in the SAME commit as any intentional perf change. The working-tree
   baseline therefore always holds the parent commit's results; CI re-measures the parent on the
   same runner via `--compare-rev` (`.github/workflows/tests.yml`, final `perf-gate` job).
-- Known pre-existing bugs are encoded as xfail ("known-issue") cases, not fixed: `run` mode
-  (baseline_runner service_mapping/agent_config), base-env `reset()` (InactiveRedAgent),
-  and two env configs referencing the missing `network/emulator_15_host.yaml`.
+- Known-broken things can be encoded as xfail ("known-issue") cases; the list is currently
+  EMPTY — the four legacy entries (`run` mode, base-env `reset()`, two campaign env configs
+  referencing a missing network) were fixed 2026-07-05. Current known issues + deliberate
+  non-fixes are tracked in PROGRESS.md ("Known issues").
 - Perf benchmarks: `bench_network_build` (200-host), `bench_sim_step` (inactive base env),
   `bench_rl_step` (full RL env step: masks, blue/red actions, detector, obs, reward),
   `bench_train_sps` (real train CLI). In `--compare-rev` mode a benchmark the compared
