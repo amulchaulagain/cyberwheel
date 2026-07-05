@@ -13,6 +13,7 @@ import itertools
 import json
 import os
 from pathlib import Path
+from uuid import uuid4
 
 from cyberwheel.server.paths import SWEEPS_DIR
 from cyberwheel.server.validation import require
@@ -27,7 +28,8 @@ def sweep_dir(sweep_id: str) -> Path:
 def save_sweep(record: dict) -> None:
     directory = sweep_dir(record["id"])
     directory.mkdir(parents=True, exist_ok=True)
-    tmp = directory / "sweep.json.tmp"
+    # Unique tmp name so concurrent writers can't rename torn JSON into place.
+    tmp = directory / f"sweep.json.{uuid4().hex}.tmp"
     with open(tmp, "w") as f:
         json.dump(record, f, indent=2)
     os.replace(tmp, directory / "sweep.json")

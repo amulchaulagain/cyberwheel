@@ -17,6 +17,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from datetime import datetime, timezone
 
 import yaml
@@ -191,29 +192,40 @@ def _ensure_reaper() -> None:
 def _reap_loop() -> None:
     while True:
         time.sleep(1.0)
-        with _lock:
-            finished = [
-                (run_id, proc)
-                for run_id, proc in _procs.items()
-                if proc.poll() is not None
-            ]
-            for run_id, _ in finished:
-                _procs.pop(run_id, None)
-        for run_id, proc in finished:
-            record = registry.load_run(run_id)
-            # 'orphaned' can appear if a poll raced the exit; the owned
-            # Popen handle has the authoritative exit code, so recover it.
-            if record is None or record["status"] not in ("running", "orphaned"):
-                continue
+        try:
+            _reap_once()
+        except Exception:
+            # One corrupt record or failed spawn must not kill reaping
+            # (no reaper -> zombies, stuck 'running' records, frozen queue).
+            traceback.print_exc()
+
+
+def _reap_once() -> None:
+    with _lock:
+        finished = [
+            (run_id, proc)
+            for run_id, proc in _procs.items()
+            if proc.poll() is not None
+        ]
+    for run_id, proc in finished:
+        record = registry.load_run(run_id)
+        # 'orphaned' can appear if a poll raced the exit; the owned
+        # Popen handle has the authoritative exit code, so recover it.
+        if record is not None and record["status"] in ("running", "orphaned"):
             record["status"] = "succeeded" if proc.returncode == 0 else "failed"
             record["exit_code"] = proc.returncode
             record["ended_at"] = registry.now_iso()
             registry.save_run(record)
+        # Release ownership only AFTER the terminal status is persisted: a
+        # concurrent load_run() in the pop→save window would see a dead pid
+        # on a still-"running" record and clobber the result with 'orphaned'.
+        with _lock:
+            _procs.pop(run_id, None)
 
-        # Drain queued sweep cells into the freed slots (Popen outside the lock).
-        while True:
-            with _lock:
-                if not _pending or len(_procs) >= SWEEP_PARALLEL:
-                    break
-                spec = _pending.pop(0)
-            _spawn(*spec)
+    # Drain queued sweep cells into the freed slots (Popen outside the lock).
+    while True:
+        with _lock:
+            if not _pending or len(_procs) >= SWEEP_PARALLEL:
+                break
+            spec = _pending.pop(0)
+        _spawn(*spec)

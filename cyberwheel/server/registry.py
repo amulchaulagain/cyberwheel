@@ -16,6 +16,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from cyberwheel.server.paths import MODELS_DIR, REGISTRY_DIR
 
@@ -39,7 +40,9 @@ def run_dir(run_id: str) -> Path:
 def save_run(record: dict) -> None:
     directory = run_dir(record["id"])
     directory.mkdir(parents=True, exist_ok=True)
-    tmp = directory / "run.json.tmp"
+    # Unique tmp name: concurrent writers (stop() worker vs reaper) sharing
+    # one tmp path would interleave writes and rename torn JSON into place.
+    tmp = directory / f"run.json.{uuid4().hex}.tmp"
     with open(tmp, "w") as f:
         json.dump(record, f, indent=2)
     os.replace(tmp, directory / "run.json")
@@ -93,10 +96,24 @@ def _reconcile(record: dict) -> dict:
         return record
     if in_flight is not None and in_flight(record["id"]):
         return record
-    if not _pid_alive(record.get("pid"), record["id"]):
-        record["status"] = "orphaned"
-        record["ended_at"] = record.get("ended_at") or now_iso()
-        save_run(record)
+    if _pid_alive(record.get("pid"), record["id"]):
+        return record
+    # Dead pid, not owned here. Re-read before persisting: the reaper only
+    # releases ownership AFTER saving the final status, so a fresh read that
+    # still says "running" is a true orphan, not a reap in progress — without
+    # this, marking orphaned here could overwrite a just-saved terminal
+    # status (a succeeded run then stays 'orphaned' forever).
+    path = run_dir(record["id"]) / "run.json"
+    try:
+        with open(path) as f:
+            record = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return record
+    if record.get("status") != "running":
+        return record
+    record["status"] = "orphaned"
+    record["ended_at"] = record.get("ended_at") or now_iso()
+    save_run(record)
     return record
 
 
