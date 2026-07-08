@@ -302,6 +302,26 @@ gating defect; re-examine an entry if its assumption changes.
 - **Evaluation report omits "± 0.00" when a CI half-width is exactly zero** — cosmetic
   truthiness artifact in `report.py`; harmless.
 
+## Tooling — Poetry → uv migration (2026-07-08)
+
+- Dependency manager switched from Poetry to **uv**. `pyproject.toml` rewritten to PEP 621
+  (`[project]` metadata, `[dependency-groups] dev`, hatchling build backend); constraints
+  translated 1:1 from the old caret ranges. `poetry.lock` replaced by `uv.lock`;
+  `requirements.txt` now exported from the lock (`uv export --no-dev --no-hashes`).
+- Three deps the Poetry env got only transitively are now declared directly:
+  **matplotlib** + **pandas** (imported by active code; the old lock's sb3 2.6.0a2 pulled
+  them, sb3 2.9.0 dropped both) and **numpy `<2`** (wandb 0.16.x uses `np.float_`, removed
+  in NumPy 2.0 — lifting the wandb pin later also lifts this one).
+- Fresh resolution moved several libs forward (sb3 2.6.0a2→2.9.0, newer torch); all suites
+  pass and perf improved 30–60% across the board, so both perf baselines were re-recorded
+  in the migration commit per the baseline convention.
+- `.python-version` pins 3.10 — uv provisions the interpreter itself, so the old
+  "install Poetry + `poetry env use`" sandbox bootstrap is gone; `uv sync` is the whole setup.
+- Updated: CI workflow (astral-sh/setup-uv + `uv sync --locked` + `uv run`, cache keyed on
+  `uv.lock`), `gitio.deps_changed_since` (watches `uv.lock`), README install/usage/badge,
+  emulator README, CLAUDE.md stack + conventions. Toolchain notes in older entries above
+  describe the Poetry-era setup and are left as history.
+
 ## Next
 - Awaiting next numbered feature. Remaining candidate from feature 2: trainer-side wins
   (batch policy forwards are dominated by per-call torch overhead at num_envs=1). From

@@ -53,7 +53,7 @@ def show_file(rev: str, relpath: str) -> Optional[str]:
 def deps_changed_since(rev: str) -> list[str]:
     """Dependency manifests that differ between ``rev`` and the working tree."""
     out = _git(
-        "diff", "--name-only", rev, "--", "pyproject.toml", "poetry.lock", check=False
+        "diff", "--name-only", rev, "--", "pyproject.toml", "uv.lock", check=False
     )
     return out.strip().splitlines() if out and out.strip() else []
 

@@ -108,8 +108,8 @@ Once all machines are configured. Open a new terminal (no need to switch to `fw`
 
 ```
 cd path-to-repo/cyberwheel
-poetry install   # if you have not already installed dependencies
-poetry shell     # enter virtual environment
+uv sync                    # if you have not already installed dependencies
+source .venv/bin/activate  # enter virtual environment
 python3 -m cyberwheel emulate <evaluation-config>.yaml   # run evaluation
 
 # example 

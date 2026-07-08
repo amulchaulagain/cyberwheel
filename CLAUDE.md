@@ -5,7 +5,8 @@ agents on simulated networks. Config-driven; networks are `networkx` graphs. Bas
 ORNL/cyberwheel - treat this file as ground truth and update it whenever structure changes.
 
 ## Stack & tooling
-- Python 3.10. Dependency manager: **Poetry** (`pyproject.toml`, `poetry.lock`).
+- Python 3.10 (pinned in `.python-version`). Dependency manager: **uv** (`pyproject.toml`,
+  `uv.lock`; PEP 621 metadata, hatchling build backend, dev deps in `[dependency-groups]`).
 - RL: Gymnasium env + PyTorch, PPO-style trainer. Tracking: Weights &
   Biases. Network graphs: `networkx`. (graphviz/pygraphviz and Dash/Plotly are retired —
   do not reintroduce them.)
@@ -16,8 +17,8 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   (emits into `cyberwheel/server/static/`) committed in the SAME commit — the committed bundle
   is what `python -m cyberwheel frontend <port>` serves, and the frontend suite's static-serving
   case fails loudly if it is missing.
-- Env note: this sandbox has no system Python 3.10 — it's provisioned via `uv python install 3.10`
-  and Poetry (`uv tool install poetry`; `poetry env use $(uv python find 3.10)`).
+- Env note: this sandbox has no system Python 3.10 — uv provisions a managed 3.10 automatically
+  (`uv sync` creates `.venv/`; run things with `uv run python -m cyberwheel ...`).
 
 ## How to run  — `python3 -m cyberwheel <mode> <config>.yaml`
 - `train`             — trains agent(s); saves to `cyberwheel/data/models/<experiment_name>/`; logs to W&B.
@@ -181,8 +182,9 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 ## Conventions & red lines
 - **Never `git push`. Never add or restore a git remote.** (A hook enforces this; do not
   attempt to disable it.)
-- Dependencies: **Poetry only** — `poetry add <pkg>`; never pip or requirements.txt. Commit
-  the updated `poetry.lock`.
+- Dependencies: **uv only** — `uv add <pkg>`; never pip directly or hand-edited
+  requirements.txt. Commit the updated `pyproject.toml` + `uv.lock` (and regenerate
+  `requirements.txt` via `uv export --no-dev --no-hashes -o requirements.txt`).
 - Follow SOLID. Add new agents / actions / detectors / rewards via config + subclassing, not
   by editing core control flow.
 - One commit per numbered feature; never bundle unrelated changes. Commit locally; never push.

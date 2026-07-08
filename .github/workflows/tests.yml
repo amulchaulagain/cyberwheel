@@ -42,26 +42,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config
 
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.10"
-
-      - name: Install Poetry
-        run: pipx install poetry
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pypoetry
-          key: poetry-${{ runner.os }}-py3.10-${{ hashFiles('poetry.lock') }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
-        run: poetry install --no-interaction
+        run: uv sync --locked
 
       - name: Config suite
-        run: poetry run python -m cyberwheel.tests --suite config --quick --json reports/config.json
+        run: uv run python -m cyberwheel.tests --suite config --quick --json reports/config.json
 
       - name: Smoke suite
-        run: poetry run python -m cyberwheel.tests --suite smoke --json reports/smoke.json
+        run: uv run python -m cyberwheel.tests --suite smoke --json reports/smoke.json
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -83,20 +77,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config
 
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.10"
-
-      - name: Install Poetry
-        run: pipx install poetry
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pypoetry
-          key: poetry-${{ runner.os }}-py3.10-${{ hashFiles('poetry.lock') }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
-        run: poetry install --no-interaction
+        run: uv sync --locked
 
       - name: Resolve parent revision
         id: parent
@@ -120,14 +108,14 @@ jobs:
       - name: Perf gate (same-runner dual measurement vs parent)
         if: steps.parent.outputs.rev != ''
         run: >
-          poetry run python -m cyberwheel.tests --suite perf
+          uv run python -m cyberwheel.tests --suite perf
           --compare-rev "${{ steps.parent.outputs.rev }}"
           --tolerance 0.30
           --json reports/perf.json
 
       - name: Perf run (informational; no parent revision)
         if: steps.parent.outputs.rev == ''
-        run: poetry run python -m cyberwheel.tests --suite perf --json reports/perf.json
+        run: uv run python -m cyberwheel.tests --suite perf --json reports/perf.json
 
       - uses: actions/upload-artifact@v4
         if: always()

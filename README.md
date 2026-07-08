@@ -131,7 +131,7 @@ This environment allows for RL training and evaluations with a large set of conf
 ### Built With
 
 * [![Python][python]][python-url]
-* [![Poetry][poetry]][poetry-url]
+* [![uv][uv]][uv-url]
 * [![Gym][gym]][gym-url]
 * [![W&B][wandb]][wandb-url]
 * [![FastAPI][fastapi]][fastapi-url]
@@ -143,13 +143,11 @@ This environment allows for RL training and evaluations with a large set of conf
 
 ### Prerequisites
 
-* python==3.10
+* uv
 
-This project runs on, and has been tested with, Python 3.10. Once installed, poetry should automatically use this version for its virtual environment.
+Cyberwheel uses [uv](https://docs.astral.sh/uv/) to manage python versions and packages. For instructions on how to install uv, visit their [installation page](https://docs.astral.sh/uv/getting-started/installation/).
 
-* poetry
-
-Cyberwheel uses poetry to manage and install python packages. For instructions on how to install poetry, visit their [installation page](https://python-poetry.org/docs/#installation).
+This project runs on, and has been tested with, Python 3.10 (pinned in `.python-version`). You do not need to install Python yourself — uv downloads a managed 3.10 interpreter automatically when it creates the virtual environment.
 
 ### Installation
 
@@ -163,11 +161,11 @@ Once all dependencies are installed:
    ```sh
    git clone git@github.com:ORNL/cyberwheel.git
    ```
-2. Install packages and resolve dependencies
+2. Install packages and resolve dependencies (creates `.venv/` from the committed `uv.lock`)
     ```sh
-    poetry install
+    uv sync
     ```
-3. (Optional) If running into issues with poetry, you can create your own venv and install from requirements.txt
+3. (Optional) If you cannot use uv, you can create your own venv and install from requirements.txt (exported from `uv.lock`)
     ```sh
     python3.10 -m venv venv
     source venv/bin/activate
@@ -179,16 +177,16 @@ Once all dependencies are installed:
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-To run any cyberwheel scripts, shell into the poetry virtual environment
+To run any cyberwheel scripts, either prefix commands with `uv run`
 ```sh
-poetry shell
+uv run python3 -m cyberwheel ...
 ```
-or activate your venv if not using poetry
+or activate the project virtual environment
 ```sh
-source venv/bin/activate
+source .venv/bin/activate
 ```
 
-When you want to deactivate the environment with poetry, you can just hit **Ctrl+D**. This will exit the virtual environment shell. If using a venv, just run 
+To deactivate the environment, just run
 ```sh
 deactivate
 ```
@@ -400,7 +398,7 @@ All configurations are stored in the `cyberwheel/data/configs` directory. You ca
 
 If you are not familiar with SOLID principles, please read this before contributing. Pretty basic, but makes a huge difference down the road --- [Article on SOLID](https://medium.com/@iclub-ideahub/the-solid-principles-a-guide-to-writing-maintainable-and-extensible-code-in-python-ecac4ea8d7ee).
 
-If you need to add a dependency, this project is packaged with [poetry](https://python-poetry.org/). Please take a few minutes to read about the [basics](https://python-poetry.org/docs/basic-usage/#specifying-dependencies) before adding any dependencies. Do not use pip, do not use requirements.txt. TLDR: use `poetry add <dependency name>`. After adding your dependency, add and commit the new `poetry.lock` file.
+If you need to add a dependency, this project is managed with [uv](https://docs.astral.sh/uv/). Please take a few minutes to read about the [basics](https://docs.astral.sh/uv/concepts/projects/dependencies/) before adding any dependencies. Do not use pip directly, do not hand-edit requirements.txt. TLDR: use `uv add <dependency name>`. After adding your dependency, add and commit the updated `pyproject.toml` and `uv.lock` files (and regenerate `requirements.txt` with `uv export --no-dev --no-hashes -o requirements.txt`).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -457,5 +455,5 @@ Project Link: [https://github.com/ORNL/cyberwheel/](https://github.com/ORNL/cybe
 [wandb-url]: https://wandb.ai/site
 [gym]: https://img.shields.io/badge/gym-000000?style=for-the-badge&logo=openaigym&logoColor=white
 [gym-url]: https://github.com/Farama-Foundation/Gymnasium
-[poetry]: https://img.shields.io/badge/poetry-000000?style=for-the-badge&logo=poetry&logoColor=white
-[poetry-url]: https://python-poetry.org/
+[uv]: https://img.shields.io/badge/uv-261230?style=for-the-badge&logo=uv&logoColor=white
+[uv-url]: https://docs.astral.sh/uv/

@@ -1,45 +1,55 @@
-[tool.poetry]
+[project]
 name = "cyberwheel"
 version = "0.1.0"
 description = "A simulation environment for training autonomous cyber defense agents based on the Mitre Att&ck framework."
-authors = ["Sean Oesch <oeschts@ornl.gov>", "Cory Watson <watsoncl1@ornl.gov>", "Amul Chaulagain <chaulagaina@ornl.gov>", "Matthew Dixson <dixsonmk@ornl.gov>", "Brian Weber <weberb@ornl.gov>", "Phillipe Austria <austriaps@ornl.gov>"]
-license = "MIT"
+authors = [
+    { name = "Sean Oesch", email = "oeschts@ornl.gov" },
+    { name = "Cory Watson", email = "watsoncl1@ornl.gov" },
+    { name = "Amul Chaulagain", email = "chaulagaina@ornl.gov" },
+    { name = "Matthew Dixson", email = "dixsonmk@ornl.gov" },
+    { name = "Brian Weber", email = "weberb@ornl.gov" },
+    { name = "Phillipe Austria", email = "austriaps@ornl.gov" },
+]
+license = { text = "MIT" }
 readme = "README.md"
-repository = "https://github.com/ORNL/cyberwheel/"
 classifiers = ["Private :: Do not Upload"]
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "networkx>=3.2.1,<4",
+    "ipaddress>=1.0.23,<2",
+    "pettingzoo>=1.24.3,<2",
+    "pydantic>=1,<2",
+    "jsonpickle>=3.0.3,<4",
+    "wandb>=0.16.5,<0.17",
+    "tensorboard>=2.16.2,<3",
+    "tqdm>=4.66.2,<5",
+    "ipykernel>=6.29.4,<7",
+    "python-dotenv>=1.0.1,<2",
+    "bigtree>=0.19.3,<0.20",
+    "gymnasium>=1.1.0,<2",
+    "ray>=2.43.0,<3",
+    "stable-baselines3>=2.5.0,<3",
+    "fastapi>=0.110,<0.116",
+    "uvicorn>=0.30,<1.0",
+    "matplotlib>=3.10.1,<4",
+    "pandas>=2.2,<3",
+    "numpy>=1.26.4,<2",
+]
 
-[tool.poetry.dependencies]
-python = "~3.10"
-networkx = "^3.2.1"
-ipaddress = "^1.0.23"
-pettingzoo = "^1.24.3"
-pydantic = "^1"
-jsonpickle = "^3.0.3"
-wandb = "^0.16.5"
-tensorboard = "^2.16.2"
-tqdm = "^4.66.2"
-ipykernel = "^6.29.4"
-python-dotenv = "^1.0.1"
-bigtree = "^0.19.3"
-gymnasium = "^1.1.0"
-ray = "^2.43.0"
-stable-baselines3 = "^2.5.0"
-fastapi = ">=0.110,<0.116"
-uvicorn = ">=0.30,<1.0"
+[project.urls]
+Repository = "https://github.com/ORNL/cyberwheel/"
 
-
-[tool.poetry.group.dev.dependencies]
-black = "^24.2.0"
-pre-commit = "^3.6.2"
-pyright = "^1.1.351"
-py-spy = "^0.3.14"
+[dependency-groups]
+dev = [
+    "black>=24.2.0,<25",
+    "pre-commit>=3.6.2,<4",
+    "pyright>=1.1.351,<2",
+    "py-spy>=0.3.14,<0.4",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools.packages.find]
-where = ['cyberwheel']
-
-[tool.setuptools.package-data]
-cyberwheel = ['*.json', '*.yaml', '*.yml']
+[tool.hatch.build.targets.wheel]
+packages = ["cyberwheel"]
