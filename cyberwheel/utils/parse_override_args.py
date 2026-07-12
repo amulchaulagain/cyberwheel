@@ -42,6 +42,13 @@ def parse(config, mode: str = 'train'):
         if value is not None:
             setattr(args, key, value)
 
+    # 'agents' is a nested map, so the presence-gated loop can't reach
+    # agents.green (the same reason --blue-agent/--red-agent don't reach it).
+    # Green is optional and off by default; apply the flag explicitly.
+    green_agent = getattr(override_args, "green_agent", None)
+    if green_agent and isinstance(getattr(args, "agents", None), dict):
+        args.agents["green"] = green_agent
+
     if args.deterministic:
         os.environ["CYBERWHEEL_DETERMINISTIC"] = 'true'
     else:
@@ -82,6 +89,7 @@ def parse_override_args(print_help: bool = False):
     env_group.add_argument("--train-red", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="toggle if you want to train the red agent")
     env_group.add_argument("--valid-targets", type=str, help="Hosts to consider as valid targets for red agent. Can be: 'HOST_NAME' | 'servers' | 'all'")
     env_group.add_argument("--blue-agent", type=str, help="the blue agent config to train with. Current options: rl_blue_agent.yaml | inactive_blue_agent.yaml")
+    env_group.add_argument("--green-agent", type=str, help="optional green (benign user) agent config from cyberwheel/data/configs/green_agent, e.g. scripted_green.yaml; omit for no green agent")
     env_group.add_argument("--train-blue", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="toggle if you want to train the blue agent")
     env_group.add_argument("--network-config", help="Input the network config filename", type=str)
     env_group.add_argument("--decoy-config", help="Input the decoy config filename", type=str)
@@ -123,6 +131,7 @@ def parse_eval_override_args(print_help: bool = False):
 
     parser.add_argument("--red-agent", type=str, help="the red agent config to evaluate with. Current options: rl_red_agent.yaml | art_agent.yaml | inactive_red_agent.yaml")
     parser.add_argument("--blue-agent", type=str, help="the blue agent config to evaluate with. Current options: rl_blue_agent.yaml | inactive_blue_agent.yaml")
+    parser.add_argument("--green-agent", type=str, help="optional green (benign user) agent config from cyberwheel/data/configs/green_agent, e.g. scripted_green.yaml; omit for no green agent")
     parser.add_argument("--environment", type=str, help="the environment class to use. Current options: CyberwheelRL | Cyberwheel")
     parser.add_argument("--valid-targets", type=str, help="Hosts to consider as valid targets for red agent. Can be: 'HOST_NAME' | 'servers' | 'all'")
     parser.add_argument("--train-red", type=lambda x: bool(strtobool(x)), nargs="?", const=True, help="toggle if you want to train the red agent")

@@ -134,6 +134,8 @@ def _check_environment(path: Path) -> Outcome:
         )
         refs.append(("red_agent", agents["red"]))
         refs.append(("blue_agent", agents["blue"]))
+        if agents.get("green"):
+            refs.append(("green_agent", agents["green"]))
     if kind == "baseline":
         # baseline_runner loads these into agent_config for run mode.
         for key, subdir in (("red_agent", "red_agent"), ("blue_agent", "blue_agent")):
@@ -403,6 +405,65 @@ def _check_blue_agent(path: Path) -> Outcome:
     return Outcome(Status.PASS, f"{len(data['actions'])} actions OK")
 
 
+def _check_green_agent(path: Path) -> Outcome:
+    data = _load(path)
+    check(isinstance(data, dict), "expected a mapping")
+    for key in ("class", "rl"):
+        check(key in data, f"missing key {key!r}")
+    check(data["rl"] is False, "green agents are scripted; 'rl' must be false")
+    _import_cyberwheel_utils()
+    green_agents = importlib.import_module("cyberwheel.green_agents")
+    check(
+        hasattr(green_agents, data["class"]),
+        f"agent class {data['class']!r} not exported by cyberwheel.green_agents",
+    )
+    rate = data.get("session_start_rate_per_100_hosts", 4.0)
+    check(
+        isinstance(rate, (int, float)) and float(rate) >= 0.0,
+        f"'session_start_rate_per_100_hosts' must be a number >= 0: {rate!r}",
+    )
+    length = data.get("session_length", [2, 6])
+    check(
+        isinstance(length, list)
+        and len(length) == 2
+        and all(isinstance(v, int) for v in length)
+        and 1 <= length[0] <= length[1],
+        f"'session_length' must be [lo, hi] ints with 1 <= lo <= hi: {length!r}",
+    )
+    prob = data.get("decoy_touch_probability", 0.0)
+    check(
+        isinstance(prob, (int, float)) and 0.0 <= float(prob) <= 1.0,
+        f"'decoy_touch_probability' {prob!r} not in [0, 1]",
+    )
+    cap = data.get("max_concurrent_sessions", 50)
+    check(
+        isinstance(cap, int) and cap >= 1,
+        f"'max_concurrent_sessions' must be an int >= 1: {cap!r}",
+    )
+    activities = data.get("activities") or {}
+    check(
+        isinstance(activities, dict) and activities,
+        "'activities' must be a non-empty mapping",
+    )
+    for name, spec in activities.items():
+        check(isinstance(spec, dict), f"activity {name!r} must be a mapping")
+        weight = spec.get("weight", 1.0)
+        check(
+            isinstance(weight, (int, float)) and float(weight) >= 0.0,
+            f"activity {name!r}: 'weight' must be a number >= 0: {weight!r}",
+        )
+        technique = spec.get("technique", f"benign_{name}")
+        check(
+            isinstance(technique, str) and technique,
+            f"activity {name!r}: 'technique' must be a non-empty string",
+        )
+    check(
+        any(float(spec.get("weight", 1.0)) > 0 for spec in activities.values()),
+        "at least one activity needs a positive weight",
+    )
+    return Outcome(Status.PASS, f"green agent OK ({len(activities)} activities)")
+
+
 def _network_size(fname: str) -> int:
     prefix = fname.split("-")[0]
     return int(prefix) if prefix.isdigit() else 0
@@ -418,6 +479,7 @@ def register(registry: Registry, ctx: Context) -> None:
         "detector": _check_detector,
         "red_agent": _check_red_agent_shape,
         "blue_agent": _check_blue_agent,
+        "green_agent": _check_green_agent,
         "exploit_severity": _check_exploit_severity,
     }
     for subdir, fn in checks.items():

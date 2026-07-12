@@ -301,6 +301,16 @@ gating defect; re-examine an entry if its assumption changes.
   written) and to the UI preview (layout doesn't use IPs).
 - **Evaluation report omits "± 0.00" when a CI half-width is exactly zero** — cosmetic
   truthiness artifact in `report.py`; harmless.
+- **`--blue-agent`/`--red-agent` CLI flags are silent no-ops on modern configs** —
+  `parse()`'s override loop only applies flags whose key already exists top-level in the
+  env YAML, and modern configs nest agents under `agents:`; the flags parse but never
+  reach `agents.blue`/`agents.red` (this is the CLAUDE.md "agents.* unreachable via
+  flags" note, made concrete). Confirmed 2026-07-12 while wiring `--green-agent`, which
+  IS explicitly applied to `agents.green` in `parse()`. Fixing red/blue the same way
+  would change behavior of existing invocations that pass the flags believing they work
+  (e.g. `smoke:active_defense_e2e` trains the DEFAULT blue agent despite its flag — its
+  in-process sibling case covers the active-defense agent directly, so coverage is real).
+  Deliberately deferred: fix + audit callers as its own commit.
 
 ## Tooling — Poetry → uv migration (2026-07-08)
 
@@ -322,7 +332,59 @@ gating defect; re-examine an entry if its assumption changes.
   emulator README, CLAUDE.md stack + conventions. Toolchain notes in older entries above
   describe the Poetry-era setup and are left as history.
 
+## Feature 4 — green agent (benign noise), phases 0–1 (2026-07-12)
+
+Plan context: a peer-environment comparison (2026-07-12) ranked a green/benign-user agent
+as Cyberwheel's biggest gap (PrimAITE/CAGE4/CSLE all have one). Full 6-phase plan lives in
+the session notes; phases 2–5 = detector FP configs (`benign_*` probabilities), an
+availability-aware blue reward consuming `events_blocked`, an opt-in windowed-count blue
+observation, and eval-metric/frontend polish.
+
+### Phase 0 — Alert mutable-defaults fix (commit `fix: Alert mutable default arguments...`)
+- `Alert.__init__` shared `[]`/`{}` defaults across instances; `add_dst_host` etc. on one
+  Alert would leak into every later bare `Alert(...)`. Latent (all existing callers pass
+  explicit lists) but armed by anything constructing bare Alerts — as the green agent does.
+- Defaults now `None` → per-instance lists; `dst_ips`/`dst_ports` always exist. New smoke
+  case `alert_instance_isolation` guards it.
+
+### Phase 1 — green agent core (this commit)
+- **New package `cyberwheel/green_agents/`**: `GreenAgent` ABC + `GreenAgentResult`
+  (alerts, events_emitted, events_blocked, decoy_touches); `ScriptedGreenAgent` —
+  session-based benign traffic (multi-step bursts, workstation→server, weighted activities
+  tagged `benign_*`); `InactiveGreenAgent` default (zero RNG draws → green-less runs
+  byte-identical, verified via `random.getstate()` in the smoke test).
+- **Env wiring (`cyberwheel_rl.py` only; base env untouched)**: optional `agents: green:`
+  key; green acts after red; alerts merge in
+  `RLBlueAgent.get_observation_space(red_result, green_alerts=...)` (single-alert path
+  unchanged when empty). Eval info/CSV gain `green_events`/`green_blocked`
+  (+`green_decoy_touches` in info); zeros when off.
+- **CLI**: `--green-agent scripted_green.yaml` on train + evaluate, special-cased in
+  `parse()` (the generic override loop can't reach nested `agents.*` — same reason
+  `--blue-agent`/`--red-agent` silently don't; NOT fixed here, see Known issues above).
+- **Config**: `data/configs/green_agent/scripted_green.yaml` — rate per 100 hosts, session
+  length range, concurrency cap (perf guard), `decoy_touch_probability` (default 0),
+  weighted activities → benign technique tags (ProbabilityDetector-compatible for phase 2).
+- **Tests**: config checker for `green_agent/` YAMLs + `agents.green` refs;
+  `smoke:green_agent_mechanics` (RNG-neutral off; obs-bit wiring through the detector;
+  session persistence/expiry; isolation blocking; decoy-touch count; reset; same-seed
+  determinism) and `smoke:green_agent_e2e` (CLI train+evaluate with green: 17 benign events
+  logged; control evaluate without green: columns all zero).
+- **Implementation notes**: draws use `random.choice(pool.data_list)` directly —
+  `HybridSetList.get_random()` reseeds the global RNG under `CYBERWHEEL_DETERMINISTIC`;
+  `network.user_hosts`/`server_hosts` exclude decoys at `add_host`, so green pools are
+  decoy-free by construction and decoy contact only happens via the explicit knob.
+
+### Perf/baseline observation (both phases)
+- Working tree vs HEAD via `--suite perf --compare-rev HEAD` (the framework's same-machine
+  dual measurement): all benchmarks OK. Profiler `--check` exit 0 (rl_step step_ms −0.1%
+  phase 0). Note: the *committed* `train_sps_15host=439` baseline (recorded during the uv
+  migration) is not reproducible on the current sandbox even at HEAD (~330); absolute
+  baseline comparison flags a spurious −37% for ANY change. Use `--compare-rev` locally,
+  as CI does. Baselines intentionally not re-recorded (no intentional perf change).
+
 ## Next
-- Awaiting next numbered feature. Remaining candidate from feature 2: trainer-side wins
-  (batch policy forwards are dominated by per-call torch overhead at num_envs=1). From
-  feature 3: extend the viz writer if multi-red is added (see Known issues).
+- Green agent phases 2–5 (detector FP configs → availability reward + flagship
+  `green_noise_vs_rl_blue.yaml` → opt-in windowed-count blue obs → metrics/frontend).
+- Remaining candidate from feature 2: trainer-side wins (batch policy forwards are
+  dominated by per-call torch overhead at num_envs=1). From feature 3: extend the viz
+  writer if multi-red is added (see Known issues).

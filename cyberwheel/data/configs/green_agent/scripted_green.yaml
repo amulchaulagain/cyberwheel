@@ -1,0 +1,30 @@
+name: scripted_green
+class: ScriptedGreenAgent
+rl: false
+
+# Benign background activity. Hosts run multi-step work sessions; each active
+# session emits one benign event per step (an Alert tagged with the activity's
+# benign technique string), merged into the detector stream alongside the red
+# action's alert. Sessions are bursty on purpose: sustained per-host activity
+# is what makes benign noise hard for a policy to average away.
+session_start_rate_per_100_hosts: 4.0  # expected new sessions per step, scaled by host count
+session_length: [2, 6]                 # steps a session lasts (uniform, inclusive)
+max_concurrent_sessions: 50            # hard cap; also caps benign events per step (perf guard)
+decoy_touch_probability: 0.0           # per-session chance of mistakenly targeting a decoy host
+
+# Relative weights choose a new session's activity. The technique string is
+# the tag detectors key on: e.g. a ProbabilityDetector entry
+# `benign_web_browse: 0.02` turns 2% of browsing events into false positives.
+activities:
+  web_browse:
+    weight: 5
+    technique: benign_web_browse
+  file_share:
+    weight: 3
+    technique: benign_file_share
+  email:
+    weight: 2
+    technique: benign_email
+  service_login:
+    weight: 1
+    technique: benign_service_login

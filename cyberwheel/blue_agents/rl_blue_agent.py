@@ -193,8 +193,15 @@ class RLBlueAgent(BlueAgent):
     def create_action_space(self, action_space_size: int) -> Space:
         return self.action_space.create_action_space(action_space_size)
     
-    def get_observation_space(self, red_agent_result) -> Iterable:
-        alerts = self.observation.detector.obs([red_agent_result.action_results.detector_alert])
+    def get_observation_space(self, red_agent_result, green_alerts=()) -> Iterable:
+        # Red's alert plus any benign green alerts share one detector pass;
+        # the detector stack decides what surfaces (green survivors are the
+        # false positives). Empty green_alerts keeps the legacy single-alert
+        # path bit-for-bit identical.
+        perfect_alerts = [red_agent_result.action_results.detector_alert]
+        if green_alerts:
+            perfect_alerts.extend(green_alerts)
+        alerts = self.observation.detector.obs(perfect_alerts)
         num_decoys_deployed = len(self.network.decoys)
         return self.observation.create_obs_vector(alerts, num_decoys_deployed=num_decoys_deployed)
     

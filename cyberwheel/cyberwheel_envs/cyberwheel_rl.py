@@ -7,7 +7,8 @@ from gymnasium import spaces
 
 from cyberwheel.cyberwheel_envs.cyberwheel import Cyberwheel
 from cyberwheel.network.network_base import Network
-from cyberwheel import red_agents, blue_agents
+from cyberwheel import red_agents, blue_agents, green_agents
+from cyberwheel.green_agents import InactiveGreenAgent
 from cyberwheel.utils import YAMLConfig, HybridSetList
 from cyberwheel.utils.set_seed import set_seed
 from cyberwheel.reward import RLReward
@@ -65,6 +66,15 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         self.blue_agent = getattr(blue_agents, self.args.agent_config["blue"]["class"])(network=self.network, args=self.args)
         self.red_agent = getattr(red_agents, self.args.agent_config["red"]["class"])(network=self.network, args=self.args)
 
+        # Green (benign user) agent is optional: no `agents: green:` key means
+        # the inactive agent, which emits nothing and consumes no RNG draws,
+        # keeping green-less runs byte-identical to pre-green behavior.
+        green_conf = self.args.agent_config.get("green")
+        if green_conf:
+            self.green_agent = getattr(green_agents, green_conf["class"])(network=self.network, args=self.args)
+        else:
+            self.green_agent = InactiveGreenAgent()
+
         if self.args.agent_config["blue"]["rl"]:
             # max() keeps configs without host-typed actions at their historical
             # size, so previously trained policies still load; host-typed
@@ -117,8 +127,11 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         """
         blue_agent_result = self.blue_agent.act(action["blue"]) if "blue" in action and action["blue"] != None else self.blue_agent.act()
         red_agent_result = self.red_agent.act(action["red"]) if "red" in action and action["red"] != None else self.red_agent.act()
+        # Green acts after red so its benign alerts join this step's detector
+        # stream; the blue agent observes red and green through the same pipe.
+        green_agent_result = self.green_agent.act()
 
-        blue_obs_vec = self.blue_agent.get_observation_space(red_agent_result) if self.args.agent_config["blue"]["rl"] else None
+        blue_obs_vec = self.blue_agent.get_observation_space(red_agent_result, green_alerts=green_agent_result.alerts) if self.args.agent_config["blue"]["rl"] else None
         red_obs_vec = self.red_agent.get_observation_space() if self.args.agent_config["red"]["rl"] else None
         
         blue_reward, red_reward = self.reward_calculator.calculate_reward(
@@ -155,6 +168,9 @@ class CyberwheelRL(gym.Env, Cyberwheel):
                 "decoy_attacked": decoy_attacked,
                 "red_reward": red_reward,
                 "blue_reward": blue_reward,
+                "green_events": green_agent_result.events_emitted,
+                "green_blocked": green_agent_result.events_blocked,
+                "green_decoy_touches": green_agent_result.decoy_touches,
             }
         obs = {"blue": blue_obs_vec, "red": red_obs_vec}
         reward = blue_reward + red_reward
@@ -170,6 +186,7 @@ class CyberwheelRL(gym.Env, Cyberwheel):
 
         self.red_agent.reset(self.network, self.args.service_mapping[self.network.name])
         self.blue_agent.reset(self.network)
+        self.green_agent.reset(self.network)
         self.reward_calculator.reset(self.network)
         return {
             "blue": self.blue_agent.observation.obs_vec if self.args.agent_config["blue"]["rl"] else None, 

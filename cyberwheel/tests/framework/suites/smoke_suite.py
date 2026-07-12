@@ -425,7 +425,7 @@ def _smoke_evaluate_batch(run_id: str) -> Outcome:
     )
 
 
-def _build_rl_env(blue_yaml: str):
+def _build_rl_env(blue_yaml: str, green_yaml: str | None = None):
     """Build a CyberwheelRL env on the 15-host net with the given blue agent."""
     import yaml
 
@@ -442,6 +442,8 @@ def _build_rl_env(blue_yaml: str):
     args.seed = 1
     args.deterministic = True
     args.agents = {"red": "rl_red_agent.yaml", "blue": blue_yaml}
+    if green_yaml:
+        args.agents["green"] = green_yaml
     network = Network.create_network_from_yaml(CONFIG_ROOT / "network" / _NETWORK)
     args.service_mapping = {network.name: get_service_map(network)}
     args.agent_config = {}
@@ -976,6 +978,167 @@ def _smoke_alert_instance_isolation() -> Outcome:
     return Outcome(Status.PASS, "Alert instances isolated; convenience fields consistent")
 
 
+def _smoke_green_agent_mechanics() -> Outcome:
+    """Green agent: RNG-neutral when off; sessions, obs wiring, blocking when on."""
+    import random as _random
+    from types import SimpleNamespace
+
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from cyberwheel.green_agents import InactiveGreenAgent, ScriptedGreenAgent
+    from cyberwheel.green_agents.scripted_green_agent import _Session
+    from cyberwheel.red_actions.actions import Nothing
+    from cyberwheel.utils.set_seed import set_seed
+
+    # No `agents: green:` key => inactive agent, zero RNG draws, empty result.
+    env_off, _, _ = _build_rl_env("rl_blue_agent.yaml")
+    check(
+        isinstance(env_off.green_agent, InactiveGreenAgent),
+        "green agent should default to InactiveGreenAgent",
+    )
+    state = _random.getstate()
+    result = env_off.green_agent.act()
+    check(_random.getstate() == state, "inactive green agent consumed RNG draws")
+    check(
+        result.alerts == () and result.events_emitted == 0 and result.events_blocked == 0,
+        "inactive green agent emitted activity",
+    )
+
+    # Green enabled via the agents map.
+    env, net, args = _build_rl_env("rl_blue_agent.yaml", green_yaml="scripted_green.yaml")
+    green = env.green_agent
+    check(isinstance(green, ScriptedGreenAgent), f"expected ScriptedGreenAgent, got {type(green)}")
+
+    # Benign alerts reach the blue observation through the detector stack.
+    host = next(iter(net.hosts.values()))
+    red_stub = SimpleNamespace(action_results=Nothing(host, host).sim_execute())
+    green_result = None
+    for _ in range(30):
+        candidate = green.act()
+        if candidate.alerts:
+            green_result = candidate
+            break
+    check(green_result is not None, "no green events in 30 steps at the shipped rate")
+    obs_vec = env.blue_agent.get_observation_space(red_stub, green_alerts=green_result.alerts)
+    observation = env.blue_agent.observation
+    barrier = observation.len_alerts // 2
+    lit = {i for i in range(barrier) if obs_vec[i] == 1}
+    expected = {observation.mapping[a.src_host.name] for a in green_result.alerts}
+    check(
+        lit == expected,
+        f"green alerts lit obs bits {sorted(lit)}, expected {sorted(expected)}",
+    )
+
+    # Sessions are bursty (persist across steps) and expire on schedule;
+    # isolated endpoints block events and count them.
+    green.rate_per_100 = 0.0
+    src = net.hosts[net.user_hosts.data_list[0]]
+    dst = net.hosts[net.server_hosts.data_list[0]]
+    src.isolated = True
+    green.sessions = [_Session(src, dst, None, "benign_web_browse", 3)]
+    blocked = green.act()
+    check(
+        blocked.events_blocked == 1 and blocked.events_emitted == 0 and not blocked.alerts,
+        "event from an isolated source must be blocked and counted",
+    )
+    src.isolated = False
+    emitted = green.act()
+    check(
+        emitted.events_emitted == 1 and emitted.events_blocked == 0,
+        "restored source should emit again",
+    )
+    check(
+        emitted.alerts[0].src_host is src and emitted.alerts[0].techniques == ["benign_web_browse"],
+        "benign alert src/technique wrong",
+    )
+    check(len(green.sessions) == 1, "session should persist until its length is spent")
+    green.act()
+    check(green.sessions == [], "session should expire after 3 steps")
+
+    # Decoy destinations are counted as decoy touches.
+    dst.decoy = True
+    green.sessions = [_Session(src, dst, None, "benign_email", 1)]
+    check(green.act().decoy_touches == 1, "decoy touch not counted")
+    dst.decoy = False
+
+    # reset() clears sessions.
+    green.sessions = [_Session(src, dst, None, "benign_email", 5)]
+    env.reset(seed=1)
+    check(green.sessions == [], "env reset must clear green sessions")
+
+    # Determinism: identical seeds yield identical benign event streams.
+    def stream(seed: int):
+        set_seed(seed)
+        agent = ScriptedGreenAgent(net, args)
+        events = []
+        for _ in range(20):
+            for alert in agent.act().alerts:
+                events.append((alert.src_host.name, alert.dst_hosts[0].name, alert.techniques[0]))
+        return events
+
+    first, second, other = stream(7), stream(7), stream(8)
+    check(first == second, "green event stream is not deterministic under a fixed seed")
+    check(first != other, "changing the seed did not change the green event stream")
+    return Outcome(
+        Status.PASS,
+        f"inactive agent RNG-neutral; sessions/blocking/decoy/reset OK; "
+        f"{len(first)} deterministic events over 20 steps",
+    )
+
+
+def _smoke_green_agent_e2e(run_id: str) -> Outcome:
+    """Train + evaluate through the CLI with the scripted green agent enabled."""
+    exp = f"{run_id}_green"
+    train = run_cli(
+        [
+            "-m", "cyberwheel", "train", "train_rl_red_agent_vs_rl_blue.yaml",
+            "--experiment-name", exp, "--network-config", _NETWORK,
+            "--green-agent", "scripted_green.yaml",
+            "--total-timesteps", "16", "--num-steps", "8", "--num-envs", "1",
+            "--num-saves", "1", "--num-minibatches", "2", "--update-epochs", "2",
+            "--eval-episodes", "1", "--track", "false", "--device", "cpu",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=900,
+    )
+    check(train.returncode == 0, f"train exited {train.returncode}; stderr: {train.stderr[-800:]}")
+    check_file(DATA_ROOT / "models" / exp / "blue_agent.pt", min_size=1024)
+
+    def _evaluate(graph_name: str, green: bool):
+        argv = [
+            "-m", "cyberwheel", "evaluate", "evaluate_rl_red_vs_rl_blue.yaml",
+            "--experiment-name", exp, "--network-config", _NETWORK,
+            "--num-episodes", "1", "--num-steps", "10", "--graph-name", graph_name,
+            "--download-model", "false", "--visualize", "false",
+            "--seed", "1", "--deterministic", "true",
+        ]
+        if green:
+            argv += ["--green-agent", "scripted_green.yaml"]
+        proc = run_cli(argv, timeout=600)
+        check(proc.returncode == 0, f"evaluate exited {proc.returncode}; stderr: {proc.stderr[-800:]}")
+        csv_path = DATA_ROOT / "action_logs" / f"{graph_name}.csv"
+        check_file(csv_path)
+        with open(csv_path, newline="") as f:
+            rows = list(csv.DictReader(f))
+        check(len(rows) == 10, f"expected 10 action-log rows, got {len(rows)}")
+        for column in ("green_events", "green_blocked"):
+            check(column in rows[0], f"action log missing column {column!r}: {list(rows[0])}")
+        return rows
+
+    rows_on = _evaluate(f"{exp}_eval", green=True)
+    events_on = sum(int(r["green_events"]) for r in rows_on)
+    check(events_on > 0, "green-enabled evaluate logged zero benign events over 10 steps")
+
+    rows_off = _evaluate(f"{exp}_eval_off", green=False)
+    check(
+        all(r["green_events"] == "0" and r["green_blocked"] == "0" for r in rows_off),
+        "green columns must be all zero when no green agent is configured",
+    )
+    return Outcome(
+        Status.PASS,
+        f"green train + evaluate e2e OK ({events_on} benign events logged; off-run all zeros)",
+    )
+
+
 def _smoke_correlation_window_detector() -> Outcome:
     """SIEM correlation-window detector: window/threshold logic + episode reset."""
     import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
@@ -1297,6 +1460,22 @@ def register(registry: Registry, ctx: Context) -> None:
             suite=SUITE,
             fn=_smoke_alert_instance_isolation,
             timeout_s=120.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:green_agent_mechanics",
+            suite=SUITE,
+            fn=_smoke_green_agent_mechanics,
+            timeout_s=300.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:green_agent_e2e",
+            suite=SUITE,
+            fn=(lambda: _smoke_green_agent_e2e(ctx.run_id)),
+            timeout_s=900.0,
         )
     )
     registry.add(

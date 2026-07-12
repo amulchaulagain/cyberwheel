@@ -244,6 +244,10 @@ class RLEvaluator(RLTrainer):
                         actions_df[f"{agent}_action_dest"] = [info[f"{agent}_action_dst"]]
                         actions_df[f"{agent}_reward"] = [info[f"{agent}_reward"]]
                         episode_totals[f"{agent}_reward"] += float(info[f"{agent}_reward"])
+                    # Green (benign user) activity counters; all zeros when no
+                    # green agent is configured.
+                    actions_df["green_events"] = [info.get("green_events", 0)]
+                    actions_df["green_blocked"] = [info.get("green_blocked", 0)]
 
                     actions_df = pd.DataFrame(actions_df)
                     actions_df.to_csv(self.log_file, mode='a', header = os.path.getsize(self.log_file) == 0, index=False)

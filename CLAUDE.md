@@ -81,9 +81,10 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   one-shot `ms` metrics < 1 ms (per-step `ms/step` metrics are gated at any magnitude).
 
 ## Architecture (conceptual — stable)
-- **Env loop (per step):** the red agent acts on a host → the action emits **Alerts** → the
-  blue agent's **detector** layer filters/perturbs those Alerts → Alerts become the blue
-  agent's **observation** → **reward** is computed → repeat.
+- **Env loop (per step):** the red agent acts on a host → the action emits **Alerts** → an
+  optional **green agent** adds benign-activity Alerts to the same stream → the blue agent's
+  **detector** layer filters/perturbs those Alerts → Alerts become the blue agent's
+  **observation** → **reward** is computed → repeat.
 - **Network:** routers → subnets → hosts, as `networkx` nodes. Hosts carry services (ports,
   CVEs, OS). Built from a network config.
 - **Red agents:** (a) *RL red* — observation is a limited network view that expands as it
@@ -91,13 +92,23 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   techniques, validated against a target host's OS / phase / CVEs; (c) *ART campaign* — a fixed
   killchain of specific techniques (used for emulation).
 - **Blue agent:** deploys decoys to slow/stop red; observation = full network + detector alerts.
+- **Green agent (optional):** scripted benign-user noise. Hosts run multi-step work *sessions*
+  (bursty on purpose — i.i.d. noise is a learnable-away bias); each active session emits one
+  benign Alert per step (tagged with `benign_*` technique strings) into the same detector
+  stream as red, so detector config decides which benign events surface as false positives.
+  Off by default and RNG-neutral when off: no `agents: green:` key ⇒ InactiveGreenAgent, zero
+  RNG draws, green-less runs byte-identical. Enable via env config (`agents: green:
+  scripted_green.yaml`) or CLI `--green-agent` (special-cased in `parse()`; the generic
+  override loop can't reach nested `agents.*`). Events to/from isolated hosts are blocked and
+  counted (`events_blocked` — the availability signal for a future disruption-aware reward);
+  evaluate CSVs always carry `green_events`/`green_blocked` columns (zeros when off).
 - **Detectors / Alerts:** a pluggable detector stack that can drop alerts, add noise, or emit
   false positives before they reach the observation.
 - Supports **multi-agent** (train RL red vs RL blue simultaneously) and **multi-network**
   training (fixed obs sizes: small=100 hosts / medium=1000 / large=10000).
 
 ## Where things live
-- `cyberwheel/data/configs/` — all YAML configs, organized by concern: `environment/` (training params + which agents), `red_agent/`, `blue_agent/`,
+- `cyberwheel/data/configs/` — all YAML configs, organized by concern: `environment/` (training params + which agents), `red_agent/`, `blue_agent/`, `green_agent/`,
   plus network, services, host-types, decoys, detectors, and campaign definitions.
 - `cyberwheel/data/models/`, `.../action_logs/`, `.../graphs/` — run artifacts (git-ignored).
 - `cyberwheel/emulator/` — FIREWHEEL emulation setup + its own README.
@@ -128,6 +139,16 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   `utils/exploit_model.py` and gates `ARTKillChainPhase.sim_execute` — RNG-neutral when off.
 - **Blue agent:** `cyberwheel/blue_agents/` — `blue_agent.py`, `rl_blue_agent.py`,
   `random_blue_agent.py`, `inactive_blue_agent.py`; `action_space/` (`action_space.py`, `discrete.py`).
+- **Green agents:** `cyberwheel/green_agents/` — `green_agent_base.py` (`GreenAgent` ABC +
+  `GreenAgentResult`: alerts, events_emitted, events_blocked, decoy_touches),
+  `scripted_green_agent.py` (`ScriptedGreenAgent`: session-based benign traffic; src from
+  `network.user_hosts`, dst from `network.server_hosts` — both decoy-free by construction;
+  draws via `random.choice` on the raw lists because `HybridSetList.get_random` reseeds the
+  global RNG under determinism), `inactive_green_agent.py` (default; zero RNG draws). Config
+  `data/configs/green_agent/scripted_green.yaml` (session rate per 100 hosts, length range,
+  concurrency cap, `decoy_touch_probability`, weighted activities → benign technique tags).
+  Wired in `cyberwheel_rl.py` only (base env untouched): green acts after red, its alerts
+  merge into `RLBlueAgent.get_observation_space(red_result, green_alerts=...)`.
 - **Blue actions:** `cyberwheel/blue_actions/` — `blue_action.py` base (Standalone/Host/Subnet/Range);
   `actions/` (DeployDecoyHost, RemoveDecoyHost, IsolateDecoy, Nothing; active-defense on real hosts:
   QuarantineHost, RestoreHost, PatchHost); `shared_data/`. Active-defense actions ship in the
