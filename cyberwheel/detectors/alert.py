@@ -11,16 +11,16 @@ IPAddress = Union[IPv4Address, IPv6Address, None]
 
 class Alert():
     FIELD_NAMES = set(['src_host', 'dst_hosts', 'services'])
-    def __init__(self, 
-                 src_host: Union[None, Host] = None, 
-                 techniques: List[Technique]=[], 
-                 dst_hosts: List[Host] = [], 
-                 services: List[Service]=[],
-                 user: str="", 
-                 command: str="", 
-                 files: List[Any]=[], 
-                 other_resources: Dict[str, Any]={}, 
-                 os: str="", 
+    def __init__(self,
+                 src_host: Union[None, Host] = None,
+                 techniques: List[Technique] | None = None,
+                 dst_hosts: List[Host] | None = None,
+                 services: List[Service] | None = None,
+                 user: str="",
+                 command: str="",
+                 files: List[Any] | None = None,
+                 other_resources: Dict[str, Any] | None = None,
+                 os: str="",
                  os_version: str=""):
         """
         A class for holding information on actions made by a non-blue agent. (Maybe we'll do a green agent at some point?)
@@ -46,20 +46,23 @@ class Alert():
             - os_version: version of the OS
         """
         
+        # Mutable defaults are materialized per instance: a shared `[]` default
+        # would let add_dst_host/add_service/add_techniques on one Alert leak
+        # into every later Alert constructed without an explicit list.
         self.src_host = src_host
-        self.techniques = techniques 
+        self.techniques = techniques if techniques is not None else []
 
-        self.dst_hosts = dst_hosts
-        self.services = services
+        self.dst_hosts = dst_hosts if dst_hosts is not None else []
+        self.services = services if services is not None else []
 
         if self.src_host is not None: self.src_ip = self.src_host.mac_address
-        if self.dst_hosts is not None: self.dst_ips = [h.mac_address for h in self.dst_hosts]
-        if self.services is not None: self.dst_ports = [s.port for s in self.services]
+        self.dst_ips = [h.mac_address for h in self.dst_hosts]
+        self.dst_ports = [s.port for s in self.services]
 
         self.user = user
         self.command = command
-        self.files = files
-        self.other_resources = other_resources
+        self.files = files if files is not None else []
+        self.other_resources = other_resources if other_resources is not None else {}
         self.os = os
         self.os_version = os_version
 

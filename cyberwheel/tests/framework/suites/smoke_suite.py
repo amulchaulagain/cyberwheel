@@ -949,6 +949,33 @@ def _smoke_network_generator() -> Outcome:
     return Outcome(Status.PASS, "generated network valid, deterministic, and posture-controlled")
 
 
+def _smoke_alert_instance_isolation() -> Outcome:
+    """Alerts built without explicit lists must not share mutable state."""
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from cyberwheel.detectors.alert import Alert
+    from cyberwheel.network.network_base import Network
+
+    network = Network.create_network_from_yaml(CONFIG_ROOT / "network" / _NETWORK)
+    host_a, host_b = list(network.hosts.values())[:2]
+
+    first = Alert(src_host=host_a)
+    first.add_dst_host(host_b)
+    first.add_techniques(["T1018"])
+    second = Alert(src_host=host_b)
+    check(
+        second.dst_hosts == [] and second.dst_ips == [],
+        f"dst_hosts leaked across Alert instances: {second.dst_hosts}",
+    )
+    check(second.techniques == [], f"techniques leaked across Alert instances: {second.techniques}")
+    check(second.services == [] and second.dst_ports == [], "services leaked across Alert instances")
+
+    # dst_ips/dst_ports must always exist, list args or not.
+    explicit = Alert(src_host=host_a, dst_hosts=[host_b], services=[])
+    check(explicit.dst_ips == [host_b.mac_address], f"explicit dst_hosts not mirrored: {explicit.dst_ips}")
+    check(Alert().dst_hosts == [], "bare Alert() should start with empty dst_hosts")
+    return Outcome(Status.PASS, "Alert instances isolated; convenience fields consistent")
+
+
 def _smoke_correlation_window_detector() -> Outcome:
     """SIEM correlation-window detector: window/threshold logic + episode reset."""
     import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
@@ -1262,6 +1289,14 @@ def register(registry: Registry, ctx: Context) -> None:
             suite=SUITE,
             fn=_smoke_network_generator,
             timeout_s=300.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:alert_instance_isolation",
+            suite=SUITE,
+            fn=_smoke_alert_instance_isolation,
+            timeout_s=120.0,
         )
     )
     registry.add(
