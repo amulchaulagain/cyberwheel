@@ -22,3 +22,22 @@ def reward_red_delay(rewarder, **kwargs):
         pass
 
     return b, b_recurring
+
+
+def reward_red_delay_availability(rewarder, **kwargs):
+    """reward_red_delay plus an availability cost: every benign (green) event
+    blocked this step because its source or destination host is isolated
+    costs ``blocked_event_penalty`` (env config key, default 1.0). This is
+    what makes indiscriminate quarantining a losing strategy for blue when a
+    green agent is active — the penalty recurs naturally for as long as the
+    host stays isolated AND users keep trying to reach it, so an idle host
+    stays cheap to quarantine while a busy server is expensive.
+    """
+    b, b_recurring = reward_red_delay(rewarder, **kwargs)
+
+    green_agent_result = kwargs.get("green_agent_result", None)
+    if green_agent_result is not None and green_agent_result.events_blocked:
+        penalty = getattr(rewarder.args, "blocked_event_penalty", 1.0)
+        b -= penalty * green_agent_result.events_blocked
+
+    return b, b_recurring

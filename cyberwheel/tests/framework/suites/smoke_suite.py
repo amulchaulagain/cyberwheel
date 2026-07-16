@@ -1368,6 +1368,161 @@ def _smoke_noisy_detector_e2e(run_id: str) -> Outcome:
     )
 
 
+def _smoke_availability_reward_mechanics() -> Outcome:
+    """Availability reward: blocked benign events cost blue; step() plumbing."""
+    from types import SimpleNamespace
+
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    import cyberwheel.red_agents  # noqa: F401 -- must precede cyberwheel.reward
+    from cyberwheel.blue_agents.blue_agent import BlueAgentResult
+    from cyberwheel.green_agents.green_agent_base import GreenAgentResult
+    from cyberwheel.green_agents.scripted_green_agent import _Session
+    from cyberwheel.reward.rl_reward import RLReward
+
+    red_agent = SimpleNamespace(
+        get_reward_map=lambda: {}, args=SimpleNamespace(num_steps=10)
+    )
+    blue_agent = SimpleNamespace(get_reward_map=lambda: {"nothing": (0.0, 0.0)})
+    network = SimpleNamespace(decoys={}, topology_version=None)
+    red_fail = SimpleNamespace(
+        action=SimpleNamespace(get_name=lambda: "impact"),
+        target_host="invalid",
+        success=False,
+    )
+
+    red_rewards = set()
+
+    def blue_reward(reward_args, green_result) -> float:
+        # Fresh rewarder per call: step counter and recurring ledger reset.
+        rewarder = RLReward(reward_args, red_agent, blue_agent, ["srv1"], network)
+        b, r = rewarder.calculate_reward(
+            blue_agent_result=BlueAgentResult("nothing", "n0", True, 0),
+            red_agent_result=red_fail,
+            green_agent_result=green_result,
+        )
+        red_rewards.add(r)
+        return b
+
+    args = SimpleNamespace(
+        blue_reward_function="reward_red_delay_availability",
+        red_reward_function="reward_decoy_hits",
+        blocked_event_penalty=2.5,
+    )
+    b = blue_reward(args, GreenAgentResult(events_blocked=3))
+    check(b == -7.5, f"3 blocked events at penalty 2.5 should cost -7.5, got {b}")
+    check(
+        blue_reward(args, GreenAgentResult(events_blocked=0)) == 0.0,
+        "zero blocked events must not be penalized",
+    )
+    check(
+        blue_reward(args, None) == 0.0,
+        "no green result (emulator env / green off) must not be penalized",
+    )
+    default_args = SimpleNamespace(
+        blue_reward_function="reward_red_delay_availability",
+        red_reward_function="reward_decoy_hits",
+    )
+    b = blue_reward(default_args, GreenAgentResult(events_blocked=2))
+    check(b == -2.0, f"default penalty should be 1.0/event: expected -2.0, got {b}")
+    check(
+        len(red_rewards) == 1,
+        f"red reward must be unaffected by green results, saw {red_rewards}",
+    )
+
+    # CyberwheelRL.step must hand the green result to the reward calculator.
+    env, net, _ = _build_rl_env("rl_blue_agent.yaml", green_yaml="scripted_green.yaml")
+    captured = {}
+    original = env.reward_calculator.calculate_reward
+
+    def spy(**kwargs):
+        captured["green"] = kwargs.get("green_agent_result")
+        return original(**kwargs)
+
+    env.reward_calculator.calculate_reward = spy
+    green = env.green_agent
+    green.rate_per_100 = 0.0
+    src = net.hosts[net.user_hosts.data_list[0]]
+    dst = net.hosts[net.server_hosts.data_list[0]]
+    src.isolated = True
+    green.sessions = [_Session(src, dst, None, "benign_web_browse", 1)]
+    masks = env.action_mask
+    actions = {
+        agent: next(i for i, ok in enumerate(mask) if ok)
+        for agent, mask in masks.items()
+    }
+    env.step(actions)
+    src.isolated = False
+    result = captured.get("green")
+    check(result is not None, "step() did not pass green_agent_result to the reward")
+    check(
+        result.events_blocked == 1,
+        f"expected 1 blocked event through step(), got {result.events_blocked}",
+    )
+    return Outcome(
+        Status.PASS,
+        "penalty math (2.5x3=-7.5, default 1.0, None/0 free) + step() plumbing OK",
+    )
+
+
+def _smoke_availability_reward_e2e(run_id: str) -> Outcome:
+    """Train + evaluate the flagship green-noise config through the CLI.
+
+    green_noise_vs_rl_blue.yaml is dual-mode (train and evaluate keys in one
+    file), so both CLI modes take it directly — which also proves evaluate
+    runs the active-defense blue agent it was trained with (the --blue-agent
+    flag being a silent no-op makes a same-config evaluate the only safe way).
+    """
+    exp = f"{run_id}_avail"
+    train = run_cli(
+        [
+            "-m", "cyberwheel", "train", "green_noise_vs_rl_blue.yaml",
+            "--experiment-name", exp,
+            "--total-timesteps", "16", "--num-steps", "8", "--num-envs", "1",
+            "--num-saves", "1", "--num-minibatches", "2", "--update-epochs", "2",
+            "--eval-episodes", "1", "--track", "false", "--device", "cpu",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=900,
+    )
+    check(train.returncode == 0, f"train exited {train.returncode}; stderr: {train.stderr[-800:]}")
+    check_file(DATA_ROOT / "models" / exp / "blue_agent.pt", min_size=1024)
+
+    graph_name = f"{exp}_eval"
+    eval_proc = run_cli(
+        [
+            "-m", "cyberwheel", "evaluate", "green_noise_vs_rl_blue.yaml",
+            "--experiment-name", exp,
+            "--num-episodes", "2", "--num-steps", "10", "--graph-name", graph_name,
+            "--download-model", "false", "--visualize", "false",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=600,
+    )
+    check(eval_proc.returncode == 0, f"evaluate exited {eval_proc.returncode}; stderr: {eval_proc.stderr[-800:]}")
+    csv_path = DATA_ROOT / "action_logs" / f"{graph_name}.csv"
+    check_file(csv_path)
+    with open(csv_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    check(len(rows) == 20, f"expected 20 action-log rows (2 episodes x 10 steps), got {len(rows)}")
+    total_green = sum(int(r["green_events"]) for r in rows)
+    check(total_green > 0, "green agent emitted no events across 20 evaluate steps")
+    active_defense_actions = {
+        "nothing", "deploy_decoy", "remove_decoy",
+        "quarantine_host", "restore_host", "patch_host",
+    }
+    seen_actions = {r["blue_action_name"] for r in rows}
+    check(
+        seen_actions <= active_defense_actions,
+        f"evaluate did not run the active-defense blue agent: {seen_actions}",
+    )
+    check_file(DATA_ROOT / "action_logs" / f"{graph_name}.summary.json")
+    return Outcome(
+        Status.PASS,
+        f"flagship config trains + evaluates ({total_green} green events; "
+        f"blue actions {sorted(seen_actions)})",
+    )
+
+
 def _smoke_sweep_grid_expansion() -> Outcome:
     """Sweep grid expansion + status rollup (server-side, torch-free)."""
     from cyberwheel.server.sweeps import MAX_CELLS, expand_grid, rollup_status
@@ -1639,6 +1794,22 @@ def register(registry: Registry, ctx: Context) -> None:
             name="smoke:noisy_detector_e2e",
             suite=SUITE,
             fn=(lambda: _smoke_noisy_detector_e2e(ctx.run_id)),
+            timeout_s=900.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:availability_reward_mechanics",
+            suite=SUITE,
+            fn=_smoke_availability_reward_mechanics,
+            timeout_s=300.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:availability_reward_e2e",
+            suite=SUITE,
+            fn=(lambda: _smoke_availability_reward_e2e(ctx.run_id)),
             timeout_s=900.0,
         )
     )

@@ -136,7 +136,8 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         
         blue_reward, red_reward = self.reward_calculator.calculate_reward(
             blue_agent_result=blue_agent_result,
-            red_agent_result=red_agent_result
+            red_agent_result=red_agent_result,
+            green_agent_result=green_agent_result,
         ) # TODO: Double check that the signs are correct
 
         done = self.current_step == self.max_steps - 1        

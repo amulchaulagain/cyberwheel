@@ -36,7 +36,12 @@ class RLReward(Reward):
         self._valid_targets_cache = None
         self._valid_targets_key = None
 
-    def calculate_reward(self, blue_agent_result: BlueAgentResult, red_agent_result: RedAgentResult) -> int | float:
+    def calculate_reward(
+        self,
+        blue_agent_result: BlueAgentResult,
+        red_agent_result: RedAgentResult,
+        green_agent_result=None,
+    ) -> int | float:
         """
         TODO: Add function header
         """
@@ -45,8 +50,8 @@ class RLReward(Reward):
 
         # Calculate red and blue rewards
         r, r_recurring = self.red_reward_function(self, blue_agent_result=blue_agent_result, red_agent_result=red_agent_result, valid_targets=valid_targets)
-        
-        b, b_recurring = self.blue_reward_function(self, blue_agent_result=blue_agent_result, red_agent_result=red_agent_result, valid_target=valid_targets)
+
+        b, b_recurring = self.blue_reward_function(self, blue_agent_result=blue_agent_result, red_agent_result=red_agent_result, valid_target=valid_targets, green_agent_result=green_agent_result)
 
         # Handle recurring rewards. Blue costs are keyed by action id so that
         # only the matching removal cancels them: remove_decoy can't cancel a

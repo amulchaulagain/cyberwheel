@@ -30,6 +30,7 @@ _BENCHMARKS = (
     ("bench_network_build.py", 600.0),
     ("bench_sim_step.py", 900.0),
     ("bench_rl_step.py", 900.0),
+    ("bench_rl_step_green.py", 900.0),
     ("bench_train_sps.py", 1200.0),
 )
 

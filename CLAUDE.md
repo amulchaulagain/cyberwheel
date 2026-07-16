@@ -63,8 +63,11 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   non-fixes are tracked in PROGRESS.md ("Known issues").
 - Perf benchmarks: `bench_network_build` (200-host), `bench_sim_step` (inactive base env),
   `bench_rl_step` (full RL env step: masks, blue/red actions, detector, obs, reward),
-  `bench_train_sps` (real train CLI). In `--compare-rev` mode a benchmark the compared
-  revision cannot run is skipped there and its metric reported as NEW (not gated).
+  `bench_rl_step_green` (same step path on the flagship `green_noise_vs_rl_blue.yaml`:
+  green sessions + multi-alert noisy-NIDS stream + availability reward — watches the
+  `DetectorHandler` dedup cost), `bench_train_sps` (real train CLI). In `--compare-rev` mode
+  a benchmark the compared revision cannot run is skipped there and its metric reported as
+  NEW (not gated).
 
 ## Profiling — `python3 -m cyberwheel.profiler`
 - Reusable env profiler in `cyberwheel/profiler/`: per-phase wall-time attribution
@@ -100,8 +103,14 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   RNG draws, green-less runs byte-identical. Enable via env config (`agents: green:
   scripted_green.yaml`) or CLI `--green-agent` (special-cased in `parse()`; the generic
   override loop can't reach nested `agents.*`). Events to/from isolated hosts are blocked and
-  counted (`events_blocked` — the availability signal for a future disruption-aware reward);
-  evaluate CSVs always carry `green_events`/`green_blocked` columns (zeros when off).
+  counted (`events_blocked` — the availability signal consumed by the
+  `reward_red_delay_availability` blue reward: each blocked event costs
+  `blocked_event_penalty`, env key, default 1.0, so quarantining a busy server is expensive
+  while an idle host stays cheap); evaluate CSVs always carry `green_events`/`green_blocked`
+  columns (zeros when off). Flagship config `environment/green_noise_vs_rl_blue.yaml` (ART
+  red vs active-defense RL blue + green + `nids_noisy.yaml` + availability reward) is
+  dual-mode: one file works for both `train` and `evaluate` (needed because `--blue-agent`
+  is a silent no-op — evaluate must reuse the exact agent config it was trained with).
 - **Detectors / Alerts:** a pluggable detector stack that can drop alerts, add noise, or emit
   false positives before they reach the observation.
 - Supports **multi-agent** (train RL red vs RL blue simultaneously) and **multi-network**
@@ -173,8 +182,11 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   decoy touches); duplicate detections dedup at `end`.
 - **Observation:** `cyberwheel/observation/` — `observation.py`, `blue_observation.py`,
   `red_observation.py`, `observation_attributes.py`.
-- **Reward:** `cyberwheel/reward/` — `reward_base.py`, `rl_reward.py`, `rl_split_reward.py`,
-  `decoy_reward.py`, `isolate_reward.py`, `blue_reward_functions.py`, `red_reward_functions.py`,
+- **Reward:** `cyberwheel/reward/` — `reward_base.py`, `rl_reward.py` (`calculate_reward`
+  takes an optional `green_agent_result`, forwarded to the blue reward function; the emulator
+  env omits it → None), `rl_split_reward.py`, `decoy_reward.py`, `isolate_reward.py`,
+  `blue_reward_functions.py` (`reward_red_delay`; `reward_red_delay_availability` = same
+  minus `blocked_event_penalty` × green `events_blocked`), `red_reward_functions.py`,
   `step_detected_reward.py`, `step_accomplished.py`.
 - **RL trainer / runners:** `cyberwheel/runners/` — `rl_trainer.py` (trainer), `train_cyberwheel.py`,
   `evaluate_cyberwheel.py`, `rl_evaluator.py`, `rl_handler.py`, `baseline_runner.py`,

@@ -418,11 +418,45 @@ owned by the detector config (not the agent).
   green-less byte-identity are untouched. Perf `--compare-rev HEAD` + profiler `--check`
   clean (see commit).
 
+## Feature 4 — green agent, phase 3: availability reward + flagship config (2026-07-16)
+
+Goal: make blue pay for collateral damage — quarantining hosts that benign users are
+actively using — so detection trades off against availability.
+
+- **Reward plumbing**: `CyberwheelRL.step` now passes the step's `GreenAgentResult` into
+  `RLReward.calculate_reward(green_agent_result=...)`, which forwards it to the blue reward
+  function's kwargs. Optional end to end: the emulator env omits it (→ None), existing
+  functions take `**kwargs`, so every current config is byte-identical.
+- **New blue reward fn** `reward_red_delay_availability` (`blue_reward_functions.py`):
+  `reward_red_delay` minus `blocked_event_penalty` × green `events_blocked` (env key,
+  default 1.0). No new recurring machinery needed — the penalty recurs naturally for as
+  long as the host stays isolated AND sessions keep hitting it, so idle hosts are cheap to
+  quarantine, busy servers expensive.
+- **Flagship config** `environment/green_noise_vs_rl_blue.yaml`: ART red vs
+  `active_defense_blue_agent.yaml` RL blue + `scripted_green.yaml` + `nids_noisy.yaml` +
+  availability reward. **Dual-mode**: carries both train and evaluate keys so ONE file works
+  for both CLI modes — required because `--blue-agent` is a silent no-op, so evaluating a
+  model trained with a non-default blue agent is only safe by reusing the training config.
+  Single-string `network_config` on purpose (a list breaks evaluate's `.split('.')`).
+- **New benchmark** `bench_rl_step_green.py` (registered in the perf suite): full RL step
+  on the flagship config — green sessions, multi-alert noisy-NIDS stream (the
+  `DetectorHandler.obs` O(n²) dedup this exists to watch), active-defense masks,
+  availability reward. ~18.6k steps/s at introduction vs ~37k green-less rl_step on this
+  machine — the gap is the noisy multi-alert path plus ART red (heavier than RL red), not
+  a regression. Metric is NEW vs the committed baseline (ungated this commit); CI's
+  `--compare-rev` gates it from the next commit on. Baseline NOT re-recorded: no existing
+  metric changed (perf `--compare-rev HEAD`: rl_step +0.6%, sim_step -0.7%, train_sps
+  -9.1% [noisy]; profiler `--check` all OK, reward phase -0.5%).
+- **Tests**: `smoke:availability_reward_mechanics` (penalty math 2.5×3=−7.5, default 1.0,
+  None/0 free, red reward untouched; spy on the rewarder proves `step()` passes the green
+  result and a blocked session arrives with `events_blocked==1`) and
+  `smoke:availability_reward_e2e` (CLI train + 2-episode evaluate straight off the flagship
+  config; asserts the evaluate ran the active-defense action set + green columns live).
+  Config suite covers the new YAML automatically (rl-train schema).
+
 ## Next
-- Green agent phases 3–5 (availability reward consuming `events_blocked` + flagship
-  `green_noise_vs_rl_blue.yaml` → opt-in windowed-count blue obs → metrics/frontend).
-  Consider the ungated `bench_rl_step_green` benchmark alongside the phase-3 flagship
-  config; watch `DetectorHandler.obs` O(n²) list dedup now that multi-alert steps are real.
+- Green agent phases 4–5 (opt-in windowed-count blue obs → metrics/frontend: blue
+  precision, green_blocked surfacing).
 - Remaining candidate from feature 2: trainer-side wins (batch policy forwards are
   dominated by per-call torch overhead at num_envs=1). From feature 3: extend the viz
   writer if multi-red is added (see Known issues).
