@@ -382,9 +382,47 @@ observation, and eval-metric/frontend polish.
   baseline comparison flags a spurious −37% for ANY change. Use `--compare-rev` locally,
   as CI does. Baselines intentionally not re-recorded (no intentional perf change).
 
+## Feature 4 — green agent, phase 2: detector FP configs (2026-07-16)
+
+Goal: make green noise actually reach the blue observation as false positives, at rates
+owned by the detector config (not the agent).
+
+- **Enabler — red alerts now carry their technique**: `Alert.techniques` was never
+  populated on the active path (created `[]`, nothing called `add_techniques`), so
+  `ProbabilityDetector` dropped EVERY red alert via the empty-set intersection — which is
+  why no shipped handler config ever used it and everything ran `perfect_detector.yaml`.
+  `ARTKillChainPhase.sim_execute` (covers discovery/privesc/lateral/impact subclasses) +
+  ping sweep (T1018) + port scan (T1046) now stamp the executed `mitre_id` on success.
+  Behavior-neutral otherwise: only `ProbabilityDetector` reads `.techniques`, `Alert.__eq__`
+  and `to_dict` ignore it, zero extra RNG draws.
+- **`import_detector` path resolution** (`handler.py`): a string `config:` that doesn't
+  exist as given resolves against packaged `data/configs/detector/`, so handler YAMLs can
+  reference sibling tables (`config: nids.yaml`) from any CWD. Dicts/absolute paths pass
+  through unchanged.
+- **New configs**: `detector/benign_false_positives.yaml` — per-event FP rate per
+  `benign_*` tag (web_browse .02, file_share .05, email .01, service_login .10,
+  generic .03). `detector/nids_noisy.yaml` — handler graph with three parallel sensors:
+  `nids` (ProbabilityDetector over nids.yaml → red at per-technique rates; benign tags
+  absent → never), `benign_fp` (ProbabilityDetector over the FP table → only green noise),
+  `decoys` (DecoyDetector → decoy interactions always surface); dedup at `end` via
+  `Alert.__eq__`. `scripted_green.yaml`: `decoy_touch_probability` 0.0 → 0.02 (live —
+  green occasionally touches decoys, surfacing as FPs indistinguishable from red hits;
+  decoy REWARD is unaffected: it keys on red action output, not alerts).
+- **Tests**: `smoke:noisy_detector_mechanics` (tag stamping for sweep/scan/generic phase;
+  T1016 surfaced 99/100 at p=.992; untagged + unknown tags 0/50; web_browse 9/400 at .02;
+  decoy touches 20/20; nids+decoy dedup to 1) and `smoke:noisy_detector_e2e` (CLI
+  train+evaluate with `--detector-config nids_noisy.yaml --green-agent scripted_green.yaml`;
+  55 green events over 2×10 eval steps). Config suite validates the new handler graph
+  (instantiates all 3 detectors) and the FP table ([0,1] bounds) automatically.
+- Defaults unchanged (`perfect_detector.yaml` everywhere), so gated perf benchmarks and
+  green-less byte-identity are untouched. Perf `--compare-rev HEAD` + profiler `--check`
+  clean (see commit).
+
 ## Next
-- Green agent phases 2–5 (detector FP configs → availability reward + flagship
+- Green agent phases 3–5 (availability reward consuming `events_blocked` + flagship
   `green_noise_vs_rl_blue.yaml` → opt-in windowed-count blue obs → metrics/frontend).
+  Consider the ungated `bench_rl_step_green` benchmark alongside the phase-3 flagship
+  config; watch `DetectorHandler.obs` O(n²) list dedup now that multi-alert steps are real.
 - Remaining candidate from feature 2: trainer-side wins (batch policy forwards are
   dominated by per-call torch overhead at num_envs=1). From feature 3: extend the viz
   writer if multi-red is added (see Known issues).

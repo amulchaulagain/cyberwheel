@@ -146,7 +146,9 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   draws via `random.choice` on the raw lists because `HybridSetList.get_random` reseeds the
   global RNG under determinism), `inactive_green_agent.py` (default; zero RNG draws). Config
   `data/configs/green_agent/scripted_green.yaml` (session rate per 100 hosts, length range,
-  concurrency cap, `decoy_touch_probability`, weighted activities → benign technique tags).
+  concurrency cap, `decoy_touch_probability` — 0.02 by default, surfacing via DecoyDetector as
+  maximally-confusing FPs — and weighted activities → benign technique tags with per-event FP
+  rates in `detector/benign_false_positives.yaml`, wired via `detector/nids_noisy.yaml`).
   Wired in `cyberwheel_rl.py` only (base env untouched): green acts after red, its alerts
   merge into `RLBlueAgent.get_observation_space(red_result, green_alerts=...)`.
 - **Blue actions:** `cyberwheel/blue_actions/` — `blue_action.py` base (Standalone/Host/Subnet/Range);
@@ -161,7 +163,14 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   host triggers `threshold` alerts within a sliding `window` of steps). Stateful detectors clear
   per-episode state via `Detector.reset()` + `DetectorHandler.reset_detectors()` (episode-only;
   distinct from `handler.reset()`, which clears node buffers every step). Selected by the env
-  `detector_config` key (a handler-graph YAML with `adjacency_list` + `init_info`).
+  `detector_config` key (a handler-graph YAML with `adjacency_list` + `init_info`; a node's
+  `config:` filename resolves against `data/configs/detector/`). `ProbabilityDetector` keys on
+  `Alert.techniques`: red killchain actions stamp their executed `mitre_id` on the detector alert
+  (`ARTKillChainPhase`/ping sweep/port scan; untagged alerts never pass a probability node).
+  `nids_noisy.yaml` is the noisy stack for green-agent runs — parallel sensors: `nids.yaml`
+  (per-technique red detection rates), `benign_false_positives.yaml` (per-event FP rate per
+  `benign_*` tag), and a `DecoyDetector` (decoy interactions always surface, incl. green
+  decoy touches); duplicate detections dedup at `end`.
 - **Observation:** `cyberwheel/observation/` — `observation.py`, `blue_observation.py`,
   `red_observation.py`, `observation_attributes.py`.
 - **Reward:** `cyberwheel/reward/` — `reward_base.py`, `rl_reward.py`, `rl_split_reward.py`,

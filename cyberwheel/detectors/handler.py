@@ -3,6 +3,8 @@ import yaml
 import matplotlib.pyplot as plt
 import networkx as nx
 
+from importlib.resources import files
+from pathlib import Path
 from typing import Iterator
 
 from cyberwheel.detectors.detector_base import Detector
@@ -119,17 +121,23 @@ class DetectorHandler:
         plt.savefig(filename)
 
 
-def import_detector(module: str, class_: str, config: str | None) -> Detector:
+def import_detector(module: str, class_: str, config: str | dict | None) -> Detector:
     """
     Imports the specifed detector.
-    
+
     - `module`: The module this detector is located in.
 
     - `class_`: The detector's class name.
 
-    - `config`: Name of a config file to initialize this detector with.
+    - `config`: Detector-specific config: an inline mapping is passed through
+      as-is; a string names a YAML file, and a bare filename that doesn't exist
+      as given is resolved against the packaged detector config directory
+      (``cyberwheel/data/configs/detector``), so handler YAMLs can reference
+      sibling files like ``nids.yaml`` regardless of the working directory.
     """
     import_path = ".".join(["cyberwheel.detectors.detectors", module])
     m = importlib.import_module(import_path)
-    detector_type = getattr(m, class_)  
+    detector_type = getattr(m, class_)
+    if isinstance(config, str) and not Path(config).exists():
+        config = str(files("cyberwheel.data.configs.detector").joinpath(config))
     return detector_type(config) if config else detector_type()

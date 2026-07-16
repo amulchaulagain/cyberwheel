@@ -60,6 +60,7 @@ class ARTPingSweep(ARTKillChainPhase):
             host.run_command(chosen_test.executor, p, "user")
 
         self.action_results.add_successful_action()
+        self.action_results.detector_alert.add_techniques([mitre_id])
         self.action_results.add_metadata(
             host.name,
             {

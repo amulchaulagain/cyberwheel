@@ -1236,6 +1236,138 @@ def _smoke_correlation_window_e2e(run_id: str) -> Outcome:
     return Outcome(Status.PASS, "correlation-window detector survives train + 2-episode evaluate")
 
 
+def _smoke_noisy_detector_mechanics() -> Outcome:
+    """nids_noisy stack: red technique tagging, benign FP rates, decoy surfacing."""
+    from importlib.resources import files
+
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from cyberwheel.detectors.alert import Alert
+    from cyberwheel.detectors.handler import DetectorHandler
+    from cyberwheel.red_actions.actions import ARTPingSweep, ARTPortScan
+    from cyberwheel.red_actions.actions.art_killchain_phase import ARTKillChainPhase
+    from cyberwheel.utils.set_seed import set_seed
+
+    env, net, _ = _build_rl_env("rl_blue_agent.yaml")
+    red = env.red_agent
+    real_hosts = [h for h in net.hosts.values() if not h.decoy]
+    src, target = real_hosts[0], real_hosts[1]
+
+    # Red actions stamp their executed MITRE technique on the detector alert;
+    # that tag is what a technique-keyed ProbabilityDetector rolls against.
+    sweep = ARTPingSweep(src, target).sim_execute()
+    check(
+        sweep.detector_alert.techniques == ["T1018"],
+        f"pingsweep alert techniques {sweep.detector_alert.techniques} != ['T1018']",
+    )
+    scan = ARTPortScan(src, target).sim_execute()
+    check(
+        scan.detector_alert.techniques == ["T1046"],
+        f"portscan alert techniques {scan.detector_alert.techniques} != ['T1046']",
+    )
+    tid = next(t for lst in red.service_mapping[target.name].values() if lst for t in [lst[0]])
+    phase = ARTKillChainPhase(src, target, valid_techniques=[tid]).sim_execute()
+    check(
+        phase.detector_alert.techniques == [tid],
+        f"killchain alert techniques {phase.detector_alert.techniques} != [{tid!r}]",
+    )
+
+    handler = DetectorHandler(
+        files("cyberwheel.data.configs.detector").joinpath("nids_noisy.yaml")
+    )
+
+    def survivors(alert: Alert, trials: int) -> int:
+        n = 0
+        for _ in range(trials):
+            handler.reset()
+            n += len(handler.obs([alert]))
+        return n
+
+    set_seed(1)
+    # A red technique surfaces at its nids.yaml rate (T1016 is ~0.99).
+    hits = survivors(Alert(src_host=src, techniques=["T1016"], dst_hosts=[target]), 100)
+    check(hits >= 80, f"high-probability red technique surfaced only {hits}/100 times")
+    # Untagged alerts (e.g. a no-op step) and unknown tags never surface.
+    check(
+        survivors(Alert(src_host=src, dst_hosts=[target]), 50) == 0,
+        "untagged alert leaked through the noisy NIDS",
+    )
+    check(
+        survivors(Alert(src_host=src, techniques=["benign_nonsense"], dst_hosts=[target]), 50) == 0,
+        "unknown benign tag leaked through the noisy NIDS",
+    )
+    # Benign events surface at their configured per-event FP rate (2% here).
+    fp = survivors(
+        Alert(src_host=src, techniques=["benign_web_browse"], dst_hosts=[target]), 400
+    )
+    check(0 < fp < 40, f"benign web_browse FPs {fp}/400, expected around 8")
+
+    # Decoy interactions surface unconditionally, and a red alert detected by
+    # both the nids and decoy sensors dedups to a single alert at `end`.
+    target.decoy = True
+    try:
+        touches = survivors(
+            Alert(src_host=src, techniques=["benign_web_browse"], dst_hosts=[target]), 20
+        )
+        check(touches == 20, f"decoy touches surfaced {touches}/20 times, expected all")
+        handler.reset()
+        merged = handler.obs([Alert(src_host=src, techniques=["T1016"], dst_hosts=[target])])
+        check(len(merged) == 1, f"nids+decoy detections must dedup to 1 alert, got {len(merged)}")
+    finally:
+        target.decoy = False
+    return Outcome(
+        Status.PASS,
+        f"red alerts tagged; T1016 surfaced {hits}/100, web_browse FPs {fp}/400, "
+        "decoys always surface and dedup",
+    )
+
+
+def _smoke_noisy_detector_e2e(run_id: str) -> Outcome:
+    """Train + evaluate through the CLI with green noise and the noisy NIDS."""
+    exp = f"{run_id}_noisy"
+    train = run_cli(
+        [
+            "-m", "cyberwheel", "train", "train_rl_red_agent_vs_rl_blue.yaml",
+            "--experiment-name", exp, "--network-config", _NETWORK,
+            "--detector-config", "nids_noisy.yaml",
+            "--green-agent", "scripted_green.yaml",
+            "--total-timesteps", "16", "--num-steps", "8", "--num-envs", "1",
+            "--num-saves", "1", "--num-minibatches", "2", "--update-epochs", "2",
+            "--eval-episodes", "1", "--track", "false", "--device", "cpu",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=900,
+    )
+    check(train.returncode == 0, f"train exited {train.returncode}; stderr: {train.stderr[-800:]}")
+    check_file(DATA_ROOT / "models" / exp / "blue_agent.pt", min_size=1024)
+
+    graph_name = f"{exp}_eval"
+    eval_proc = run_cli(
+        [
+            "-m", "cyberwheel", "evaluate", "evaluate_rl_red_vs_rl_blue.yaml",
+            "--experiment-name", exp, "--network-config", _NETWORK,
+            "--detector-config", "nids_noisy.yaml",
+            "--green-agent", "scripted_green.yaml",
+            "--num-episodes", "2", "--num-steps", "10", "--graph-name", graph_name,
+            "--download-model", "false", "--visualize", "false",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=600,
+    )
+    check(eval_proc.returncode == 0, f"evaluate exited {eval_proc.returncode}; stderr: {eval_proc.stderr[-800:]}")
+    csv_path = DATA_ROOT / "action_logs" / f"{graph_name}.csv"
+    check_file(csv_path)
+    with open(csv_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    check(len(rows) == 20, f"expected 20 action-log rows (2 episodes x 10 steps), got {len(rows)}")
+    total_green = sum(int(r["green_events"]) for r in rows)
+    check(total_green > 0, "green agent emitted no events across 20 evaluate steps")
+    check_file(DATA_ROOT / "action_logs" / f"{graph_name}.summary.json")
+    return Outcome(
+        Status.PASS,
+        f"noisy NIDS + green survives train + 2-episode evaluate ({total_green} green events)",
+    )
+
+
 def _smoke_sweep_grid_expansion() -> Outcome:
     """Sweep grid expansion + status rollup (server-side, torch-free)."""
     from cyberwheel.server.sweeps import MAX_CELLS, expand_grid, rollup_status
@@ -1491,6 +1623,22 @@ def register(registry: Registry, ctx: Context) -> None:
             name="smoke:correlation_window_e2e",
             suite=SUITE,
             fn=(lambda: _smoke_correlation_window_e2e(ctx.run_id)),
+            timeout_s=900.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:noisy_detector_mechanics",
+            suite=SUITE,
+            fn=_smoke_noisy_detector_mechanics,
+            timeout_s=300.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:noisy_detector_e2e",
+            suite=SUITE,
+            fn=(lambda: _smoke_noisy_detector_e2e(ctx.run_id)),
             timeout_s=900.0,
         )
     )

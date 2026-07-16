@@ -1,0 +1,12 @@
+# Per-event false-positive rates for benign green-agent activity, keyed by the
+# technique tags ScriptedGreenAgent stamps on its alerts (see
+# green_agent/scripted_green.yaml `activities`). A ProbabilityDetector loaded
+# with this table surfaces that fraction of benign events as alerts — they
+# reach the blue observation looking exactly like detected red activity.
+# Rates are per event: an active session emits one event per step, so a 6-step
+# file_share session has a ~1-in-4 chance of surfacing at least once.
+benign_web_browse: 0.02
+benign_file_share: 0.05
+benign_email: 0.01
+benign_service_login: 0.10
+benign_generic: 0.03  # fallback tag when a green config defines no activities

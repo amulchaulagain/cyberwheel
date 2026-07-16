@@ -274,6 +274,9 @@ class ARTKillChainPhase(ARTAction):
                     self.valid_techniques
                 )  # Change to look for depending on service
             self.action_results.add_successful_action()
+            # Stamp the executed technique so technique-keyed detectors
+            # (ProbabilityDetector) can roll detection for this alert.
+            self.action_results.detector_alert.add_techniques([mitre_id])
             art_technique = art_techniques.technique_mapping[mitre_id]
 
             processes = []

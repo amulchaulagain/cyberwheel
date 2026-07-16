@@ -1,0 +1,34 @@
+# Noisy NIDS: the detector stack meant for runs with the green agent enabled.
+# Three sensors run in parallel on the same per-step alert stream:
+#   - nids:      ProbabilityDetector over MITRE technique ids (nids.yaml).
+#                Red killchain actions stamp their executed mitre_id on the
+#                alert, so red surfaces at that technique's detection rate;
+#                benign_* tags have no entry here and never surface.
+#   - benign_fp: ProbabilityDetector over benign_* activity tags
+#                (benign_false_positives.yaml) — each rate is that activity's
+#                per-event false-positive probability. Red technique ids have
+#                no entry here, so this node only ever emits green noise.
+#   - decoys:    DecoyDetector — any interaction with a decoy host surfaces
+#                unconditionally, including a green session that rolled
+#                decoy_touch_probability (a false positive indistinguishable
+#                from a real decoy hit). Duplicate detections of the same
+#                event dedup at `end`.
+# Select with `detector_config: nids_noisy.yaml` or `--detector-config`.
+adjacency_list:
+- [start, nids, benign_fp, decoys]
+- [nids, end]
+- [benign_fp, end]
+- [decoys, end]
+init_info:
+  nids:
+    class: ProbabilityDetector
+    module: probability_detector
+    config: nids.yaml
+  benign_fp:
+    class: ProbabilityDetector
+    module: probability_detector
+    config: benign_false_positives.yaml
+  decoys:
+    class: DecoyDetector
+    module: example_detectors
+    config: null
