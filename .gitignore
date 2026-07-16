@@ -201,3 +201,6 @@ frontend/node_modules/
 # Vite/TS build cache
 frontend/tsconfig.tsbuildinfo
 frontend/dist/
+
+# Mac DS Store
+*.DS_Store
