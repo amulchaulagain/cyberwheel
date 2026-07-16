@@ -402,6 +402,22 @@ def _check_blue_agent(path: Path) -> Outcome:
             hasattr(module, action_space["class"]),
             f"action_space class {action_space['class']!r} not in module {action_space['module']!r}",
         )
+    observation = data.get("observation")
+    if observation:
+        check(
+            isinstance(observation, dict) and "class" in observation,
+            "observation key must be a mapping with a 'class'",
+        )
+        obs_module = importlib.import_module("cyberwheel.observation")
+        check(
+            hasattr(obs_module, observation["class"]),
+            f"observation class {observation['class']!r} not exported by cyberwheel.observation",
+        )
+        obs_args = observation.get("args")
+        check(
+            obs_args is None or isinstance(obs_args, dict),
+            "observation args must be a mapping",
+        )
     return Outcome(Status.PASS, f"{len(data['actions'])} actions OK")
 
 

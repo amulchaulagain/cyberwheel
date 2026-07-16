@@ -1523,6 +1523,145 @@ def _smoke_availability_reward_e2e(run_id: str) -> Outcome:
     )
 
 
+def _smoke_windowed_obs_mechanics() -> Outcome:
+    """WindowedBlueObservation: opt-in wiring, window slide/cap/reset, compat invariants."""
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from cyberwheel.detectors.alert import Alert
+    from cyberwheel.observation import BlueObservation, WindowedBlueObservation
+
+    # No `observation:` key => exactly the historical class, so old models load.
+    env_default, _, _ = _build_rl_env("rl_blue_agent.yaml")
+    obs_default = env_default.blue_agent.observation
+    check(
+        type(obs_default) is BlueObservation,
+        f"default blue agent must keep BlueObservation, got {type(obs_default).__name__}",
+    )
+
+    # The observation key swaps in the windowed class without changing the
+    # vector size (same policy input width for a given network-size class).
+    env, net, args = _build_rl_env(
+        "windowed_active_defense_blue_agent.yaml", green_yaml="scripted_green.yaml"
+    )
+    obs = env.blue_agent.observation
+    check(
+        isinstance(obs, WindowedBlueObservation),
+        f"expected WindowedBlueObservation, got {type(obs).__name__}",
+    )
+    check(obs.max_size == obs_default.max_size, "windowed obs changed the obs vector size")
+    expected_high = max(args.max_decoys + 2, obs.count_cap)
+    high = int(env.observation_space["blue"].high[0])
+    check(
+        high == expected_high,
+        f"obs-space high bound should rise to {expected_high} for counts, got {high}",
+    )
+
+    # Window mechanics on a small window: counts accumulate, clamp at the cap,
+    # and expire as the window slides past them.
+    win = WindowedBlueObservation(args, net, obs.detector, window=3, count_cap=2)
+    barrier = win.len_alerts // 2
+    names = sorted(net.hosts.keys())
+    host_a, host_b = net.hosts[names[0]], net.hosts[names[1]]
+    ia, ib = win.mapping[host_a.name], win.mapping[host_b.name]
+
+    def step(alerts):
+        return win.create_obs_vector(alerts, num_decoys_deployed=3)
+
+    vec = step([Alert(src_host=host_a)])
+    check(vec[ia] == 1 and vec[barrier + ia] == 1, "single alert should count once")
+    check(int(vec[-1]) == 3, "standalone num_decoys_deployed attr lost")
+    vec = step([Alert(src_host=host_a), Alert(src_host=host_a)])
+    check(vec[ia] == 1, "current-step bits must stay binary")
+    check(vec[barrier + ia] == 2, f"count should clamp at cap 2, got {vec[barrier + ia]}")
+    vec = step([Alert(src_host=host_b)])
+    check(vec[ia] == 0 and vec[ib] == 1, "current-step bits must refresh each step")
+    check(vec[barrier + ia] == 2 and vec[barrier + ib] == 1, "counts wrong at step 3")
+    vec = step([])
+    check(vec[barrier + ia] == 2, "step-1 hit expired one step early")  # raw 2: step 2's pair
+    vec = step([])
+    check(vec[barrier + ia] == 0 and vec[barrier + ib] == 1, "window slide wrong at step 5")
+    vec = step([])
+    check(vec[barrier + ib] == 0, "step-3 hit should have expired")
+
+    # Alerts from hosts outside the mapping (e.g. decoys) are skipped.
+    ghost = SimpleNamespace(name="ghost_host", mac_address="00:00:00:00:00:00")
+    vec = step([Alert(src_host=ghost)])
+    check(not vec[:barrier].any(), "unknown-host alert must not light any bit")
+
+    # reset clears the window state.
+    step([Alert(src_host=host_a)])
+    win.reset(net)
+    check(
+        not win.obs_vec[: win.len_alerts].any() and not win._counts.any(),
+        "reset must clear windowed counts",
+    )
+
+    # Full env path: stepped observations stay inside the declared Box.
+    env.reset(seed=1)
+    box = env.observation_space["blue"]
+    for i in range(12):
+        step_obs = env.step({"blue": 0, "red": 0})[0]["blue"]
+        check(
+            box.contains(step_obs.astype(np.int32)),
+            f"windowed obs left the observation space at step {i}",
+        )
+    return Outcome(
+        Status.PASS,
+        "opt-in wiring, size/bound invariants, window slide/cap/reset OK",
+    )
+
+
+def _smoke_windowed_obs_e2e(run_id: str) -> Outcome:
+    """Train + evaluate the windowed-observation green-noise config via the CLI.
+
+    green_noise_windowed_obs.yaml is dual-mode like the flagship, so both CLI
+    modes take it directly — proving a model trained under the windowed
+    observation evaluates under the same observation.
+    """
+    exp = f"{run_id}_windowed"
+    train = run_cli(
+        [
+            "-m", "cyberwheel", "train", "green_noise_windowed_obs.yaml",
+            "--experiment-name", exp,
+            "--total-timesteps", "16", "--num-steps", "8", "--num-envs", "1",
+            "--num-saves", "1", "--num-minibatches", "2", "--update-epochs", "2",
+            "--eval-episodes", "1", "--track", "false", "--device", "cpu",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=900,
+    )
+    check(train.returncode == 0, f"train exited {train.returncode}; stderr: {train.stderr[-800:]}")
+    check_file(DATA_ROOT / "models" / exp / "blue_agent.pt", min_size=1024)
+
+    graph_name = f"{exp}_eval"
+    eval_proc = run_cli(
+        [
+            "-m", "cyberwheel", "evaluate", "green_noise_windowed_obs.yaml",
+            "--experiment-name", exp,
+            "--num-episodes", "2", "--num-steps", "10", "--graph-name", graph_name,
+            "--download-model", "false", "--visualize", "false",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=600,
+    )
+    check(eval_proc.returncode == 0, f"evaluate exited {eval_proc.returncode}; stderr: {eval_proc.stderr[-800:]}")
+    csv_path = DATA_ROOT / "action_logs" / f"{graph_name}.csv"
+    check_file(csv_path)
+    with open(csv_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    check(len(rows) == 20, f"expected 20 action-log rows (2 episodes x 10 steps), got {len(rows)}")
+    total_green = sum(int(r["green_events"]) for r in rows)
+    check(total_green > 0, "green agent emitted no events across 20 evaluate steps")
+    check_file(DATA_ROOT / "action_logs" / f"{graph_name}.summary.json")
+    return Outcome(
+        Status.PASS,
+        f"windowed-obs config trains + evaluates ({total_green} green events)",
+    )
+
+
 def _smoke_sweep_grid_expansion() -> Outcome:
     """Sweep grid expansion + status rollup (server-side, torch-free)."""
     from cyberwheel.server.sweeps import MAX_CELLS, expand_grid, rollup_status
@@ -1810,6 +1949,22 @@ def register(registry: Registry, ctx: Context) -> None:
             name="smoke:availability_reward_e2e",
             suite=SUITE,
             fn=(lambda: _smoke_availability_reward_e2e(ctx.run_id)),
+            timeout_s=900.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:windowed_obs_mechanics",
+            suite=SUITE,
+            fn=_smoke_windowed_obs_mechanics,
+            timeout_s=300.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:windowed_obs_e2e",
+            suite=SUITE,
+            fn=(lambda: _smoke_windowed_obs_e2e(ctx.run_id)),
             timeout_s=900.0,
         )
     )

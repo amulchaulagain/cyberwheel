@@ -1,0 +1,77 @@
+# Windowed-observation variant of the flagship green-noise scenario
+# (green_noise_vs_rl_blue.yaml): identical red/green/detector/reward setup,
+# but the blue agent observes sliding-window per-host alert counts
+# (WindowedBlueObservation) instead of sticky ever-alerted bits — counts let
+# blue separate persistent red activity from bursty benign false positives.
+# Kept as a separate config because observation semantics must match between
+# training and evaluation; models trained on the flagship stay on the flagship.
+#
+# Dual-mode config: contains both train and evaluate keys, so the same file
+# works for `python -m cyberwheel train green_noise_windowed_obs.yaml` and
+# `python -m cyberwheel evaluate green_noise_windowed_obs.yaml`.
+
+# Training Parameters
+experiment_name: GreenNoiseWindowedObs
+seed: 1 # The seed to use for the experiment
+deterministic: false # Whether or not the training is deterministic
+device: cpu # Which device to train on
+async_env: true # Whether to run the environments in parallel
+total_timesteps: 1000000000 # Total number of steps to run throughout training
+num_saves: 100 # Number of times the model is evaluated and saved during the training run
+num_envs: 128 # Number of game environments to run at once (parallel if async_env == true)
+num_steps: 100 # Number of steps to run per episode
+eval_episodes: 5 # Number of episodes to run in an evaluation
+debug_mode: false
+
+# Environment Parameters
+environment: CyberwheelRL # Environment class to use
+network_config: 15-host-network.yaml # single network (a list would break evaluate mode)
+host_config: host_defs_services.yaml # Host configuration filename in config/host_definitions
+decoy_config: decoy_hosts.yaml # Decoy configuration filename in config/detector
+
+agents:
+  blue: windowed_active_defense_blue_agent.yaml # active-defense actions + windowed alert-count observation
+  red: art_agent.yaml
+  green: scripted_green.yaml # benign-user sessions; source of events_blocked
+
+campaign: false
+valid_targets: servers
+reward_function: RLReward # The reward function
+blue_reward_function: reward_red_delay_availability
+red_reward_function: reward_decoy_hits
+blocked_event_penalty: 1.0 # blue reward lost per benign event blocked by an isolated host, per step
+detector_config: nids_noisy.yaml # noisy NIDS: red at per-technique rates + benign false positives + decoy sensor
+network_size_compatibility: small
+max_decoys: 5
+
+# Evaluation Parameters (evaluate mode reads these; train mode ignores them)
+checkpoint: agent
+download_model: false
+run: # required if download_model is true
+visualize: false
+graph_name: GreenNoiseWindowedObs
+num_episodes: 10
+
+# RL Parameters
+env_id: cyberwheel # Environment ID
+actor_lr: 2.5e-4
+critic_lr: 2.5e-4
+anneal_lr: cosine_restarts # Whether or not to anneal the learning rate for policy and value networks
+min_lr: 1e-5 # floor LR for both
+restart_Tmult: 1 # next cycle = 200k, then 400k, …
+gamma: 0.995 # The discount factor (gamma value)
+gae_lambda: 0.95 # Lambda for the general advantage estimation
+num_minibatches: 4 # Number of minibatches
+update_epochs: 4 # Number of epochs to update the policy
+norm_adv: true # Whether or not to normalize advantages
+clip_coef: 0.3 # Surrogate clipping coefficient
+clip_vloss: true # Whether to use clipped loss for the value function
+ent_coef: 0.02 # Coefficient of entropy
+vf_coef: 0.5 # Coefficient of the value function
+max_grad_norm: 0.5 # The maximum norm for the gradient clipping
+target_kl: null # The target KL Divergence Threshold
+
+# Weights & Biases Parameters (optional)
+track:
+wandb_project_name: # The W&B project name if tracking
+wandb_entity: # The W&B entity if tracking

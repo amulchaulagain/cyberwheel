@@ -88,7 +88,16 @@ class CyberwheelRL(gym.Env, Cyberwheel):
             self.blue_max_action_space_size = None
         self.red_max_action_space_size = self.args.max_num_hosts * self.red_agent.action_space.num_actions * 2 if self.args.agent_config["red"]["rl"] else None
 
-        self.max_blue_attr_value = self.args.max_decoys + 2 if self.args.agent_config["blue"]["rl"] else None # Max obs attribute is limited to when num_decoys_deployed exceeds max_decoys allowed
+        if self.args.agent_config["blue"]["rl"]:
+            # Legacy ceiling: num_decoys_deployed maxes out at max_decoys (+2 slack).
+            # Observation classes whose values can exceed it (e.g. windowed alert
+            # counts) declare their own ceiling via max_obs_value.
+            self.max_blue_attr_value = max(
+                self.args.max_decoys + 2,
+                getattr(self.blue_agent.observation, "max_obs_value", 0),
+            )
+        else:
+            self.max_blue_attr_value = None
         self.max_red_attr_value = 4 if self.args.agent_config["red"]["rl"] else None # Max obs attribute is limited to the 'quadrant' attribute, which goes up to 4.
 
 

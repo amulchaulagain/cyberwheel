@@ -454,9 +454,42 @@ actively using — so detection trades off against availability.
   config; asserts the evaluate ran the active-defense action set + green columns live).
   Config suite covers the new YAML automatically (rl-train schema).
 
+## Feature 4 — green agent, phase 4: opt-in windowed alert-count blue observation (2026-07-16)
+
+Goal: give blue a richer observation that can separate persistent red activity from bursty
+benign false positives — per-host alert counts over a sliding window instead of the sticky
+ever-alerted bit.
+
+- **Configurable observation class**: blue agent YAML takes an optional `observation:
+  {class, args}` key (`rl_blue_agent.py` resolves the class from `cyberwheel.observation`).
+  Absent ⇒ exactly the historical `BlueObservation`, so every existing config and trained
+  model is untouched.
+- **`WindowedBlueObservation`** (`observation/windowed_blue_observation.py`): same vector
+  size/layout as `BlueObservation` (current-step bits, then one slot per host, then
+  standalone attrs), but the second half holds each host's alert count over the last
+  `window` steps (clamped to `count_cap`, default = window). O(alerts) per step via a
+  deque of per-step hit lists + a running counts array. Declares `max_obs_value =
+  count_cap`; `CyberwheelRL` raises `max_blue_attr_value` (the obs-space high bound, also
+  read by the trainer) to `max(max_decoys + 2, max_obs_value)` — legacy value preserved
+  exactly for classes without `max_obs_value`.
+- **Configs**: `blue_agent/windowed_active_defense_blue_agent.yaml` (active-defense actions
+  + windowed obs, window/cap 10) and dual-mode `environment/green_noise_windowed_obs.yaml`
+  (flagship green-noise scenario with the windowed blue agent). Separate env config on
+  purpose: observation SEMANTICS must match between train and evaluate, and `--blue-agent`
+  is a silent no-op, so flagship-trained models stay on the flagship config.
+- **Tests**: config suite validates the optional `observation:` key (class exported by
+  `cyberwheel.observation`, args a mapping); `smoke:windowed_obs_mechanics` (default class
+  unchanged, size/high-bound invariants, window slide/cap/expiry/reset, unknown-host skip,
+  12 env steps stay inside the Box) and `smoke:windowed_obs_e2e` (CLI train + 2-episode
+  evaluate off the new config). 28/28 smoke, config suite green.
+- **Perf**: default path untouched — perf `--compare-rev HEAD`: rl_step −0.2%,
+  rl_step_green +6.1%, sim_step +2.6%, train_sps −15.3% (noisy, within tolerance);
+  profiler `--check` all 15 metrics OK. Baseline not re-recorded (no intentional perf
+  change).
+
 ## Next
-- Green agent phases 4–5 (opt-in windowed-count blue obs → metrics/frontend: blue
-  precision, green_blocked surfacing).
+- Green agent phase 5 (eval metrics: blue precision, green_blocked surfacing + frontend
+  plumbing).
 - Remaining candidate from feature 2: trainer-side wins (batch policy forwards are
   dominated by per-call torch overhead at num_envs=1). From feature 3: extend the viz
   writer if multi-red is added (see Known issues).

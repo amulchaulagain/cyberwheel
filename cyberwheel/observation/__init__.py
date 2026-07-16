@@ -1,2 +1,3 @@
 from cyberwheel.observation.blue_observation import BlueObservation
 from cyberwheel.observation.red_observation import RedObservation
+from cyberwheel.observation.windowed_blue_observation import WindowedBlueObservation

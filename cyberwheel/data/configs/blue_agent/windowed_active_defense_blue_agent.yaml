@@ -1,0 +1,95 @@
+name: windowed_active_defense_blue_agent
+class: RLBlueAgent
+rl: true
+# Active-defense agent (same actions as active_defense_blue_agent.yaml) with a
+# richer observation: sliding-window per-host alert counts instead of sticky
+# ever-alerted bits, so the agent can tell a persistently alerting host from a
+# one-off false positive. Same observation size — but different semantics, so
+# don't evaluate models trained under another observation with this config.
+observation:
+  class: WindowedBlueObservation
+  args:
+    window: 10 # steps an alert stays in a host's count
+    count_cap: 10 # optional clamp on the reported count (defaults to window)
+actions:
+  nothing: # Unique name for this action
+    class: Nothing # The action class's name
+    configs: # List of config file names this action needs. Must be in cyberwheel/data/configs
+    reward:
+      immediate: 0.0 # Reward gained for executing this action.
+      recurring: 0.0 # Reward gained for on this step and all subsequent steps after taking this action.
+    action_space_args:
+      type: standalone
+    shared_data:
+
+  deploy_decoy:
+    class: DeployDecoyHost
+    configs:
+      decoy_hosts: decoy_server_hosts.yaml
+      host_definitions: host_defs_services.yaml
+      services: windows_exploitable_services.yaml
+    reward:
+      immediate: 0.0
+      recurring: 0.0
+    action_space_args:
+      type: subnet
+    shared_data:
+      - isolate_data
+
+  remove_decoy:
+    module: RemoveDecoyHost
+    class: RemoveDecoyHost
+    configs:
+    reward:
+      immediate: -1.0
+      recurring: 0.0
+    action_space_args:
+      type: subnet
+    shared_data:
+
+  quarantine_host:
+    class: QuarantineHost
+    configs:
+    reward:
+      immediate: -1.0    # one-time cost of pulling a host offline
+      recurring: -2.0    # persistent cost while the host stays quarantined
+    action_space_args:
+      type: host
+    shared_data:
+
+  restore_host:
+    class: RestoreHost
+    configs:
+    reward:
+      immediate: -1.0    # reimage cost; also cancels one quarantine's recurring cost
+      recurring: 0.0
+    action_space_args:
+      type: host
+    shared_data:
+
+  patch_host:
+    class: PatchHost
+    configs:
+    reward:
+      immediate: -2.0    # hardening cost; permanently removes the host's CVEs
+      recurring: 0.0
+    action_space_args:
+      type: host
+    shared_data:
+
+# Shared data is additional data that is shared by blue actions
+# The actions define what data they want to use
+# The type of the data is defined here.
+# Can be a list, set, dict or another object that implements a `clear()` method.
+shared_data:
+  isolate_data:
+    module: cyberwheel.blue_actions.shared_data.IsolateData
+    class: IsolateData
+    # OPTIONAL. Parameters for initializing the class.
+    args:
+      size: 4
+
+action_space:
+  module: discrete
+  class: DiscreteActionSpace
+  args:

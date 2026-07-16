@@ -181,7 +181,16 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   `benign_*` tag), and a `DecoyDetector` (decoy interactions always surface, incl. green
   decoy touches); duplicate detections dedup at `end`.
 - **Observation:** `cyberwheel/observation/` — `observation.py`, `blue_observation.py`,
-  `red_observation.py`, `observation_attributes.py`.
+  `red_observation.py`, `windowed_blue_observation.py`, `observation_attributes.py`.
+  The blue observation class is configurable via an optional `observation: {class, args}`
+  key in the blue agent YAML (resolved against `cyberwheel.observation`; absent ⇒ the
+  historical `BlueObservation`, so old configs/models are untouched).
+  `WindowedBlueObservation` swaps the sticky ever-alerted bits for sliding-window per-host
+  alert counts (`window`/`count_cap` args; same vector size) and declares `max_obs_value`,
+  which `CyberwheelRL` folds into the obs-space high bound (`max_blue_attr_value`).
+  Observation semantics must match between train and evaluate (`--blue-agent` is a silent
+  no-op), hence the separate config pair `blue_agent/windowed_active_defense_blue_agent.yaml`
+  + dual-mode `environment/green_noise_windowed_obs.yaml` (flagship scenario + windowed obs).
 - **Reward:** `cyberwheel/reward/` — `reward_base.py`, `rl_reward.py` (`calculate_reward`
   takes an optional `green_agent_result`, forwarded to the blue reward function; the emulator
   env omits it → None), `rl_split_reward.py`, `decoy_reward.py`, `isolate_reward.py`,

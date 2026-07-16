@@ -50,13 +50,16 @@ class BlueObservation(Observation):
             self.obs_vec[index] = 1
             self.obs_vec[index + barrier] = 1
 
+        self._write_standalone_attrs(kwargs)
+        return self.obs_vec
+
+    def _write_standalone_attrs(self, kwargs) -> None:
         # Add standalone observation attributes to the end of the obs space
         i = len(self.attributes["standalone"])
         for attr in self.attributes["standalone"]:
             obs_value = attr.get_obs_value(kwargs, default=-1)
             self.obs_vec[self.max_size - i] = obs_value
             i -= 1
-        return self.obs_vec
 
     def reset(self, network) -> Iterable:
         self.network = network

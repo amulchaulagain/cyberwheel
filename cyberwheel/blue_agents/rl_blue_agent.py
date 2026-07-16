@@ -9,7 +9,7 @@ from gymnasium import Space
 from cyberwheel.blue_agents.blue_agent import BlueAgent, BlueAgentResult
 from cyberwheel.network.network_base import Network, Host
 from cyberwheel.blue_agents.action_space.action_space import ActionSpace, ASReturn
-from cyberwheel.observation import BlueObservation
+from cyberwheel import observation as observation_module
 
 from cyberwheel.detectors.handler import DetectorHandler
 
@@ -53,7 +53,12 @@ class RLBlueAgent(BlueAgent):
         self.network = network
         detector = DetectorHandler(files("cyberwheel.data.configs.detector").joinpath(args.detector_config))
 
-        self.observation = BlueObservation(args, network, detector)
+        # Observation class is configurable via an optional `observation:` key
+        # in the blue agent YAML; absent, this is exactly the historical
+        # BlueObservation so previously trained policies keep loading.
+        obs_conf = self.args.agent_config["blue"].get("observation") or {}
+        obs_class = getattr(observation_module, obs_conf.get("class", "BlueObservation"))
+        self.observation = obs_class(args, network, detector, **(obs_conf.get("args") or {}))
 
         self.configs: Dict[str, Any] = {}
         self.action_space: ActionSpace = None
