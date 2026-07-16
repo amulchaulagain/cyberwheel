@@ -24,6 +24,12 @@ const METRIC_LABELS: Record<string, string> = {
   total_reward: "Total reward",
   blue_reward: "Blue reward",
   red_reward: "Red reward",
+  green_events: "Green events",
+  green_blocked: "Green blocked",
+  blue_alerts: "Alerts surfaced",
+  alert_precision: "Alert precision",
+  blue_isolations: "Quarantines",
+  blue_precision: "Blue precision",
 };
 
 function SummaryTile({ label, stat }: { label: string; stat: StatBlock }) {

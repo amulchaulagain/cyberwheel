@@ -14,6 +14,16 @@ from typing import Iterable
 from cyberwheel.detectors.alert import Alert
 from cyberwheel.network.network_base import Network
 
+# Green agents tag every event with a technique string carrying this prefix,
+# while red actions stamp MITRE ids — so the prefix is the ground-truth source
+# label on an alert wherever it ends up in the detector pipeline.
+BENIGN_TECHNIQUE_PREFIX = "benign_"
+
+
+def is_benign_alert(alert: Alert) -> bool:
+    """True if the alert is green-sourced (carries a ``benign_*`` technique tag)."""
+    return any(str(t).startswith(BENIGN_TECHNIQUE_PREFIX) for t in alert.techniques)
+
 
 class GreenAgentResult:
     """Outcome of one green step.

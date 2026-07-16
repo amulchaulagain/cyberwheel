@@ -211,10 +211,16 @@ def _smoke_evaluate(run_id: str) -> Outcome:
         f"!= CSV reward sum {csv_total}",
     )
     reward_columns = {c for c in rows[0] if c.endswith("_reward")}
+    # Reward stats mirror the CSV's per-agent reward columns; the activity/
+    # precision metrics (phase-5 eval metrics) are always present.
+    activity_metrics = {
+        "green_events", "green_blocked", "blue_alerts",
+        "alert_precision", "blue_isolations", "blue_precision",
+    }
     check(
-        set(summary["overall"]) == {"total_reward", *reward_columns},
+        set(summary["overall"]) == {"total_reward", *reward_columns, *activity_metrics},
         f"summary metrics {sorted(summary['overall'])} do not match CSV reward "
-        f"columns {sorted(reward_columns)}",
+        f"columns {sorted(reward_columns)} + activity metrics",
     )
 
     # Visualization artifacts (evaluate ran with --visualize true).
@@ -425,8 +431,14 @@ def _smoke_evaluate_batch(run_id: str) -> Outcome:
     )
 
 
-def _build_rl_env(blue_yaml: str, green_yaml: str | None = None):
-    """Build a CyberwheelRL env on the 15-host net with the given blue agent."""
+def _build_rl_env(
+    blue_yaml: str,
+    green_yaml: str | None = None,
+    red_yaml: str = "rl_red_agent.yaml",
+    detector_yaml: str | None = None,
+    evaluation: bool = False,
+):
+    """Build a CyberwheelRL env on the 15-host net with the given agents."""
     import yaml
 
     import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
@@ -441,7 +453,9 @@ def _build_rl_env(blue_yaml: str, green_yaml: str | None = None):
     args.network_config = _NETWORK
     args.seed = 1
     args.deterministic = True
-    args.agents = {"red": "rl_red_agent.yaml", "blue": blue_yaml}
+    if detector_yaml:
+        args.detector_config = detector_yaml
+    args.agents = {"red": red_yaml, "blue": blue_yaml}
     if green_yaml:
         args.agents["green"] = green_yaml
     network = Network.create_network_from_yaml(CONFIG_ROOT / "network" / _NETWORK)
@@ -450,7 +464,9 @@ def _build_rl_env(blue_yaml: str, green_yaml: str | None = None):
     for agent_type in args.agents:
         with open(CONFIG_ROOT / f"{agent_type}_agent" / args.agents[agent_type]) as f:
             args.agent_config[agent_type] = yaml.safe_load(f)
-    env = CyberwheelRL(args, network=network, networks={network.name: network})
+    env = CyberwheelRL(
+        args, network=network, evaluation=evaluation, networks={network.name: network}
+    )
     env.reset(seed=1)
     return env, network, args
 
@@ -1662,6 +1678,177 @@ def _smoke_windowed_obs_e2e(run_id: str) -> Outcome:
     )
 
 
+def _smoke_eval_metrics_mechanics() -> Outcome:
+    """Phase-5 eval metrics: ratio None-filtering, hostile-host ground truth,
+    and step() counter plumbing on the flagship-style env in evaluation mode."""
+    import cyberwheel.utils  # noqa: F401 -- resolves the import-order cycle
+    from cyberwheel.blue_agents.blue_agent import BlueAgentResult
+    from cyberwheel.detectors.alert import Alert
+    from cyberwheel.green_agents import is_benign_alert
+    from cyberwheel.utils.step_metrics import build_evaluation_summary
+
+    # Benign ground-truth label: technique-tag prefix, nothing else.
+    check(is_benign_alert(Alert(techniques=["benign_web_browse"])), "benign tag missed")
+    check(not is_benign_alert(Alert(techniques=["T1018"])), "red mitre id read as benign")
+    check(not is_benign_alert(Alert()), "untagged alert read as benign")
+
+    # Ratio metrics skip None episodes (empty denominator) instead of
+    # polluting the stats; count metrics keep every episode.
+    summary = build_evaluation_summary(
+        seeds=[1], explicit_seeds=True, deterministic=True, num_episodes=2,
+        num_steps=5, graph_name="g", experiment_name="e",
+        metric_names=["total_reward", "blue_precision"],
+        per_episode=[
+            {"episode": 0, "seed": 1, "steps": 5, "total_reward": -3.0, "blue_precision": None},
+            {"episode": 1, "seed": 1, "steps": 5, "total_reward": -1.0, "blue_precision": 1.0},
+        ],
+    )
+    ratio = summary["overall"]["blue_precision"]
+    check(ratio["n"] == 1 and ratio["mean"] == 1.0, f"None episode leaked into ratio stats: {ratio}")
+    check(summary["overall"]["total_reward"]["n"] == 2, "non-ratio metric lost episodes")
+    check(summary["per_seed"][0]["metrics"]["blue_precision"]["n"] == 1, "per-seed block kept the None episode")
+
+    # Flagship-style env (ART red + green + noisy NIDS + active defense) in
+    # evaluation mode — the only mode that computes these counters.
+    env, net, args = _build_rl_env(
+        "active_defense_blue_agent.yaml",
+        green_yaml="scripted_green.yaml",
+        red_yaml="art_agent.yaml",
+        detector_yaml="nids_noisy.yaml",
+        evaluation=True,
+    )
+    red = env.red_agent
+    known = set(red.history.hosts) | {red.current_host.name}
+    fresh = [h for h in net.hosts.values() if not h.decoy and h.name not in known]
+    check(len(fresh) >= 2, "test needs two hosts red has not seen")
+    hostile_host, clean_host = fresh[0], fresh[1]
+
+    # Hostile = red gained execution (discovered/escalated/impacted or red is
+    # there); probes alone (sweep/scan) don't count.
+    khi_cls = type(next(iter(red.history.hosts.values())))
+    marked = khi_cls(ip_address=hostile_host.ip_address)
+    marked.escalated = True
+    red.history.hosts[hostile_host.name] = marked
+    red.history.hosts[clean_host.name] = khi_cls(
+        ip_address=clean_host.ip_address, scanned=True, sweeped=True
+    )
+    check(env._red_touched(hostile_host.name), "escalated host not classified hostile")
+    check(not env._red_touched(clean_host.name), "scan/sweep-only host classified hostile")
+    check(env._red_touched(red.current_host.name), "red's current host must be hostile")
+
+    # step() counts newly quarantined real hosts and judges them at decision
+    # time: drive blue deterministically to quarantine one hostile + one clean
+    # host in a single step.
+    blue = env.blue_agent
+    quarantine = next(
+        ac.action for ac in blue.action_space._action_checkers
+        if ac.name == "quarantine_host"
+    )
+
+    def scripted_act(action=None):
+        blue.observation.detector.reset()
+        first = quarantine.execute(hostile_host)
+        second = quarantine.execute(clean_host)
+        check(first.success and second.success, "test quarantines failed to apply")
+        return BlueAgentResult("quarantine_host", first.id, True, 1, target=first.target)
+
+    blue.act = scripted_act
+    _, _, _, _, info = env.step({"blue": 0})
+    check(info["blue_isolations"] == 2, f"expected 2 isolations, got {info['blue_isolations']}")
+    check(
+        info["blue_hostile_isolations"] == 1,
+        f"expected 1 hostile isolation, got {info['blue_hostile_isolations']}",
+    )
+    surfaced = blue.last_surfaced_alerts
+    check(
+        info["blue_alerts"] == len(surfaced),
+        f"info blue_alerts {info['blue_alerts']} != surfaced {len(surfaced)}",
+    )
+    benign = sum(1 for a in surfaced if is_benign_alert(a))
+    check(
+        info["blue_false_alerts"] == benign,
+        f"info blue_false_alerts {info['blue_false_alerts']} != benign survivors {benign}",
+    )
+    check(
+        0 <= info["blue_false_alerts"] <= info["blue_alerts"],
+        "false-alert count out of range",
+    )
+    return Outcome(
+        Status.PASS,
+        "None-filtering, hostile classification (2 quarantines -> 1 hostile), "
+        f"alert counters ({info['blue_alerts']} surfaced / {info['blue_false_alerts']} benign) OK",
+    )
+
+
+def _smoke_eval_metrics_e2e(run_id: str) -> Outcome:
+    """Evaluate CSV + summary carry the phase-5 metrics end to end (reuses the
+    flagship checkpoint trained by smoke:availability_reward_e2e)."""
+    exp = f"{run_id}_avail"
+    graph_name = f"{exp}_metrics_eval"
+    eval_proc = run_cli(
+        [
+            "-m", "cyberwheel", "evaluate", "green_noise_vs_rl_blue.yaml",
+            "--experiment-name", exp,
+            "--num-episodes", "2", "--num-steps", "10", "--graph-name", graph_name,
+            "--download-model", "false", "--visualize", "false",
+            "--seed", "1", "--deterministic", "true",
+        ],
+        timeout=600,
+    )
+    check(eval_proc.returncode == 0, f"evaluate exited {eval_proc.returncode}; stderr: {eval_proc.stderr[-800:]}")
+
+    csv_path = DATA_ROOT / "action_logs" / f"{graph_name}.csv"
+    check_file(csv_path)
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        fields = reader.fieldnames or []
+        rows = list(reader)
+    step_columns = [
+        "green_events", "green_blocked", "blue_alerts", "blue_false_alerts",
+        "blue_isolations", "blue_hostile_isolations",
+    ]
+    missing = [c for c in step_columns if c not in fields]
+    check(not missing, f"action-log CSV is missing columns: {missing}")
+    for row in rows:
+        check(
+            int(row["blue_false_alerts"]) <= int(row["blue_alerts"]),
+            f"row has more false alerts than alerts: {row}",
+        )
+        check(
+            int(row["blue_hostile_isolations"]) <= int(row["blue_isolations"]),
+            f"row has more hostile isolations than isolations: {row}",
+        )
+    total_alerts = sum(int(r["blue_alerts"]) for r in rows)
+    check(total_alerts > 0, "noisy-NIDS flagship surfaced zero alerts in 20 steps")
+
+    with open(DATA_ROOT / "action_logs" / f"{graph_name}.summary.json") as f:
+        summary = json.load(f)
+    for metric in ("green_events", "green_blocked", "blue_alerts",
+                   "alert_precision", "blue_isolations", "blue_precision"):
+        check(metric in summary["metrics"], f"summary metrics list lacks {metric}")
+        check(metric in summary["overall"], f"summary overall block lacks {metric}")
+    ap = summary["overall"]["alert_precision"]
+    check(
+        ap["mean"] is None or 0.0 <= ap["mean"] <= 1.0,
+        f"alert_precision out of [0,1]: {ap}",
+    )
+    bp = summary["overall"]["blue_precision"]
+    check(
+        bp["mean"] is None or 0.0 <= bp["mean"] <= 1.0,
+        f"blue_precision out of [0,1]: {bp}",
+    )
+    for ep in summary["per_episode"]:
+        check(
+            "blue_hostile_isolations" in ep and "blue_false_alerts" in ep,
+            f"per-episode entry lacks raw counters: {ep}",
+        )
+    return Outcome(
+        Status.PASS,
+        f"eval metrics end to end: {total_alerts} alerts surfaced, "
+        f"alert_precision mean {ap['mean']}, blue_precision mean {bp['mean']}",
+    )
+
+
 def _smoke_sweep_grid_expansion() -> Outcome:
     """Sweep grid expansion + status rollup (server-side, torch-free)."""
     from cyberwheel.server.sweeps import MAX_CELLS, expand_grid, rollup_status
@@ -1966,6 +2153,23 @@ def register(registry: Registry, ctx: Context) -> None:
             suite=SUITE,
             fn=(lambda: _smoke_windowed_obs_e2e(ctx.run_id)),
             timeout_s=900.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:eval_metrics_mechanics",
+            suite=SUITE,
+            fn=_smoke_eval_metrics_mechanics,
+            timeout_s=300.0,
+        )
+    )
+    registry.add(
+        TestCase(
+            name="smoke:eval_metrics_e2e",
+            suite=SUITE,
+            fn=(lambda: _smoke_eval_metrics_e2e(ctx.run_id)),
+            timeout_s=600.0,
+            depends_on="smoke:availability_reward_e2e",
         )
     )
     registry.add(

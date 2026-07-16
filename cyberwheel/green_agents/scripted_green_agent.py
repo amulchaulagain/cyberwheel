@@ -1,7 +1,11 @@
 import random
 
 from cyberwheel.detectors.alert import Alert
-from cyberwheel.green_agents.green_agent_base import GreenAgent, GreenAgentResult
+from cyberwheel.green_agents.green_agent_base import (
+    BENIGN_TECHNIQUE_PREFIX,
+    GreenAgent,
+    GreenAgentResult,
+)
 from cyberwheel.network.network_base import Network
 
 
@@ -53,7 +57,7 @@ class ScriptedGreenAgent(GreenAgent):
             "generic": {"weight": 1.0, "technique": "benign_generic"}
         }
         self._techniques = [
-            str(spec.get("technique", f"benign_{name}"))
+            str(spec.get("technique", f"{BENIGN_TECHNIQUE_PREFIX}{name}"))
             for name, spec in activities.items()
         ]
         self._weights = [float(spec.get("weight", 1.0)) for spec in activities.values()]

@@ -8,7 +8,7 @@ from gymnasium import spaces
 from cyberwheel.cyberwheel_envs.cyberwheel import Cyberwheel
 from cyberwheel.network.network_base import Network
 from cyberwheel import red_agents, blue_agents, green_agents
-from cyberwheel.green_agents import InactiveGreenAgent
+from cyberwheel.green_agents import InactiveGreenAgent, is_benign_alert
 from cyberwheel.utils import YAMLConfig, HybridSetList
 from cyberwheel.utils.set_seed import set_seed
 from cyberwheel.reward import RLReward
@@ -134,7 +134,20 @@ class CyberwheelRL(gym.Env, Cyberwheel):
         4. Get obs from Red or Blue Observation
         5. Return obs and related metadata
         """
+        # Evaluation-only precision bookkeeping (never touches the training
+        # path): snapshot quarantines before blue acts so newly isolated real
+        # hosts can be judged against red's killchain progress at decision time.
+        if self.evaluation:
+            pre_isolated = {h.name for h in self.network.isolated_hosts}
         blue_agent_result = self.blue_agent.act(action["blue"]) if "blue" in action and action["blue"] != None else self.blue_agent.act()
+        if self.evaluation:
+            new_isolations = [
+                h for h in self.network.isolated_hosts
+                if h.name not in pre_isolated and not h.decoy
+            ]
+            hostile_isolations = sum(
+                1 for h in new_isolations if self._red_touched(h.name)
+            )
         red_agent_result = self.red_agent.act(action["red"]) if "red" in action and action["red"] != None else self.red_agent.act()
         # Green acts after red so its benign alerts join this step's detector
         # stream; the blue agent observes red and green through the same pipe.
@@ -182,9 +195,35 @@ class CyberwheelRL(gym.Env, Cyberwheel):
                 "green_blocked": green_agent_result.events_blocked,
                 "green_decoy_touches": green_agent_result.decoy_touches,
             }
+            # Post-detector alerts the blue agent actually saw this step;
+            # benign-tagged survivors are the detector's false positives.
+            surfaced = getattr(self.blue_agent, "last_surfaced_alerts", None) or []
+            false_alerts = sum(1 for a in surfaced if is_benign_alert(a))
+            info["blue_alerts"] = len(surfaced)
+            info["blue_false_alerts"] = false_alerts
+            info["blue_isolations"] = len(new_isolations)
+            info["blue_hostile_isolations"] = hostile_isolations
         obs = {"blue": blue_obs_vec, "red": red_obs_vec}
         reward = blue_reward + red_reward
         return obs, reward, done, False, info
+
+    def _red_touched(self, host_name: str) -> bool:
+        """Ground truth for evaluation precision: has red gained execution on
+        this host? True once red's killchain has progressed on it (discovered/
+        escalated/impacted in the agent's history) or red currently sits on it.
+        Hosts red merely ping-sweeped or port-scanned don't count — isolating
+        them doesn't contain anything. Red agents without a history (e.g. RL
+        red) fall back to the current-position check only."""
+        red = self.red_agent
+        current = getattr(red, "current_host", None)
+        if current is not None and current.name == host_name:
+            return True
+        history = getattr(red, "history", None)
+        known = history.hosts.get(host_name) if history is not None else None
+        return bool(
+            known is not None
+            and (known.discovered or known.escalated or known.impacted or known.on_host)
+        )
 
     def reset(self, seed=None, options=None) -> tuple[Iterable, dict]:
         if seed is not None:

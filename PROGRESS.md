@@ -487,9 +487,50 @@ ever-alerted bit.
   profiler `--check` all 15 metrics OK. Baseline not re-recorded (no intentional perf
   change).
 
+## Feature 4 — green agent, phase 5: evaluation precision metrics + frontend surfacing (2026-07-16)
+
+**Status:** complete — the green-agent plan's final phase.
+
+- **Per-step counters** (evaluation mode only; the training path and gated benchmarks
+  construct the env with `evaluation=False` and are untouched):
+  - `blue_alerts` / `blue_false_alerts` — post-detector alerts the blue agent actually saw;
+    `RLBlueAgent.get_observation_space` keeps a reference to the surfaced list
+    (`last_surfaced_alerts`, O(1)), and green's `benign_*` technique tags are the ground-truth
+    source label (`is_benign_alert` / `BENIGN_TECHNIQUE_PREFIX` exported from
+    `green_agents`), so benign survivors = the detector stack's false positives.
+  - `blue_isolations` / `blue_hostile_isolations` — newly quarantined real hosts, detected
+    structurally by diffing `network.isolated_hosts` around blue's act (no action-name
+    matching; decoys excluded) and judged at decision time (before red's move) by
+    `CyberwheelRL._red_touched`: hostile ⇔ red gained execution (history discovered/
+    escalated/impacted/on_host, or red's current host). Ping-sweeped/port-scanned-only
+    hosts deliberately don't count — isolating them contains nothing. RL red has no
+    history → falls back to the current-position check.
+- **Evaluator/summary**: the six counters are per-step CSV columns (always present, zeros
+  when N/A — same convention as `green_events`) and per-episode sums; per-episode derived
+  ratios `alert_precision` ((alerts−false)/alerts) and `blue_precision` (hostile/isolations)
+  are None when the denominator is 0. `build_evaluation_summary` now excludes None values
+  per metric, so a ratio's stat-block `n` can be < episode count (format kept at version 1 —
+  additive). Summary `metrics` list adds: green_events, green_blocked, blue_alerts,
+  alert_precision, blue_isolations, blue_precision (raw false-alert/hostile counts stay
+  per-episode-only to keep the tile row readable).
+- **Frontend**: server report + compare view + summary panel already render metric lists
+  generically; the only SPA change is `METRIC_LABELS` entries (EvaluationRunPage) + rebuilt
+  bundle. ComparePage intentionally shows raw metric keys (config-diff style).
+- **Tests**: `smoke:eval_metrics_mechanics` (benign-tag classifier, summary None-filtering,
+  hostile-vs-scanned classification, and a scripted double-quarantine step asserting
+  2 isolations / 1 hostile + alert-counter consistency) and `smoke:eval_metrics_e2e`
+  (fresh evaluate off the flagship checkpoint via `depends_on:
+  smoke:availability_reward_e2e`; asserts CSV columns, row-wise invariants, summary metric
+  blocks, ratios in [0,1]). `_build_rl_env` grew `red_yaml`/`detector_yaml`/`evaluation`
+  params (defaults preserve old callers).
+- **Perf**: eval-only branches; perf suite `--compare-rev HEAD` + profiler `--check` run
+  sequentially (see phase-3 gotcha) — numbers in the phase-5 commit message. Baseline not
+  re-recorded (no intentional perf change).
+
 ## Next
-- Green agent phase 5 (eval metrics: blue precision, green_blocked surfacing + frontend
-  plumbing).
+- Green-agent plan complete (phases 0–5). Follow-ups from the env-comparison backlog:
+  benchmark/leaderboard packaging (frozen configs + seeds + the new precision metrics make
+  a citable challenge feasible), firewall/ACL-enforced blue action.
 - Remaining candidate from feature 2: trainer-side wins (batch policy forwards are
   dominated by per-call torch overhead at num_envs=1). From feature 3: extend the viz
   writer if multi-red is added (see Known issues).

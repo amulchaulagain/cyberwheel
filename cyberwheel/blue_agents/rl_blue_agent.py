@@ -62,6 +62,9 @@ class RLBlueAgent(BlueAgent):
 
         self.configs: Dict[str, Any] = {}
         self.action_space: ActionSpace = None
+        # The post-detector alerts from the most recent observation, kept as a
+        # plain reference (no copy) so evaluation can report what blue saw.
+        self.last_surfaced_alerts: List = []
 
         self.from_yaml()
         self._init_blue_actions()
@@ -207,6 +210,7 @@ class RLBlueAgent(BlueAgent):
         if green_alerts:
             perfect_alerts.extend(green_alerts)
         alerts = self.observation.detector.obs(perfect_alerts)
+        self.last_surfaced_alerts = alerts
         num_decoys_deployed = len(self.network.decoys)
         return self.observation.create_obs_vector(alerts, num_decoys_deployed=num_decoys_deployed)
     
@@ -214,5 +218,6 @@ class RLBlueAgent(BlueAgent):
         for v in self.shared_data.values():
             v.clear()
         self.decoys_deployed = 0
+        self.last_surfaced_alerts = []
         self.network = network
         self.observation.reset(network)

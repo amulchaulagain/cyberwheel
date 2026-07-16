@@ -23,8 +23,9 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 ## How to run  — `python3 -m cyberwheel <mode> <config>.yaml`
 - `train`             — trains agent(s); saves to `cyberwheel/data/models/<experiment_name>/`; logs to W&B.
 - `evaluate`          — evaluates a trained run; writes `cyberwheel/data/action_logs/<name>.csv`
-                        plus `<name>.summary.json` (per-episode/per-seed/overall reward stats with
-                        95% Student-t CIs); if `visualize: true`, also writes `cyberwheel/data/graphs/<name>/`.
+                        plus `<name>.summary.json` (per-episode/per-seed/overall stats with 95%
+                        Student-t CIs over rewards, green activity, and precision — see the green
+                        agent bullet); if `visualize: true`, also writes `cyberwheel/data/graphs/<name>/`.
                         Optional `seeds:` list (or `--seeds 1,2,3`) runs a multi-seed batch in one
                         process — one CSV/viz dir with a global episode index + `seed` column; each
                         seed reseeds its episode block regardless of `deterministic`. Served by
@@ -106,8 +107,16 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
   counted (`events_blocked` — the availability signal consumed by the
   `reward_red_delay_availability` blue reward: each blocked event costs
   `blocked_event_penalty`, env key, default 1.0, so quarantining a busy server is expensive
-  while an idle host stays cheap); evaluate CSVs always carry `green_events`/`green_blocked`
-  columns (zeros when off). Flagship config `environment/green_noise_vs_rl_blue.yaml` (ART
+  while an idle host stays cheap). Evaluation metrics (eval-only, never in the training
+  path): per-step CSV columns `green_events`/`green_blocked`/`blue_alerts`/`blue_false_alerts`
+  /`blue_isolations`/`blue_hostile_isolations` (always present, zeros when N/A) and summary
+  stats `alert_precision` (share of post-detector alerts that were red — green tags every
+  alert `benign_*`, `is_benign_alert` in `green_agents`, so surviving benign alerts are the
+  false positives) and `blue_precision` (share of blue's quarantines that hit hosts red had
+  gained execution on: history discovered/escalated/impacted or red's current host — probes
+  alone don't count; `CyberwheelRL._red_touched`). Ratio metrics are None on episodes with an
+  empty denominator and those episodes are excluded from their stat blocks (`n` shrinks).
+  Flagship config `environment/green_noise_vs_rl_blue.yaml` (ART
   red vs active-defense RL blue + green + `nids_noisy.yaml` + availability reward) is
   dual-mode: one file works for both `train` and `evaluate` (needed because `--blue-agent`
   is a silent no-op — evaluate must reuse the exact agent config it was trained with).
@@ -149,7 +158,9 @@ ORNL/cyberwheel - treat this file as ground truth and update it whenever structu
 - **Blue agent:** `cyberwheel/blue_agents/` — `blue_agent.py`, `rl_blue_agent.py`,
   `random_blue_agent.py`, `inactive_blue_agent.py`; `action_space/` (`action_space.py`, `discrete.py`).
 - **Green agents:** `cyberwheel/green_agents/` — `green_agent_base.py` (`GreenAgent` ABC +
-  `GreenAgentResult`: alerts, events_emitted, events_blocked, decoy_touches),
+  `GreenAgentResult`: alerts, events_emitted, events_blocked, decoy_touches; also
+  `BENIGN_TECHNIQUE_PREFIX`/`is_benign_alert` — the ground-truth source label evaluation
+  precision keys on),
   `scripted_green_agent.py` (`ScriptedGreenAgent`: session-based benign traffic; src from
   `network.user_hosts`, dst from `network.server_hosts` — both decoy-free by construction;
   draws via `random.choice` on the raw lists because `HybridSetList.get_random` reseeds the

@@ -74,16 +74,24 @@ def build_evaluation_summary(
     ``per_episode`` holds one dict per episode in seed-block order; seeds are
     grouped positionally (num_episodes-sized slices), which stays correct even
     if the same seed value appears twice.
+
+    A metric may be None for an episode (ratio metrics like blue_precision
+    when the denominator was zero); such episodes are excluded from that
+    metric's stats, so a stat block's ``n`` can be smaller than the episode
+    count.
     """
+    def stats(episodes: list, metric: str) -> dict:
+        return mean_std_ci95(
+            [ep[metric] for ep in episodes if ep.get(metric) is not None]
+        )
+
     per_seed = []
     for i, seed in enumerate(seeds):
         block = per_episode[i * num_episodes:(i + 1) * num_episodes]
         per_seed.append({
             "seed": seed,
             "episodes": len(block),
-            "metrics": {
-                m: mean_std_ci95([ep[m] for ep in block]) for m in metric_names
-            },
+            "metrics": {m: stats(block, m) for m in metric_names},
         })
     return {
         "format_version": SUMMARY_FORMAT_VERSION,
@@ -98,9 +106,7 @@ def build_evaluation_summary(
         "metrics": list(metric_names),
         "per_episode": per_episode,
         "per_seed": per_seed,
-        "overall": {
-            m: mean_std_ci95([ep[m] for ep in per_episode]) for m in metric_names
-        },
+        "overall": {m: stats(per_episode, m) for m in metric_names},
     }
 
 

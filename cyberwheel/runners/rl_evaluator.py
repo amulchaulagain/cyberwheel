@@ -196,7 +196,23 @@ class RLEvaluator(RLTrainer):
             self.action_mask[agent] = torch.zeros(self.agents[agent]["max_action_space_size"], dtype=torch.bool).to(self.device)
             self.rewards[agent] = [0] * self.args.num_episodes
 
-        metric_names = ["total_reward"] + [f"{agent}_reward" for agent in self.agents]
+        reward_metrics = ["total_reward"] + [f"{agent}_reward" for agent in self.agents]
+        # Per-step counters summed into per-episode totals. All zeros when the
+        # run has no green agent / no host-isolating blue action, so the
+        # summary schema is uniform across scenarios.
+        count_metrics = [
+            "green_events", "green_blocked",
+            "blue_alerts", "blue_false_alerts",
+            "blue_isolations", "blue_hostile_isolations",
+        ]
+        # Summary stat blocks: rewards, activity counts, and the two derived
+        # precision ratios (episodes with an empty denominator contribute
+        # nothing to a ratio's stats — see build_evaluation_summary).
+        metric_names = reward_metrics + [
+            "green_events", "green_blocked",
+            "blue_alerts", "alert_precision",
+            "blue_isolations", "blue_precision",
+        ]
         per_episode = []
         global_episode = 0
 
@@ -211,7 +227,8 @@ class RLEvaluator(RLTrainer):
                     obs, _ = self.env.reset()
                 if self.viz:
                     self.viz.start_episode(global_episode)
-                episode_totals = {m: 0.0 for m in metric_names}
+                episode_totals = {m: 0.0 for m in reward_metrics}
+                episode_counts = {m: 0 for m in count_metrics}
                 for step in range(self.args.num_steps):
                     action = None
                     actions = {}
@@ -244,21 +261,36 @@ class RLEvaluator(RLTrainer):
                         actions_df[f"{agent}_action_dest"] = [info[f"{agent}_action_dst"]]
                         actions_df[f"{agent}_reward"] = [info[f"{agent}_reward"]]
                         episode_totals[f"{agent}_reward"] += float(info[f"{agent}_reward"])
-                    # Green (benign user) activity counters; all zeros when no
-                    # green agent is configured.
-                    actions_df["green_events"] = [info.get("green_events", 0)]
-                    actions_df["green_blocked"] = [info.get("green_blocked", 0)]
+                    # Green (benign user) activity + blue precision counters;
+                    # all zeros when the scenario doesn't produce them.
+                    for m in count_metrics:
+                        value = int(info.get(m, 0))
+                        episode_counts[m] += value
+                        actions_df[m] = [value]
 
                     actions_df = pd.DataFrame(actions_df)
                     actions_df.to_csv(self.log_file, mode='a', header = os.path.getsize(self.log_file) == 0, index=False)
 
                 if self.viz:
                     self.viz.end_episode()
+                # Precision ratios: of what the detector surfaced, how much was
+                # really red (alert_precision); of the hosts blue quarantined,
+                # how many red had actually gained execution on (blue_precision).
+                # None (not 0) when the episode had no alerts / no quarantines.
+                alerts = episode_counts["blue_alerts"]
+                isolations = episode_counts["blue_isolations"]
                 per_episode.append({
                     "episode": global_episode,
                     "seed": seed,
                     "steps": self.args.num_steps,
                     **{m: round(v, 4) for m, v in episode_totals.items()},
+                    **episode_counts,
+                    "alert_precision": round(
+                        (alerts - episode_counts["blue_false_alerts"]) / alerts, 4
+                    ) if alerts else None,
+                    "blue_precision": round(
+                        episode_counts["blue_hostile_isolations"] / isolations, 4
+                    ) if isolations else None,
                 })
                 global_episode += 1
 
