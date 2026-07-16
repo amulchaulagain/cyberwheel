@@ -11,26 +11,29 @@ import NewSweepPage from "./pages/NewSweepPage";
 import NewTrainingPage from "./pages/NewTrainingPage";
 import SweepPage from "./pages/SweepPage";
 import TrainingRunPage from "./pages/TrainingRunPage";
+import logoUrl from "./logo.png"; // adjust path to where your file actually sits
 
 function Logo() {
   return (
     <div className="flex items-center gap-2.5 px-4 py-5">
       <svg viewBox="0 0 32 32" className="h-7 w-7">
-        <circle cx="16" cy="16" r="13" fill="none" stroke="#5eb0ff" strokeWidth="3" />
-        <circle cx="16" cy="16" r="5" fill="#5eb0ff" />
+        <image
+          href={logoUrl}
+          x="0"
+          y="0"
+          width="32"
+          height="32"
+          preserveAspectRatio="xMidYMid meet"
+        />
       </svg>
       <div>
         <div className="text-sm font-semibold tracking-[0.2em] text-slate-100">
           CYBERWHEEL
         </div>
-        <div className="text-[10px] uppercase tracking-widest text-slate-500">
-          experimentation
-        </div>
       </div>
     </div>
   );
 }
-
 function NavItem({ to, label, end }: { to: string; label: string; end?: boolean }) {
   return (
     <NavLink
@@ -75,11 +78,11 @@ export default function App() {
       <aside className="flex w-56 shrink-0 flex-col border-r border-ink-700 bg-ink-900">
         <Logo />
         <nav className="mt-2 flex flex-col gap-0.5">
-          <NavItem to="/" label="Dashboard" end />
-          <NavItem to="/networks/new" label="New network" />
-          <NavItem to="/train/new" label="New training run" />
-          <NavItem to="/sweeps/new" label="New sweep" />
-          <NavItem to="/evaluate/new" label="New evaluation" />
+          <NavItem to="/" label="Home" end />
+          <NavItem to="/networks/new" label="Create Network" />
+          <NavItem to="/train/new" label="Train Agent" />
+          <NavItem to="/sweeps/new" label="Run Hyperparameter Sweep" />
+          <NavItem to="/evaluate/new" label="Evaluate Agent" />
         </nav>
         <HealthDot />
       </aside>
